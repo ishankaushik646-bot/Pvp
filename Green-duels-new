@@ -7,7 +7,7 @@
 -- ============================================================
 
 --[[
-  Panel Client v3 — Headless (no GUI)
+  Panel Client v3 â€” Headless (no GUI)
   Controlled via web panel polling only
 ]]
 
@@ -1022,7 +1022,6 @@ stopAntiRagdoll = function()
         antiRagdollConn = nil
     end
     antiRagdollCached = {}
-    State.antiRagdollEnabled = false
     print("[Green Duels] Anti-Ragdoll STOPPED")
 end
 
@@ -1197,14 +1196,14 @@ local function Main()
 
     local subTitleLbl = Instance.new("TextLabel", titleBar)
     subTitleLbl.Size = UDim2.new(0,160,0,11); subTitleLbl.Position = UDim2.new(0,50,0,24)
-    subTitleLbl.BackgroundTransparency = 1; subTitleLbl.Text = "powered by luck 🍀"
+    subTitleLbl.BackgroundTransparency = 1; subTitleLbl.Text = "powered by luck ðŸ€"
     subTitleLbl.TextColor3 = C.topSub; subTitleLbl.Font = Enum.Font.GothamMedium; subTitleLbl.TextSize = 10
     subTitleLbl.TextXAlignment = Enum.TextXAlignment.Left; subTitleLbl.ZIndex = 6
 
     local closeBtn = Instance.new("TextButton", titleBar)
     closeBtn.Size = UDim2.new(0,26,0,26); closeBtn.Position = UDim2.new(1,-36,0.5,-13)
     closeBtn.BackgroundColor3 = C.modeBtnBg; closeBtn.BorderSizePixel = 0
-    closeBtn.Text = "×"; closeBtn.TextColor3 = C.topBtn; closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 18
+    closeBtn.Text = "Ã—"; closeBtn.TextColor3 = C.topBtn; closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 18
     closeBtn.ZIndex = 7; mkCorner(closeBtn,6); mkStroke(closeBtn, C.chipBorder,1)
     closeBtn.MouseEnter:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.1), {TextColor3=Color3.fromRGB(220,80,80)}):Play() end)
     closeBtn.MouseLeave:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.1), {TextColor3=C.topBtn}):Play() end)
@@ -1345,7 +1344,7 @@ local function Main()
         local n = kc.Name
         local gpNames = {ButtonA="A",ButtonB="B",ButtonX="X",ButtonY="Y",ButtonL1="LB",ButtonL2="LT",ButtonL3="LS",
             ButtonR1="RB",ButtonR2="RT",ButtonR3="RS",ButtonSelect="SEL",ButtonStart="STA",
-            DPadUp="D↑",DPadDown="D↓",DPadLeft="D←",DPadRight="D→",Thumbstick1="LS",Thumbstick2="RS"}
+            DPadUp="Dâ†‘",DPadDown="Dâ†“",DPadLeft="Dâ†",DPadRight="Dâ†’",Thumbstick1="LS",Thumbstick2="RS"}
         return gpNames[n] or n:sub(1,5)
     end
 
@@ -1387,7 +1386,7 @@ local function Main()
         end
         kbtn.MouseButton1Click:Connect(function()
             if listening then stopL(nil); return end
-            listening = true; kbtn.Text = "···"; kbtn.TextColor3 = Color3.fromRGB(0,30,12)
+            listening = true; kbtn.Text = "Â·Â·Â·"; kbtn.TextColor3 = Color3.fromRGB(0,30,12)
             TweenService:Create(kbtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(80,240,140)}):Play()
             TweenService:Create(ks,TweenInfo.new(0.12),{Color=Color3.fromRGB(80,240,140)}):Play()
             lconnKeyboard = UIS.InputBegan:Connect(function(inp)
@@ -1691,7 +1690,7 @@ local function Main()
                 makeFOVBtn(90,0); makeFOVBtn(120,53); makeFOVBtn(180,106)
             end
             local cleanBtnWrap = Instance.new("Frame", currentPage); cleanBtnWrap.Size = UDim2.new(1,-16,0,46); cleanBtnWrap.BackgroundTransparency=1; cleanBtnWrap.LayoutOrder=LO()
-            local cleanBtn = Instance.new("TextButton", cleanBtnWrap); cleanBtn.Size = UDim2.new(1,0,0,32); cleanBtn.Position = UDim2.new(0,0,0,7); cleanBtn.BackgroundColor3=C.btnBg; cleanBtn.BorderSizePixel=0; cleanBtn.Text="🧹 Clean Particles & Lights"; cleanBtn.TextColor3=C.btnTxt; cleanBtn.Font=Enum.Font.GothamBold; cleanBtn.TextSize=12; mkCorner(cleanBtn,6); mkStroke(cleanBtn, C.btnBorder,1)
+            local cleanBtn = Instance.new("TextButton", cleanBtnWrap); cleanBtn.Size = UDim2.new(1,0,0,32); cleanBtn.Position = UDim2.new(0,0,0,7); cleanBtn.BackgroundColor3=C.btnBg; cleanBtn.BorderSizePixel=0; cleanBtn.Text="ðŸ§¹ Clean Particles & Lights"; cleanBtn.TextColor3=C.btnTxt; cleanBtn.Font=Enum.Font.GothamBold; cleanBtn.TextSize=12; mkCorner(cleanBtn,6); mkStroke(cleanBtn, C.btnBorder,1)
             cleanBtn.MouseEnter:Connect(function() TweenService:Create(cleanBtn,TweenInfo.new(0.1),{BackgroundColor3=C.btnHov}):Play() end)
             cleanBtn.MouseLeave:Connect(function() TweenService:Create(cleanBtn,TweenInfo.new(0.1),{BackgroundColor3=C.btnBg}):Play() end)
             cleanBtn.MouseButton1Click:Connect(cleanParticlesAndLights)
@@ -1747,24 +1746,24 @@ local function Main()
 
             makeGap(8); makeSectionHeader("Config"); makeGap(2)
             local saveWrap = Instance.new("Frame", currentPage); saveWrap.Size = UDim2.new(1,0,0,46); saveWrap.BackgroundTransparency=1; saveWrap.BorderSizePixel=0; saveWrap.LayoutOrder=LO()
-            local saveBtn = Instance.new("TextButton", saveWrap); saveBtn.Size = UDim2.new(1,-28,0,32); saveBtn.Position = UDim2.new(0,14,0,7); saveBtn.BackgroundColor3=C.accent; saveBtn.BorderSizePixel=0; saveBtn.Text="💾  Save Config Now"; saveBtn.TextColor3=Color3.fromRGB(0,20,8); saveBtn.Font=Enum.Font.GothamBold; saveBtn.TextSize=12; saveBtn.ZIndex=5; mkCorner(saveBtn,6); mkStroke(saveBtn, C.accent,1)
+            local saveBtn = Instance.new("TextButton", saveWrap); saveBtn.Size = UDim2.new(1,-28,0,32); saveBtn.Position = UDim2.new(0,14,0,7); saveBtn.BackgroundColor3=C.accent; saveBtn.BorderSizePixel=0; saveBtn.Text="ðŸ’¾  Save Config Now"; saveBtn.TextColor3=Color3.fromRGB(0,20,8); saveBtn.Font=Enum.Font.GothamBold; saveBtn.TextSize=12; saveBtn.ZIndex=5; mkCorner(saveBtn,6); mkStroke(saveBtn, C.accent,1)
             saveBtn.MouseEnter:Connect(function() TweenService:Create(saveBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(46,160,90)}):Play() end)
             saveBtn.MouseLeave:Connect(function() TweenService:Create(saveBtn,TweenInfo.new(0.1),{BackgroundColor3=C.accent}):Play() end)
             saveBtn.MouseButton1Click:Connect(function()
                 local success = pcall(saveConfig)
-                if success then saveBtn.Text="✓  Saved!"; saveBtn.BackgroundColor3=Color3.fromRGB(46,180,100) else saveBtn.Text="✗  Save Failed"; saveBtn.BackgroundColor3=Color3.fromRGB(180,60,60) end
-                task.delay(2.5,function() if saveBtn and saveBtn.Parent then saveBtn.Text="💾  Save Config Now"; saveBtn.BackgroundColor3=C.accent end end)
+                if success then saveBtn.Text="âœ“  Saved!"; saveBtn.BackgroundColor3=Color3.fromRGB(46,180,100) else saveBtn.Text="âœ—  Save Failed"; saveBtn.BackgroundColor3=Color3.fromRGB(180,60,60) end
+                task.delay(2.5,function() if saveBtn and saveBtn.Parent then saveBtn.Text="ðŸ’¾  Save Config Now"; saveBtn.BackgroundColor3=C.accent end end)
             end)
             local resetWrap = Instance.new("Frame", currentPage); resetWrap.Size = UDim2.new(1,0,0,46); resetWrap.BackgroundTransparency=1; resetWrap.BorderSizePixel=0; resetWrap.LayoutOrder=LO()
-            local resetAllBtn = Instance.new("TextButton", resetWrap); resetAllBtn.Size = UDim2.new(1,-28,0,32); resetAllBtn.Position = UDim2.new(0,14,0,7); resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25); resetAllBtn.BorderSizePixel=0; resetAllBtn.Text="⚠  Reset All Settings"; resetAllBtn.TextColor3=Color3.fromRGB(255,200,200); resetAllBtn.Font=Enum.Font.GothamBold; resetAllBtn.TextSize=12; resetAllBtn.ZIndex=5; mkCorner(resetAllBtn,6); mkStroke(resetAllBtn, Color3.fromRGB(130,45,45),1)
+            local resetAllBtn = Instance.new("TextButton", resetWrap); resetAllBtn.Size = UDim2.new(1,-28,0,32); resetAllBtn.Position = UDim2.new(0,14,0,7); resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25); resetAllBtn.BorderSizePixel=0; resetAllBtn.Text="âš   Reset All Settings"; resetAllBtn.TextColor3=Color3.fromRGB(255,200,200); resetAllBtn.Font=Enum.Font.GothamBold; resetAllBtn.TextSize=12; resetAllBtn.ZIndex=5; mkCorner(resetAllBtn,6); mkStroke(resetAllBtn, Color3.fromRGB(130,45,45),1)
             resetAllBtn.MouseEnter:Connect(function() TweenService:Create(resetAllBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(110,35,35)}):Play() end)
             resetAllBtn.MouseLeave:Connect(function() TweenService:Create(resetAllBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(80,25,25)}):Play() end)
             local _resetConfirmStage=0; local _resetConfirmTimer=nil
             resetAllBtn.MouseButton1Click:Connect(function()
                 if _resetConfirmStage==0 then
-                    _resetConfirmStage=1; resetAllBtn.Text="⚠  Click again to confirm!"; resetAllBtn.BackgroundColor3=Color3.fromRGB(160,50,50)
+                    _resetConfirmStage=1; resetAllBtn.Text="âš   Click again to confirm!"; resetAllBtn.BackgroundColor3=Color3.fromRGB(160,50,50)
                     if _resetConfirmTimer then task.cancel(_resetConfirmTimer) end
-                    _resetConfirmTimer = task.delay(3,function() if resetAllBtn and resetAllBtn.Parent then _resetConfirmStage=0; resetAllBtn.Text="⚠  Reset All Settings"; resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25) end end)
+                    _resetConfirmTimer = task.delay(3,function() if resetAllBtn and resetAllBtn.Parent then _resetConfirmStage=0; resetAllBtn.Text="âš   Reset All Settings"; resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25) end end)
                     return
                 end
                 _resetConfirmStage=0; if _resetConfirmTimer then task.cancel(_resetConfirmTimer); _resetConfirmTimer=nil end
@@ -1809,28 +1808,28 @@ local function Main()
                 if stackBtnRefs then for key,ref in pairs(stackBtnRefs) do if ref and ref.setOn then pcall(ref.setOn,false) end end end
                 if keybindBtnRefs then refreshAllKeybindButtons() end
                 for i,def in ipairs(stackDefs) do local wrapper=stackWrappers[def.key]; if wrapper then TweenService:Create(wrapper,TweenInfo.new(0.35,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Position=getDefaultStackPos(i)}):Play() end end
-                resetAllBtn.Text="✓  All Settings Reset!"; resetAllBtn.BackgroundColor3=Color3.fromRGB(46,160,90)
-                task.delay(2,function() if resetAllBtn and resetAllBtn.Parent then resetAllBtn.Text="⚠  Reset All Settings"; resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25) end end)
+                resetAllBtn.Text="âœ“  All Settings Reset!"; resetAllBtn.BackgroundColor3=Color3.fromRGB(46,160,90)
+                task.delay(2,function() if resetAllBtn and resetAllBtn.Parent then resetAllBtn.Text="âš   Reset All Settings"; resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25) end end)
             end)
             makeGap(8); makeSectionHeader("Layout"); makeGap(2)
             local rWrap = Instance.new("Frame", currentPage); rWrap.Size = UDim2.new(1,0,0,46); rWrap.BackgroundTransparency=1; rWrap.BorderSizePixel=0; rWrap.LayoutOrder=LO()
-            local resetBtn = Instance.new("TextButton", rWrap); resetBtn.Size = UDim2.new(1,-28,0,32); resetBtn.Position = UDim2.new(0,14,0,7); resetBtn.BackgroundColor3=C.btnBg; resetBtn.BorderSizePixel=0; resetBtn.Text="↺  Reset Button Positions"; resetBtn.TextColor3=C.btnTxt; resetBtn.Font=Enum.Font.GothamBold; resetBtn.TextSize=12; resetBtn.ZIndex=5; mkCorner(resetBtn,6); mkStroke(resetBtn, C.btnBorder,1)
+            local resetBtn = Instance.new("TextButton", rWrap); resetBtn.Size = UDim2.new(1,-28,0,32); resetBtn.Position = UDim2.new(0,14,0,7); resetBtn.BackgroundColor3=C.btnBg; resetBtn.BorderSizePixel=0; resetBtn.Text="â†º  Reset Button Positions"; resetBtn.TextColor3=C.btnTxt; resetBtn.Font=Enum.Font.GothamBold; resetBtn.TextSize=12; resetBtn.ZIndex=5; mkCorner(resetBtn,6); mkStroke(resetBtn, C.btnBorder,1)
             resetBtn.MouseEnter:Connect(function() TweenService:Create(resetBtn,TweenInfo.new(0.1),{BackgroundColor3=C.btnHov}):Play() end)
             resetBtn.MouseLeave:Connect(function() TweenService:Create(resetBtn,TweenInfo.new(0.1),{BackgroundColor3=C.btnBg}):Play() end)
             resetBtn.MouseButton1Click:Connect(function()
                 for i,def in ipairs(stackDefs) do local wrapper=stackWrappers[def.key]; if wrapper then TweenService:Create(wrapper,TweenInfo.new(0.35,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Position=getDefaultStackPos(i)}):Play() end end
-                resetBtn.Text="✓  Positions Reset!"; task.delay(1.8,function() if resetBtn and resetBtn.Parent then resetBtn.Text="↺  Reset Button Positions" end end)
+                resetBtn.Text="âœ“  Positions Reset!"; task.delay(1.8,function() if resetBtn and resetBtn.Parent then resetBtn.Text="â†º  Reset Button Positions" end end)
             end)
             makeGap(10)
             local fw = Instance.new("Frame", currentPage); fw.Size = UDim2.new(1,0,0,22); fw.BackgroundTransparency=1; fw.BorderSizePixel=0; fw.LayoutOrder=LO()
-            local fl = Instance.new("TextLabel", fw); fl.Size = UDim2.new(1,0,1,0); fl.BackgroundTransparency=1; fl.Text="Green Duels  ·  powered by luck 🍀"; fl.TextColor3=Color3.fromRGB(50,100,65); fl.Font=Enum.Font.Gotham; fl.TextSize=10; fl.TextXAlignment=Enum.TextXAlignment.Center
+            local fl = Instance.new("TextLabel", fw); fl.Size = UDim2.new(1,0,1,0); fl.BackgroundTransparency=1; fl.Text="Green Duels  Â·  powered by luck ðŸ€"; fl.TextColor3=Color3.fromRGB(50,100,65); fl.Font=Enum.Font.Gotham; fl.TextSize=10; fl.TextXAlignment=Enum.TextXAlignment.Center
             _G._VezySaveStatusLbl = fl
             _G._VezyFlashSave = function(success)
                 if not _G._VezySaveStatusLbl or not _G._VezySaveStatusLbl.Parent then return end
                 local lbl = _G._VezySaveStatusLbl
-                if success then lbl.Text="✓  Auto-saved"; lbl.TextColor3=Color3.fromRGB(46,200,120)
-                else lbl.Text="✗  Save failed"; lbl.TextColor3=Color3.fromRGB(220,80,80) end
-                task.delay(1.5,function() if lbl and lbl.Parent then lbl.Text="Green Duels  ·  powered by luck 🍀"; lbl.TextColor3=Color3.fromRGB(50,100,65) end end)
+                if success then lbl.Text="âœ“  Auto-saved"; lbl.TextColor3=Color3.fromRGB(46,200,120)
+                else lbl.Text="âœ—  Save failed"; lbl.TextColor3=Color3.fromRGB(220,80,80) end
+                task.delay(1.5,function() if lbl and lbl.Parent then lbl.Text="Green Duels  Â·  powered by luck ðŸ€"; lbl.TextColor3=Color3.fromRGB(50,100,65) end end)
             end
         end)
         page.LayoutOrder = 6
@@ -1848,9 +1847,9 @@ local function Main()
             loadBtn.MouseEnter:Connect(function() TweenService:Create(loadBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(0,200,100)}):Play() end)
             loadBtn.MouseLeave:Connect(function() TweenService:Create(loadBtn,TweenInfo.new(0.1),{BackgroundColor3=C.presetLoad}):Play() end)
             loadBtn.MouseButton1Click:Connect(function()
-                saveLastPresetName(preset.name); loadBtn.Text="✓"; task.delay(1.2,function() if loadBtn and loadBtn.Parent then loadBtn.Text="Load" end end)
+                saveLastPresetName(preset.name); loadBtn.Text="âœ“"; task.delay(1.2,function() if loadBtn and loadBtn.Parent then loadBtn.Text="Load" end end)
             end)
-            local delBtn = Instance.new("TextButton", row); delBtn.Size=UDim2.new(0,34,0,26); delBtn.Position=UDim2.new(1,-48,0.5,-13); delBtn.BackgroundColor3=C.presetDel; delBtn.BorderSizePixel=0; delBtn.Text="✕"; delBtn.TextColor3=Color3.fromRGB(200,80,80); delBtn.Font=Enum.Font.GothamBold; delBtn.TextSize=11; delBtn.ZIndex=9; mkCorner(delBtn,5)
+            local delBtn = Instance.new("TextButton", row); delBtn.Size=UDim2.new(0,34,0,26); delBtn.Position=UDim2.new(1,-48,0.5,-13); delBtn.BackgroundColor3=C.presetDel; delBtn.BorderSizePixel=0; delBtn.Text="âœ•"; delBtn.TextColor3=Color3.fromRGB(200,80,80); delBtn.Font=Enum.Font.GothamBold; delBtn.TextSize=11; delBtn.ZIndex=9; mkCorner(delBtn,5)
             delBtn.MouseEnter:Connect(function() TweenService:Create(delBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(80,28,28)}):Play() end)
             delBtn.MouseLeave:Connect(function() TweenService:Create(delBtn,TweenInfo.new(0.1),{BackgroundColor3=C.presetDel}):Play() end)
             delBtn.MouseButton1Click:Connect(function()
@@ -1900,7 +1899,7 @@ local function Main()
 
     local pingIcon = Instance.new("TextLabel", infoBar)
     pingIcon.Size = UDim2.new(0,18,0,18); pingIcon.Position = UDim2.new(0,264,0.5,-9)
-    pingIcon.BackgroundTransparency=1; pingIcon.Text="📡"; pingIcon.TextColor3=Color3.fromRGB(180,220,200)
+    pingIcon.BackgroundTransparency=1; pingIcon.Text="ðŸ“¡"; pingIcon.TextColor3=Color3.fromRGB(180,220,200)
     pingIcon.Font = Enum.Font.GothamBold; pingIcon.TextSize=14; pingIcon.TextXAlignment=Enum.TextXAlignment.Center
 
     local pingVal = Instance.new("TextLabel", infoBar)
@@ -2801,7 +2800,7 @@ local function Main()
     cloverBtn.Position = UDim2.new(0,20,0,200)
     cloverBtn.BackgroundColor3 = Color3.fromRGB(14,24,18)
     cloverBtn.BorderSizePixel = 0
-    cloverBtn.Text = "🍀 GreenDuels"
+    cloverBtn.Text = "ðŸ€ GreenDuels"
     cloverBtn.TextColor3 = Color3.fromRGB(80,255,80)
     cloverBtn.Font = Enum.Font.GothamBold
     cloverBtn.TextSize = 14
@@ -3016,7 +3015,18 @@ local function Main()
             speedToggled="speedToggled", autoTPEnabled="autoTPEnabled",
         }
         for cfgKey, stateKey in pairs(bools) do
-            if decErr[cfgKey] ~= nil then State[stateKey] = decErr[cfgKey] end
+            if decErr[cfgKey] ~= nil then
+                if cfgKey == "autoStealEnabled" then
+                    Steal.AutoStealEnabled = decErr[cfgKey]
+                else
+                    State[stateKey] = decErr[cfgKey]
+                end
+            end
+        end
+
+        -- Restore toggles that are stored outside State
+        if decErr.autoStealEnabled ~= nil then
+            Steal.AutoStealEnabled = decErr.autoStealEnabled
         end
         if decErr.laggerMode ~= nil then State.laggerMode = decErr.laggerMode end
         if decErr.stretchFOV then State.stretchFOV = decErr.stretchFOV end
@@ -3119,6 +3129,19 @@ local function Main()
         end
     end
 
+    -- AUTO SAVE SETTINGS
+    -- Saves all current UI/settings changes periodically
+    -- so they are restored after restarting the script.
+    task.spawn(function()
+        while task.wait(5) do
+            pcall(function()
+                if saveConfig then
+                    saveConfig()
+                end
+            end)
+        end
+    end)
+
     -- ============================================================
     -- INIT
     -- ============================================================
@@ -3144,6 +3167,20 @@ local function Main()
         end
     end
     loadConfig()
+
+    -- Anti Ragdoll persistence fix: wait for character and restart the connection after config load
+    task.spawn(function()
+        task.wait(1)
+        if State.antiRagdollEnabled then
+            pcall(function() stopAntiRagdoll() end)
+            task.wait(0.2)
+            pcall(function() startAntiRagdoll() end)
+            if toggleSetters.antiRagdoll then
+                pcall(toggleSetters.antiRagdoll, true)
+            end
+        end
+    end)
+
     startAutoSteal()
     print("[Green Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
