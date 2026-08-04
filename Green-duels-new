@@ -103,7 +103,7 @@ local function findResetRemote()
     return resetRemote
 end
 
--- Hook removed to prevent random auto-resets
+-- auto reset hook disabled to prevent random resets
 local o = nil
 
 local function instaReset()
@@ -961,22 +961,17 @@ local DROP_ASCEND_SPEED = 150
 
 local function runJumpDrop()
     if dropActive then return end
-    if State._tpInProgress then State._tpInProgress = false end
     pcall(function() if stopAutoTP then stopAutoTP() end end)
-    
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
-    
     dropActive = true
     _G.GreenDuelsV2_DropActive = true
     State._tpInProgress = true
     if stackBtnRefs.drop then stackBtnRefs.drop.setOn(true) end
-    
     local startTime = tick()
     if _dropConn then _dropConn:Disconnect() end
-    
     _dropConn = RunService.Heartbeat:Connect(function()
         local currentChar = LP.Character
         local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
@@ -988,15 +983,12 @@ local function runJumpDrop()
             if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
             return
         end
-        
         if tick() - startTime >= DROP_ASCEND_DURATION then
             if _dropConn then _dropConn:Disconnect(); _dropConn=nil end
-            
             local rayParams = RaycastParams.new()
             rayParams.FilterDescendantsInstances = {currentChar}
             rayParams.FilterType = Enum.RaycastFilterType.Exclude
             local rayResult = workspace:Raycast(currentRoot.Position, Vector3.new(0, -5000, 0), rayParams)
-            
             if rayResult then
                 local hum = currentChar:FindFirstChildOfClass("Humanoid")
                 local offset = (hum and hum.HipHeight or 2) + (currentRoot.Size.Y / 2)
@@ -1004,14 +996,12 @@ local function runJumpDrop()
                 currentRoot.CFrame = CFrame.new(currentRoot.Position.X, rayResult.Position.Y + offset, currentRoot.Position.Z) * CFrame.Angles(0, yaw, 0)
                 applyImpulseForVelocity(currentRoot, Vector3.zero)
             end
-            
             dropActive = false
             _G.GreenDuelsV2_DropActive = false
             State._tpInProgress = false
             if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
             return
         end
-        
         local currentVel = currentRoot.AssemblyLinearVelocity
         applyImpulseForVelocity(currentRoot, Vector3.new(currentVel.X, DROP_ASCEND_SPEED, currentVel.Z))
     end)
@@ -1073,13 +1063,7 @@ local function antiRagdollIsRagdolled()
         return true
     end
 
-    -- removed RagdollEndTime to prevent auto reset
-    if endTime then
-        local now = workspace:GetServerTimeNow()
-        if (endTime - now) > 0 then
-            return true
-        end
-    end
+    -- RagdollEndTime check disabled
 
     return false
 end
@@ -1104,9 +1088,7 @@ local function antiRagdollForceExit()
 
     if not hum or not root then return end
 
-    pcall(function()
-    -- removed RagdollEndTime to prevent auto reset
-    end)
+    -- anti-ragdoll no longer sets RagdollEndTime to avoid auto reset
 
     if hum.Health > 0 then
         hum:ChangeState(Enum.HumanoidStateType.Running)
