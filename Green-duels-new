@@ -957,7 +957,8 @@ end
 
 
 -- ============================================================
--- JUMP DROP ONLY (Safe - No Crasher)
+-- ============================================================
+-- JUMP DROP ONLY (Ace fast version - fixed)
 -- ============================================================
 local _dropConn = nil
 local dropActive = false
@@ -966,68 +967,58 @@ local dropDebounce = 0
 
 local function runJumpDrop()
     if dropActive then return end
-    if tick() - dropDebounce < 0.6 then return end
+    if tick() - dropDebounce < 0.35 then return end
     dropDebounce = tick()
-    
-    local char = LP.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not root or not hum then return end
     
     dropActive = true
     _G.GreenDuelsV2_DropActive = true
-    State._tpInProgress = true -- pause speed/aimbot to prevent lagback reset
+    State._tpInProgress = true
     if stackBtnRefs.drop then stackBtnRefs.drop.setOn(true) end
     
-    -- Briefly disable anti-ragdoll during drop
-    local wasAntiRag = State.antiRagdollEnabled
-    if wasAntiRag then
-        State.antiRagdollEnabled = false
-        pcall(function() if stopAntiRagdoll then stopAntiRagdoll() end end)
-    end
-    
-    -- Store old velocity and freeze Y
-    pcall(function()
-        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 0, root.AssemblyLinearVelocity.Z)
-    end)
-    
-    -- faster drop, minimal wait
-    pcall(function()
-        local rp = RaycastParams.new()
-        rp.FilterDescendantsInstances = {char}
-        rp.FilterType = Enum.RaycastFilterType.Exclude
-        local origin = root.Position
-        local rr = workspace:Raycast(origin, Vector3.new(0, -3000, 0), rp)
-        if rr then
-            local off = (hum.HipHeight or 2) + (root.Size.Y / 2) + 0.5
-            local targetPos = Vector3.new(origin.X, rr.Position.Y + off, origin.Z)
-            -- Safe TP - use CFrame, not velocity
-            root.CFrame = CFrame.new(targetPos)
-            root.AssemblyLinearVelocity = Vector3.new(0, -5, 0) -- gentle fall
-            hum:ChangeState(Enum.HumanoidStateType.Landed)
-            task.wait(0.08)
-            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        else
-            -- No ground found, just zero Y
-            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        end
-    end)
-    
-    -- Cleanup fast
-    task.wait(0.05)
-    dropActive = false
-    _G.GreenDuelsV2_DropActive = false
-    State._tpInProgress = false
-    if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
-    
-    if wasAntiRag then
+    task.spawn(function()
+        local char = LP.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local wasAntiRag = State.antiRagdollEnabled
+        pcall(function()
+            if wasAntiRag then
+                State.antiRagdollEnabled = false
+                if stopAntiRagdoll then stopAntiRagdoll() end
+            end
+        end)
+        pcall(function()
+            if not char or not root or not hum then return end
+            local rp = RaycastParams.new()
+            rp.FilterDescendantsInstances = {char}
+            rp.FilterType = Enum.RaycastFilterType.Exclude
+            local origin = root.Position
+            local rr = workspace:Raycast(origin, Vector3.new(0, -5000, 0), rp)
+            if rr then
+                local off = (hum.HipHeight or 2) + (root.Size.Y / 2) + 0.3
+                local _, yaw = root.CFrame:ToEulerAnglesYXZ()
+                local targetPos = Vector3.new(origin.X, rr.Position.Y + off, origin.Z)
+                root.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, yaw, 0)
+                applyImpulseForVelocity(root, Vector3.zero)
+                hum:ChangeState(Enum.HumanoidStateType.Landed)
+            else
+                local _, yaw = root.CFrame:ToEulerAnglesYXZ()
+                root.CFrame = CFrame.new(origin.X, -7, origin.Z) * CFrame.Angles(0, yaw, 0)
+                applyImpulseForVelocity(root, Vector3.zero)
+            end
+        end)
         task.wait(0.1)
-        State.antiRagdollEnabled = true
-        pcall(function() if startAntiRagdoll then startAntiRagdoll() end end)
-    end
-    
-    if _dropConn then _dropConn:Disconnect(); _dropConn=nil end
+        pcall(function()
+            dropActive = false
+            _G.GreenDuelsV2_DropActive = false
+            State._tpInProgress = false
+            if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
+            if _dropConn then _dropConn:Disconnect(); _dropConn=nil end
+            if wasAntiRag then
+                State.antiRagdollEnabled = true
+                if startAntiRagdoll then startAntiRagdoll() end
+            end
+        end)
+    end)
 end
 
 runDrop = runJumpDrop
@@ -1035,6 +1026,7 @@ runDrop = runJumpDrop
 LP.CharacterRemoving:Connect(function()
     dropActive = false
     _G.GreenDuelsV2_DropActive = false
+    State._tpInProgress = false
     if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
 end)
 
