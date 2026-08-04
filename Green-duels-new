@@ -859,7 +859,7 @@ local function mkCorner(p,r) local c=Instance.new("UICorner",p); c.CornerRadius=
 local function mkStroke(p,col,th) local s=Instance.new("UIStroke",p); s.Color=col; s.Thickness=th or 1; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; return s end
 
 -- ============================================================
--- AUTO TP
+-- AUTO TP (Ace Duels version - faster + safer)
 -- ============================================================
 local function doAutoTPDown(force)
     local char = LP.Character
@@ -872,16 +872,23 @@ local function doAutoTPDown(force)
         if hum.FloorMaterial ~= Enum.Material.Air then return end
         if hrp.Position.Y < State.autoTPHeight then return end
     end
-    hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
+    local _, yaw = hrp.CFrame:ToEulerAnglesYXZ()
+    hrp.CFrame = CFrame.new(hrp.Position.X, -7.00, hrp.Position.Z) * CFrame.Angles(0, yaw, 0)
     applyImpulseForVelocity(hrp, Vector3.zero)
 end
 
+local autoTPLastRun = 0
 local function startAutoTP()
+    State.autoTPEnabled = true
     if State.autoTPConn then task.cancel(State.autoTPConn); State.autoTPConn = nil end
     State.autoTPConn = task.spawn(function()
         while State.autoTPEnabled do
-            task.wait(0.1)
-            pcall(function() doAutoTPDown(false) end)
+            task.wait(0.08) -- faster check like Ace
+            local now = tick()
+            if now - autoTPLastRun >= 0.08 then
+                autoTPLastRun = now
+                pcall(function() doAutoTPDown(false) end)
+            end
         end
     end)
 end
@@ -896,76 +903,131 @@ runTPDown = function()
 end
 
 -- ============================================================
+-- MIRROR TP DOWN (from Ace Duels)
+-- ============================================================
+State.mirrorTPDownEnabled = State.mirrorTPDownEnabled or false
+local MIRROR_TP_DROP_THRESHOLD = 3
+local MIRROR_TP_DOWN_Y = -7.00
+local mirrorTPPreviousY = {}
+local mirrorTPLastTeleport = 0
+
+local function mirrorTPAimbotActive()
+    return State.batAimbotToggled or State.antiBypassAimbotToggled
+end
+
+local function mirrorTPTeleportDown()
+    local character = LP.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not root or not humanoid or humanoid.Health <= 0 then return end
+    local now = tick()
+    if now - mirrorTPLastTeleport < 0.08 then return end
+    mirrorTPLastTeleport = now
+    local _, yaw = root.CFrame:ToEulerAnglesYXZ()
+    root.CFrame = CFrame.new(root.Position.X, MIRROR_TP_DOWN_Y, root.Position.Z) * CFrame.Angles(0, yaw, 0)
+    applyImpulseForVelocity(root, Vector3.zero)
+end
+
+RunService.Heartbeat:Connect(function()
+    if not State.mirrorTPDownEnabled or not mirrorTPAimbotActive() then
+        table.clear(mirrorTPPreviousY)
+        return
+    end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local currentY = root.Position.Y
+                local previousY = mirrorTPPreviousY[player.UserId]
+                if previousY and previousY - currentY >= MIRROR_TP_DROP_THRESHOLD then
+                    pcall(mirrorTPTeleportDown)
+                    table.clear(mirrorTPPreviousY)
+                    return
+                end
+                mirrorTPPreviousY[player.UserId] = currentY
+            end
+        end
+    end
+end)
+
+function _G.GreenSetMirrorTPDown(enabled)
+    State.mirrorTPDownEnabled = enabled == true
+    if not State.mirrorTPDownEnabled then table.clear(mirrorTPPreviousY) end
+end
+
+
+-- ============================================================
 -- JUMP DROP ONLY (Safe - No Crasher)
 -- ============================================================
-local DROP_ASCEND_DURATION = 0.22
-local DROP_ASCEND_SPEED = 160
 local _dropConn = nil
 local dropActive = false
 _G.GreenDuelsV2_DropActive = false
+local dropDebounce = 0
 
 local function runJumpDrop()
     if dropActive then return end
-    _G.GreenDuelsV2_DropActive = true
+    if tick() - dropDebounce < 0.6 then return end
+    dropDebounce = tick()
+    
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not root or not hum then return end
+    
     dropActive = true
+    _G.GreenDuelsV2_DropActive = true
+    State._tpInProgress = true -- pause speed/aimbot to prevent lagback reset
     if stackBtnRefs.drop then stackBtnRefs.drop.setOn(true) end
-    local t0 = tick()
-    if _dropConn then _dropConn:Disconnect() end
-    _dropConn = RunService.Heartbeat:Connect(function()
-        local c = LP.Character
-        local r = c and c:FindFirstChild("HumanoidRootPart")
-        if not r then
-            if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
-            dropActive = false
-            _G.GreenDuelsV2_DropActive = false
-            if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
-            return
-        end
-        if not dropActive then
-            if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
-            if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
-            return
-        end
-        if tick() - t0 >= DROP_ASCEND_DURATION then
-            if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
-            pcall(function()
-                local rp = RaycastParams.new()
-                rp.FilterDescendantsInstances = {c}
-                rp.FilterType = Enum.RaycastFilterType.Exclude
-                local rr = workspace:Raycast(r.Position, Vector3.new(0, -3000, 0), rp)
-                if rr then
-                    local hum = c:FindFirstChildOfClass("Humanoid")
-                    local off = ((hum and hum.HipHeight) or 2) + (r.Size.Y / 2)
-                    -- safer landing: stop momentum first, then place character slightly above ground
-                    local oldVel = r.AssemblyLinearVelocity
-                    r.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    r.CFrame = CFrame.new(r.Position.X, rr.Position.Y + off + 0.15, r.Position.Z)
-                    local hum = c:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        hum:ChangeState(Enum.HumanoidStateType.Landed)
-                    end
-                    -- small stabilization impulse instead of a hard velocity correction
-                    r:ApplyImpulse(Vector3.new(0, -r.AssemblyMass * math.max(oldVel.Y, 0) * 0.05, 0))
-                end
-            end)
-            dropActive = false
-            if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
-            return
-        end
-        -- safer drop lift: apply a controlled upward impulse instead of forcing velocity
-        local mass = r.AssemblyMass
-        local current = r.AssemblyLinearVelocity
-
-        -- prevent extreme vertical speed that can cause damage/death
-        local targetY = math.clamp(DROP_ASCEND_SPEED, 80, 120)
-        if current.Y < targetY then
-            r:ApplyImpulse(Vector3.new(0, (targetY - current.Y) * mass, 0))
+    
+    -- Briefly disable anti-ragdoll during drop
+    local wasAntiRag = State.antiRagdollEnabled
+    if wasAntiRag then
+        State.antiRagdollEnabled = false
+        pcall(function() if stopAntiRagdoll then stopAntiRagdoll() end end)
+    end
+    
+    -- Store old velocity and freeze Y
+    pcall(function()
+        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 0, root.AssemblyLinearVelocity.Z)
+    end)
+    
+    -- faster drop, minimal wait
+    pcall(function()
+        local rp = RaycastParams.new()
+        rp.FilterDescendantsInstances = {char}
+        rp.FilterType = Enum.RaycastFilterType.Exclude
+        local origin = root.Position
+        local rr = workspace:Raycast(origin, Vector3.new(0, -3000, 0), rp)
+        if rr then
+            local off = (hum.HipHeight or 2) + (root.Size.Y / 2) + 0.5
+            local targetPos = Vector3.new(origin.X, rr.Position.Y + off, origin.Z)
+            -- Safe TP - use CFrame, not velocity
+            root.CFrame = CFrame.new(targetPos)
+            root.AssemblyLinearVelocity = Vector3.new(0, -5, 0) -- gentle fall
+            hum:ChangeState(Enum.HumanoidStateType.Landed)
+            task.wait(0.08)
+            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        else
+            -- No ground found, just zero Y
+            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         end
     end)
+    
+    -- Cleanup fast
+    task.wait(0.05)
+    dropActive = false
+    _G.GreenDuelsV2_DropActive = false
+    State._tpInProgress = false
+    if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
+    
+    if wasAntiRag then
+        task.wait(0.1)
+        State.antiRagdollEnabled = true
+        pcall(function() if startAntiRagdoll then startAntiRagdoll() end end)
+    end
+    
+    if _dropConn then _dropConn:Disconnect(); _dropConn=nil end
 end
 
 runDrop = runJumpDrop
@@ -979,6 +1041,7 @@ end)
 stopDrop = function()
     dropActive = false
     _G.GreenDuelsV2_DropActive = false
+    State._tpInProgress = false
     if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
     if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
 end
@@ -1796,17 +1859,24 @@ local function Main()
                 print("[Green Duels] Drop type: Jump Drop (safe - ascends then teleports)")
             end)
 
-            -- Auto TP
-            makeGap(8); makeSectionHeader("Auto TP"); makeGap(2)
-            local autoTPToggle = makeToggleRow("Auto TP", State.autoTPEnabled, function(on)
+            -- Auto TP (Ace version)
+            makeGap(8); makeSectionHeader("Auto TP (Ace)"); makeGap(2)
+            local autoTPToggle = makeToggleRow("Auto TP Down", State.autoTPEnabled, function(on)
                 State.autoTPEnabled = on
                 if on then startAutoTP() else stopAutoTP() end
                 requestSave()
             end)
             toggleSetters["autoTP"] = autoTPToggle
             autoTPHeightBox = makeInputRow("Auto TP Height", State.autoTPHeight, function(n)
-                if n and n >= 2 and n <= 500 then State.autoTPHeight = n end
+                if n and n >= -500 and n <= 500 then State.autoTPHeight = n end
             end)
+            makeGap(6)
+            local mirrorTPToggle = makeToggleRow("Mirror TP Down", State.mirrorTPDownEnabled, function(on)
+                State.mirrorTPDownEnabled = on
+                if _G.GreenSetMirrorTPDown then _G.GreenSetMirrorTPDown(on) end
+                requestSave()
+            end)
+            toggleSetters["mirrorTP"] = mirrorTPToggle
         end)
         page.LayoutOrder = 4
     end
@@ -3016,7 +3086,8 @@ local function Main()
     RunService.Heartbeat:Connect(function()
         if not (h and hrp) then return end
         if State._tpInProgress then return end
-        if State.batAimbotToggled or State.autoLeftEnabled or State.autoRightEnabled then return end
+        if State.batAimbotToggled or State.antiBypassAimbotToggled or State.autoLeftEnabled or State.autoRightEnabled then return end
+        if _G.GreenDuelsV2_DropActive or State._tpInProgress then return end
         
         local md = h.MoveDirection
         local spd
