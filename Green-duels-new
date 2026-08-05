@@ -1699,6 +1699,8 @@ local function Main()
                     end
                 end
             end)
+            toggleSetters["normalSteal"] = normalToggle
+            toggleSetters["semiSteal"] = semiToggle
             
             semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", isSemi, function(on)
                 if on then
@@ -1713,6 +1715,9 @@ local function Main()
                     end
                 end
             end)
+            -- re-assign after both created to ensure correct refs
+            toggleSetters["normalSteal"] = normalToggle
+            toggleSetters["semiSteal"] = semiToggle
 
             makeGap(6); makeSectionHeader("Steal Config"); makeGap(2)
             stealRadBox = makeInputRow("Steal Radius", Steal.StealRadius, function(n) if n then n=math.floor(n); if n>=1 and n<=500 then Steal.StealRadius=n; Steal.SemiRadius=n end end end)
@@ -3202,6 +3207,7 @@ local function Main()
                 dropType = currentDropType,
                 tpBatToggled = tpBatToggled,
                 safeMode = State.safeModeEnabled,
+                stealMode = Steal.StealMode,
             }
             local encoded = HttpService:JSONEncode(cfg)
             _writefile(CONFIG_FILE, encoded)
@@ -3289,6 +3295,17 @@ local function Main()
                 jumpDropBtn.BackgroundColor3 = C.accent
                 jumpDropBtn.TextColor3 = Color3.fromRGB(0,20,8)
             end
+        end
+
+        -- RESTORE STEAL MODE (Normal / Semi) - FIXED TO SAVE CHOICE
+        if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
+            Steal.StealMode = decErr.stealMode
+            print("[Green Duels] Restored Steal Mode:", Steal.StealMode)
+            -- Update toggles visually if UI exists
+            pcall(function()
+                if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](Steal.StealMode == "normal") end
+                if toggleSetters["semiSteal"] then toggleSetters["semiSteal"](Steal.StealMode == "semi") end
+            end)
         end
 
         local bools = {
