@@ -484,61 +484,47 @@ local Keys = {
 }
 
 -- ============================================================
--- INFINITE JUMP - HOLD LOGIC (Replaced with custom hold version)
+-- INFINITE JUMP (Hold Mode - Replaced Logic)
 -- ============================================================
--- Clean up old Ace system if exists
-if _G.AceNormalInfJump then
-    _G.AceNormalInfJump = nil
-end
-_G.AceNormalInfJump = {holdPressed=false, holdActive=false}
+-- ========== HOLD INFINITE JUMP ONLY ==========
+-- Simple hold to fly - from your new file
 
-function _G.AceStopNormalInfJumpHoldState()
-    _G.AceNormalInfJump.holdPressed = false
-    _G.AceNormalInfJump.holdActive = false
-end
-
-local function ApplyHoldInfJumpBoost()
+UserInputService.JumpRequest:Connect(function()
     if not State.infJumpEnabled then return end
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return end
-    -- Using AssemblyLinearVelocity (modern) but fallback to Velocity
-    root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
-end
-
--- Single tap jump
-UserInputService.JumpRequest:Connect(function()
-    if not State.infJumpEnabled then return end
-    ApplyHoldInfJumpBoost()
+    if root then
+        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+    end
 end)
 
--- Hold logic + fall clamp - single Heartbeat for performance
 RunService.Heartbeat:Connect(function()
     if not State.infJumpEnabled then return end
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
+    
+    -- Hold jump to keep jumping
     local hum = char:FindFirstChildOfClass("Humanoid")
-    
-    -- Hold to keep jumping (works for KB + Mobile + Controller via Humanoid.Jump)
-    local jumpHeld = false
-    pcall(function()
-        jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
-    end)
-    
-    if jumpHeld and root.AssemblyLinearVelocity.Y < 30 then
-        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
+    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
+    if jumpHeld and root.Velocity.Y < 30 then
+        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
     end
     
-    -- Fall speed limit (prevents too fast falling)
-    if root.AssemblyLinearVelocity.Y < -120 then
-        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -120, root.AssemblyLinearVelocity.Z)
+    -- Fall speed limit
+    if root.Velocity.Y < -120 then
+        root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
     end
 end)
+
+-- Keep stub for compatibility with old saves that might call it
+_G.AceNormalInfJump = _G.AceNormalInfJump or {}
+function _G.AceStopNormalInfJumpHoldState() end
+_G.AceApplyNormalInfJumpBoost = function() end
+_G.AceHookNormalInfMobileJumpButton = function() end
+
 
 -- ============================================================
 -- TRYARD ANIMATION PACK
