@@ -544,13 +544,36 @@ function _G.AceHookNormalInfMobileJumpButton(obj)
     local S = _G.AceNormalInfJump
     if not obj or obj.Name ~= "JumpButton" or not obj:IsA("GuiButton") or S.hooked[obj] then return end
     S.hooked[obj] = true
+    -- FIX: Strict touch validation to prevent phantom jumps when sliding near jump button
     obj.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.Touch or not State.infJumpEnabled then return end
+        -- Must actually be inside button bounds (not just near it)
+        local okPos, isInside = pcall(function()
+            local pos = input.Position
+            local absPos = obj.AbsolutePosition
+            local absSize = obj.AbsoluteSize
+            -- Add tiny tolerance (4px) but require true overlap
+            return pos.X >= absPos.X - 2 and pos.X <= absPos.X + absSize.X + 2 and pos.Y >= absPos.Y - 2 and pos.Y <= absPos.Y + absSize.Y + 2
+        end)
+        if not okPos or not isInside then return end
+        -- Must be direct touch on button, not a slide that started elsewhere
         _G.AceNormalInfJump.mobilePressed = true
+        local startPos = input.Position
         task.delay(0.12, function()
             if _G.AceNormalInfJump.mobilePressed and State.infJumpEnabled then
-                _G.AceNormalInfJump.mobileActive = true
-                AceApplyNormalInfJumpBoost(50)
+                -- Double-check still inside and didn't slide far (prevent slide trigger)
+                local stillValid = pcall(function()
+                    local curPos = obj.AbsolutePosition
+                    local curSize = obj.AbsoluteSize
+                    -- If finger moved > 25px from start, it was a slide, ignore
+                    local dist = (startPos - input.Position).Magnitude
+                    if dist > 25 then return false end
+                    return true
+                end)
+                if stillValid then
+                    _G.AceNormalInfJump.mobileActive = true
+                    AceApplyNormalInfJumpBoost(50)
+                end
             end
         end)
     end)
@@ -566,6 +589,19 @@ function _G.AceHookNormalInfMobileJumpButton(obj)
             _G.AceNormalInfJump.mobilePressed = false
             _G.AceNormalInfJump.mobileActive = false
         end
+    end)
+    -- Also use Activated which only fires on true taps inside button (extra safety)
+    pcall(function()
+        obj.Activated:Connect(function()
+            if not State.infJumpEnabled then return end
+            _G.AceNormalInfJump.mobilePressed = true
+            _G.AceNormalInfJump.mobileActive = true
+            AceApplyNormalInfJumpBoost(50)
+            task.delay(0.1, function()
+                _G.AceNormalInfJump.mobilePressed = false
+                _G.AceNormalInfJump.mobileActive = false
+            end)
+        end)
     end)
 end
 
@@ -1202,7 +1238,22 @@ local function Main()
             end
 
             if wasPressedLocal and not movedEnough and (tick() - pressTime) < 0.3 then
-                if onTap then onTap() end
+                -- FIX: Only count as tap if finger ended inside button bounds (prevents slide-near phantom taps)
+                local validTap = true
+                if input and input.Position then
+                    local ok, inside = pcall(function()
+                        local absPos = frame.AbsolutePosition
+                        local absSize = frame.AbsoluteSize
+                        local p = input.Position
+                        return p.X >= absPos.X and p.X <= absPos.X + absSize.X and p.Y >= absPos.Y and p.Y <= absPos.Y + absSize.Y
+                    end)
+                    if ok then validTap = inside else validTap = true end
+                end
+                -- Extra: check total movement from start < 12px (not just 8)
+                if validTap and dragStartPos and input and input.Position then
+                    if (input.Position - dragStartPos).Magnitude > 15 then validTap = false end
+                end
+                if validTap and onTap then onTap(input.Position) end
             end
         end)
 
@@ -2190,12 +2241,27 @@ local function Main()
         end
         stackBtnRefs[def.key] = {setOn = setOn, _btnFrame = btnFrame}
 
-        local function onTap()
+        local _lastDropTick = 0
+        local function onTap(inputPos)
             if def.key == "tpDown" then
                 task.spawn(function() if runTPDown then pcall(runTPDown) end; setOn(true); task.wait(0.12); setOn(false) end)
                 return
             end
             if def.key == "drop" then
+                -- FIX: Anti-phantom drop - require real tap inside button and add 0.4s cooldown
+                local now = tick()
+                if now - _lastDropTick < 0.4 then return end
+                _lastDropTick = now
+                -- If we have inputPos (from InputBegan), verify it's inside button
+                if inputPos then
+                    local ok, inside = pcall(function()
+                        local absPos = btnFrame.AbsolutePosition
+                        local absSize = btnFrame.AbsoluteSize
+                        return inputPos.X >= absPos.X and inputPos.X <= absPos.X + absSize.X and inputPos.Y >= absPos.Y and inputPos.Y <= absPos.Y + absSize.Y
+                    end)
+                    if not ok or not inside then return end
+                end
+                if dropActive then return end
                 task.spawn(function() pcall(runDrop) end)
                 return
             end
