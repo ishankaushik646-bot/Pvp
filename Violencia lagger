@@ -335,7 +335,7 @@ toggleClick.TextSize = 8
 toggleClick.TextColor3 = Color3.fromRGB(255, 0, 0)
 toggleClick.TextXAlignment = Enum.TextXAlignment.Center
 toggleClick.TextYAlignment = Enum.TextYAlignment.Center
-toggleClick.MouseButton1Click:Connect(toggleLagger)
+toggleClick.Activated:Connect(toggleLagger)
 toggleClick.AutoButtonColor = false
 local corner = Instance.new("UICorner", toggleClick)
 corner.CornerRadius = UDim.new(1,0)
@@ -530,16 +530,17 @@ do
         end
     end)
 
-    btn.MouseButton1Click:Connect(function()
-        -- Call the original toggleLagger function from main UI
+    -- FIXED: Button now works on tap/click (mobile + PC)
+    btn.Activated:Connect(function()
         pcall(toggleLagger)
     end)
 
-    -- Draggable
-    local dragging, dragStart, startPos
+    -- Draggable - FIXED to not block tap
+    local dragging, dragStart, startPos, hasDragged = false, nil, nil, false
     btn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
+            hasDragged = false
             dragStart = input.Position
             startPos = btn.Position
         end
@@ -547,6 +548,9 @@ do
     UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
+            if delta.Magnitude > 5 then
+                hasDragged = true
+            end
             btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
