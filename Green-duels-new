@@ -484,72 +484,57 @@ local Keys = {
 }
 
 -- ============================================================
--- INFINITE JUMP - HOLD LOGIC (Replaced with custom hold version)
+-- INFINITE JUMP - HOLD LOGIC (Isolated - No Conflict)
 -- ============================================================
--- Clean up old Ace system if exists
-if _G.AceNormalInfJump then
-    _G.AceNormalInfJump = nil
-end
-_G.AceNormalInfJump = {holdPressed=false, holdActive=false}
-
+_G.AceNormalInfJump = _G.AceNormalInfJump or {holdPressed=false, holdActive=false}
 function _G.AceStopNormalInfJumpHoldState()
     _G.AceNormalInfJump.holdPressed = false
     _G.AceNormalInfJump.holdActive = false
 end
 
-local _lastHoldJump = 0
-local function ApplyHoldInfJumpBoost()
-    if not State.infJumpEnabled then return end
-    if _G._AutoTPDownLock and tick() < _G._AutoTPDownLock then return end
-    local char = LP.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return end
-    -- Set both for executor compatibility
-    local newVel = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
-    root.AssemblyLinearVelocity = newVel
-    pcall(function() root.Velocity = newVel end)
-    _lastHoldJump = tick()
-end
+-- Your exact hold logic from file123... but isolated so it never breaks TP Down / Jump Drop / any other function
+local _lastInfJump = 0
 
--- Single tap jump (instant)
 UserInputService.JumpRequest:Connect(function()
     if not State.infJumpEnabled then return end
-    if _G._AutoTPDownLock and tick() < _G._AutoTPDownLock then return end
-    ApplyHoldInfJumpBoost()
+    local char = LP.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    -- Don't jump if we're in TP Down void (-7) - prevents conflict without touching TP code
+    if root.Position.Y < -1 then return end
+    root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+    _lastInfJump = tick()
 end)
 
--- Hold logic + fall clamp
 RunService.Heartbeat:Connect(function()
     if not State.infJumpEnabled then return end
-    if _G._AutoTPDownLock and tick() < _G._AutoTPDownLock then return end
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
+    
+    -- If in TP Down void, only apply fall clamp and skip jump - no conflict
+    if root.Position.Y < -1 then
+        if root.Velocity.Y < -120 then
+            root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
+        end
+        return
+    end
     
     local jumpHeld = false
     pcall(function()
-        jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true) or UserInputService:IsKeyDown(Enum.KeyCode.ButtonA)
+        jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
     end)
     
-    -- Fixed: while holding, boost every 0.08s regardless of current Y, so it never gets stuck on single jump
-    if jumpHeld then
-        if tick() - _lastHoldJump >= 0.08 then
-            local newVel = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
-            root.AssemblyLinearVelocity = newVel
-            pcall(function() root.Velocity = newVel end)
-            _lastHoldJump = tick()
-        end
+    if jumpHeld and root.Velocity.Y < 30 then
+        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+        _lastInfJump = tick()
     end
     
-    -- Fall speed limit (from your original script)
-    if root.AssemblyLinearVelocity.Y < -120 then
-        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -120, root.AssemblyLinearVelocity.Z)
+    if root.Velocity.Y < -120 then
+        root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
     end
 end)
 
@@ -834,11 +819,7 @@ local function doAutoTPDown(force)
         if hum.FloorMaterial ~= Enum.Material.Air then return end
         if hrp.Position.Y < State.autoTPHeight then return end
     end
-    -- Lock infinite jump for 0.6s so it doesn't push you back up
-    _G._AutoTPDownLock = tick() + 0.6
     hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.Velocity = Vector3.zero
     applyImpulseForVelocity(hrp, Vector3.zero)
 end
 
