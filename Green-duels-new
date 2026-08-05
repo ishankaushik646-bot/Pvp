@@ -484,148 +484,59 @@ local Keys = {
 }
 
 -- ============================================================
--- INFINITE JUMP (Ace impulse-based - ported)
+-- INFINITE JUMP - HOLD LOGIC (Replaced with custom hold version)
 -- ============================================================
-_G.AceNormalInfJump = _G.AceNormalInfJump or {holdPressed=false, holdActive=false, controllerActive=false, mobilePressed=false, mobileActive=false, hooked={}}
+-- Clean up old Ace system if exists
+if _G.AceNormalInfJump then
+    _G.AceNormalInfJump = nil
+end
+_G.AceNormalInfJump = {holdPressed=false, holdActive=false}
 
 function _G.AceStopNormalInfJumpHoldState()
-    local S = _G.AceNormalInfJump
-    S.holdPressed = false
-    S.holdActive = false
-    S.controllerActive = false
-    S.mobilePressed = false
-    S.mobileActive = false
+    _G.AceNormalInfJump.holdPressed = false
+    _G.AceNormalInfJump.holdActive = false
 end
 
-local function AceApplyNormalInfJumpBoost(boost)
+local function ApplyHoldInfJumpBoost()
     if not State.infJumpEnabled then return end
     local char = LP.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not root or not hum or hum.Health <= 0 then return end
-    local currentVel = root.AssemblyLinearVelocity
-    applyImpulseForVelocity(root, Vector3.new(currentVel.X, boost or 50, currentVel.Z))
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return end
+    -- Using AssemblyLinearVelocity (modern) but fallback to Velocity
+    root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
 end
 
-_G.AceApplyNormalInfJumpBoost = AceApplyNormalInfJumpBoost
-
-local _lastJumpReq = 0
+-- Single tap jump
 UserInputService.JumpRequest:Connect(function()
     if not State.infJumpEnabled then return end
-    local now = tick()
-    if now - _lastJumpReq < 0.18 then return end
-    _lastJumpReq = now
-    _G._lastJumpTime = now
-        _lastJumpTime = now
-    AceApplyNormalInfJumpBoost(50)
+    ApplyHoldInfJumpBoost()
 end)
 
-UserInputService.InputBegan:Connect(function(input)
-    if UserInputService:GetFocusedTextBox() then return end
-    local S = _G.AceNormalInfJump
-    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Space then
-        S.holdPressed = true
-        task.delay(0.12, function()
-            if _G.AceNormalInfJump.holdPressed and State.infJumpEnabled then
-                _G.AceNormalInfJump.holdActive = true
-                AceApplyNormalInfJumpBoost(50)
-            end
-        end)
-    elseif input.KeyCode == Enum.KeyCode.ButtonA and tostring(input.UserInputType):match("Gamepad") then
-        S.controllerActive = true
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    local S = _G.AceNormalInfJump
-    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Space then
-        S.holdPressed = false
-        S.holdActive = false
-    end
-    if input.KeyCode == Enum.KeyCode.ButtonA and tostring(input.UserInputType):match("Gamepad") then
-        S.controllerActive = false
-    end
-end)
-
-function _G.AceHookNormalInfMobileJumpButton(obj)
-    local S = _G.AceNormalInfJump
-    if not obj or obj.Name ~= "JumpButton" or not obj:IsA("GuiButton") or S.hooked[obj] then return end
-    S.hooked[obj] = true
-    local lastTapTime = 0
-    local function isRealTap(inputPos)
-        local ok, result = pcall(function()
-            local absPos = obj.AbsolutePosition
-            local absSize = obj.AbsoluteSize
-            local paddingX = absSize.X * 0.15
-            local paddingY = absSize.Y * 0.15
-            return inputPos.X >= absPos.X + paddingX and inputPos.X <= absPos.X + absSize.X - paddingX and inputPos.Y >= absPos.Y + paddingY and inputPos.Y <= absPos.Y + absSize.Y - paddingY
-        end)
-        return ok and result
-    end
-    pcall(function()
-        obj.Activated:Connect(function()
-            if not State.infJumpEnabled then return end
-            local now = tick()
-            if now - lastTapTime < 0.15 then return end
-            lastTapTime = now
-            _G.AceNormalInfJump.mobilePressed = true
-            _G.AceNormalInfJump.mobileActive = true
-            _G._lastJumpTime = tick()
-            _lastJumpTime = _G._lastJumpTime
-            AceApplyNormalInfJumpBoost(50)
-            task.delay(0.12, function()
-                _G.AceNormalInfJump.mobilePressed = false
-                _G.AceNormalInfJump.mobileActive = false
-            end)
-        end)
-    end)
-    obj.InputBegan:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.Touch or not State.infJumpEnabled then return end
-        if tick() - lastTapTime < 0.2 then return end
-        if not isRealTap(input.Position) then return end
-        local startPos = input.Position
-        local startTime = tick()
-        _G.AceNormalInfJump.mobilePressed = true
-        task.delay(0.08, function()
-            if not _G.AceNormalInfJump.mobilePressed or not State.infJumpEnabled then return end
-            if tick() - startTime > 0.3 then return end
-            if (input.Position - startPos).Magnitude > 18 then return end
-            if not isRealTap(input.Position) then return end
-            if tick() - lastTapTime < 0.15 then return end
-            lastTapTime = tick()
-            _G.AceNormalInfJump.mobileActive = true
-            AceApplyNormalInfJumpBoost(50)
-        end)
-    end)
-    obj.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
-            _G.AceNormalInfJump.mobilePressed = false
-            task.delay(0.08, function() _G.AceNormalInfJump.mobileActive = false end)
-        end
-    end)
-    obj.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            _G.AceNormalInfJump.hooked[obj] = nil
-            _G.AceNormalInfJump.mobilePressed = false
-            _G.AceNormalInfJump.mobileActive = false
-        end
-    end)
-end
-
-pcall(function()
-    local PlayerGui = LP:WaitForChild("PlayerGui")
-    for _, obj in ipairs(PlayerGui:GetDescendants()) do
-        _G.AceHookNormalInfMobileJumpButton(obj)
-    end
-    PlayerGui.DescendantAdded:Connect(function(obj)
-        task.defer(_G.AceHookNormalInfMobileJumpButton, obj)
-    end)
-end)
-
+-- Hold logic + fall clamp - single Heartbeat for performance
 RunService.Heartbeat:Connect(function()
-    local S = _G.AceNormalInfJump
-    if State.infJumpEnabled and (S.holdActive or S.mobileActive or S.controllerActive) then
-        AceApplyNormalInfJumpBoost(50)
+    if not State.infJumpEnabled then return end
+    local char = LP.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    
+    -- Hold to keep jumping (works for KB + Mobile + Controller via Humanoid.Jump)
+    local jumpHeld = false
+    pcall(function()
+        jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
+    end)
+    
+    if jumpHeld and root.AssemblyLinearVelocity.Y < 30 then
+        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
+    end
+    
+    -- Fall speed limit (prevents too fast falling)
+    if root.AssemblyLinearVelocity.Y < -120 then
+        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -120, root.AssemblyLinearVelocity.Z)
     end
 end)
 
@@ -899,13 +810,6 @@ local function mkStroke(p,col,th) local s=Instance.new("UIStroke",p); s.Color=co
 -- ============================================================
 -- AUTO TP
 -- ============================================================
-_G._lastJumpTime = _G._lastJumpTime or 0
-local _lastJumpTime = _G._lastJumpTime
--- Hook jump to track last jump time
-pcall(function()
-    LP:GetPropertyChangedSignal("Character"):Connect(function() _lastJumpTime = 0 end)
-end)
-
 local function doAutoTPDown(force)
     local char = LP.Character
     if not char then return end
@@ -914,15 +818,8 @@ local function doAutoTPDown(force)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
     if not force then
-        -- FIX V4.1: Auto TP disabled for auto-trigger, only manual TP Down button works
-        -- This prevents any auto-drop when jumping with inf jump
         if hum.FloorMaterial ~= Enum.Material.Air then return end
         if hrp.Position.Y < State.autoTPHeight then return end
-        if _G._lastJumpTime and tick() - _G._lastJumpTime < 1.5 then return end
-        if dropActive then return end
-        -- Extra safety: require being in air for >0.6 sec before auto TP
-        if hum:GetState() ~= Enum.HumanoidStateType.Freefall then return end
-        return -- Disabled auto TP to stop jump = drop bug, enable by removing this line
     end
     hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
     applyImpulseForVelocity(hrp, Vector3.zero)
@@ -1749,6 +1646,7 @@ local function Main()
                     print("[Green Duels] Steal Mode: NORMAL")
                     if requestSave then requestSave() end
                 else
+                    -- prevent both off, switch to semi if turned off
                     if Steal.StealMode == "normal" then
                         Steal.StealMode = "semi"
                         if semiToggle then semiToggle(true) end
@@ -1756,6 +1654,7 @@ local function Main()
                 end
             end)
             toggleSetters["normalSteal"] = normalToggle
+            toggleSetters["semiSteal"] = semiToggle
             
             semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", isSemi, function(on)
                 if on then
@@ -1770,6 +1669,8 @@ local function Main()
                     end
                 end
             end)
+            -- re-assign after both created to ensure correct refs
+            toggleSetters["normalSteal"] = normalToggle
             toggleSetters["semiSteal"] = semiToggle
 
             makeGap(6); makeSectionHeader("Steal Config"); makeGap(2)
@@ -3085,14 +2986,7 @@ local function Main()
             if State.autoRightEnabled and State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot(); if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end end
             if State.autoRightEnabled then startAutoRight() else stopAutoRight() end
             requestSave()
-        elseif kc==Keys.drop then 
-            -- FIX: Prevent drop from triggering when drop key is Space/Jump (would cause auto-drop on jump)
-            if kc == Enum.KeyCode.Space then
-                -- Only allow drop via button tap, not Space key
-                -- Skip to prevent jump = drop
-            else
-                if not dropActive then pcall(runDrop) end
-            end
+        elseif kc==Keys.drop then if not dropActive then pcall(runDrop) end
         elseif kc==Keys.lagger then toggleLaggerMode()
         elseif kc==Keys.tpDown then if runTPDown then task.spawn(runTPDown) end
         elseif kc==Keys.tpBat then
@@ -3357,10 +3251,11 @@ local function Main()
             end
         end
 
-        -- RESTORE STEAL MODE - FIXED
+        -- RESTORE STEAL MODE (Normal / Semi) - FIXED TO SAVE CHOICE
         if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
             Steal.StealMode = decErr.stealMode
             print("[Green Duels] Restored Steal Mode:", Steal.StealMode)
+            -- Update toggles visually if UI exists
             pcall(function()
                 if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](Steal.StealMode == "normal") end
                 if toggleSetters["semiSteal"] then toggleSetters["semiSteal"](Steal.StealMode == "semi") end
