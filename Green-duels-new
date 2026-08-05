@@ -3112,6 +3112,7 @@ local function Main()
                 autoTPHeight = State.autoTPHeight,
                 dropType = currentDropType,
                 tpBatToggled = tpBatToggled,
+                safeMode = State.safeModeEnabled,
             }
             local encoded = HttpService:JSONEncode(cfg)
             _writefile(CONFIG_FILE, encoded)
@@ -3211,6 +3212,7 @@ local function Main()
             removeAccessories="removeAcc", tryardAnimEnabled="tryardAnimEnabled",
             introEnabled="introEnabled", guiVisible="guiVisible",
             speedToggled="speedToggled", autoTPEnabled="autoTPEnabled",
+            safeMode="safeModeEnabled",
         }
         for cfgKey, stateKey in pairs(bools) do
             if decErr[cfgKey] ~= nil then
@@ -3296,6 +3298,7 @@ local function Main()
             elseif key=="hideButtons" then stateValue=State.stackButtonsHidden
             elseif key=="lockButtons" then stateValue=State.stackButtonsLocked
             elseif key=="autoTP" then stateValue=State.autoTPEnabled
+            elseif key=="safeMode" then stateValue=State.safeModeEnabled
             end
             if stateValue ~= nil then pcall(setter, stateValue) end
         end
