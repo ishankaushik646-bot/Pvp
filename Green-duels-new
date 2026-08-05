@@ -497,26 +497,31 @@ function _G.AceStopNormalInfJumpHoldState()
     _G.AceNormalInfJump.holdActive = false
 end
 
+local _lastHoldJump = 0
 local function ApplyHoldInfJumpBoost()
     if not State.infJumpEnabled then return end
+    if _G._AutoTPDownLock and tick() < _G._AutoTPDownLock then return end
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum or hum.Health <= 0 then return end
-    -- Using AssemblyLinearVelocity (modern) but fallback to Velocity
-    root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
+    -- Set both for executor compatibility
+    local newVel = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
+    root.AssemblyLinearVelocity = newVel
+    pcall(function() root.Velocity = newVel end)
+    _lastHoldJump = tick()
 end
 
--- Single tap jump
+-- Single tap jump (instant)
 UserInputService.JumpRequest:Connect(function()
     if not State.infJumpEnabled then return end
     if _G._AutoTPDownLock and tick() < _G._AutoTPDownLock then return end
     ApplyHoldInfJumpBoost()
 end)
 
--- Hold logic + fall clamp - single Heartbeat for performance
+-- Hold logic + fall clamp
 RunService.Heartbeat:Connect(function()
     if not State.infJumpEnabled then return end
     if _G._AutoTPDownLock and tick() < _G._AutoTPDownLock then return end
@@ -525,18 +530,24 @@ RunService.Heartbeat:Connect(function()
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
     
-    -- Hold to keep jumping (works for KB + Mobile + Controller via Humanoid.Jump)
     local jumpHeld = false
     pcall(function()
-        jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
+        jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true) or UserInputService:IsKeyDown(Enum.KeyCode.ButtonA)
     end)
     
-    if jumpHeld and root.AssemblyLinearVelocity.Y < 30 then
-        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
+    -- Fixed: while holding, boost every 0.08s regardless of current Y, so it never gets stuck on single jump
+    if jumpHeld then
+        if tick() - _lastHoldJump >= 0.08 then
+            local newVel = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
+            root.AssemblyLinearVelocity = newVel
+            pcall(function() root.Velocity = newVel end)
+            _lastHoldJump = tick()
+        end
     end
     
-    -- Fall speed limit (prevents too fast falling)
+    -- Fall speed limit (from your original script)
     if root.AssemblyLinearVelocity.Y < -120 then
         root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -120, root.AssemblyLinearVelocity.Z)
     end
