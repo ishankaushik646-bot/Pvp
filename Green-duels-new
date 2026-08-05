@@ -515,6 +515,7 @@ UserInputService.JumpRequest:Connect(function()
     local now = tick()
     if now - _lastJumpReq < 0.18 then return end
     _lastJumpReq = now
+    _lastJumpTime = now
     AceApplyNormalInfJumpBoost(50)
 end)
 
@@ -568,6 +569,7 @@ function _G.AceHookNormalInfMobileJumpButton(obj)
             lastTapTime = now
             _G.AceNormalInfJump.mobilePressed = true
             _G.AceNormalInfJump.mobileActive = true
+            _lastJumpTime = tick()
             AceApplyNormalInfJumpBoost(50)
             task.delay(0.12, function()
                 _G.AceNormalInfJump.mobilePressed = false
@@ -895,6 +897,12 @@ local function mkStroke(p,col,th) local s=Instance.new("UIStroke",p); s.Color=co
 -- ============================================================
 -- AUTO TP
 -- ============================================================
+local _lastJumpTime = 0
+-- Hook jump to track last jump time
+pcall(function()
+    LP:GetPropertyChangedSignal("Character"):Connect(function() _lastJumpTime = 0 end)
+end)
+
 local function doAutoTPDown(force)
     local char = LP.Character
     if not char then return end
@@ -905,6 +913,9 @@ local function doAutoTPDown(force)
     if not force then
         if hum.FloorMaterial ~= Enum.Material.Air then return end
         if hrp.Position.Y < State.autoTPHeight then return end
+        -- FIX: Don't auto-drop immediately after jumping (prevents auto-drop when using infinite jump)
+        if tick() - _lastJumpTime < 1.0 then return end
+        if dropActive then return end
     end
     hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
     applyImpulseForVelocity(hrp, Vector3.zero)
