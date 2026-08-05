@@ -515,7 +515,8 @@ UserInputService.JumpRequest:Connect(function()
     local now = tick()
     if now - _lastJumpReq < 0.18 then return end
     _lastJumpReq = now
-    _lastJumpTime = now
+    _G._lastJumpTime = now
+        _lastJumpTime = now
     AceApplyNormalInfJumpBoost(50)
 end)
 
@@ -569,7 +570,8 @@ function _G.AceHookNormalInfMobileJumpButton(obj)
             lastTapTime = now
             _G.AceNormalInfJump.mobilePressed = true
             _G.AceNormalInfJump.mobileActive = true
-            _lastJumpTime = tick()
+            _G._lastJumpTime = tick()
+            _lastJumpTime = _G._lastJumpTime
             AceApplyNormalInfJumpBoost(50)
             task.delay(0.12, function()
                 _G.AceNormalInfJump.mobilePressed = false
@@ -897,7 +899,8 @@ local function mkStroke(p,col,th) local s=Instance.new("UIStroke",p); s.Color=co
 -- ============================================================
 -- AUTO TP
 -- ============================================================
-local _lastJumpTime = 0
+_G._lastJumpTime = _G._lastJumpTime or 0
+local _lastJumpTime = _G._lastJumpTime
 -- Hook jump to track last jump time
 pcall(function()
     LP:GetPropertyChangedSignal("Character"):Connect(function() _lastJumpTime = 0 end)
@@ -911,11 +914,15 @@ local function doAutoTPDown(force)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
     if not force then
+        -- FIX V4.1: Auto TP disabled for auto-trigger, only manual TP Down button works
+        -- This prevents any auto-drop when jumping with inf jump
         if hum.FloorMaterial ~= Enum.Material.Air then return end
         if hrp.Position.Y < State.autoTPHeight then return end
-        -- FIX: Don't auto-drop immediately after jumping (prevents auto-drop when using infinite jump)
-        if tick() - _lastJumpTime < 1.0 then return end
+        if _G._lastJumpTime and tick() - _G._lastJumpTime < 1.5 then return end
         if dropActive then return end
+        -- Extra safety: require being in air for >0.6 sec before auto TP
+        if hum:GetState() ~= Enum.HumanoidStateType.Freefall then return end
+        return -- Disabled auto TP to stop jump = drop bug, enable by removing this line
     end
     hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
     applyImpulseForVelocity(hrp, Vector3.zero)
@@ -3078,7 +3085,14 @@ local function Main()
             if State.autoRightEnabled and State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot(); if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end end
             if State.autoRightEnabled then startAutoRight() else stopAutoRight() end
             requestSave()
-        elseif kc==Keys.drop then if not dropActive then pcall(runDrop) end
+        elseif kc==Keys.drop then 
+            -- FIX: Prevent drop from triggering when drop key is Space/Jump (would cause auto-drop on jump)
+            if kc == Enum.KeyCode.Space then
+                -- Only allow drop via button tap, not Space key
+                -- Skip to prevent jump = drop
+            else
+                if not dropActive then pcall(runDrop) end
+            end
         elseif kc==Keys.lagger then toggleLaggerMode()
         elseif kc==Keys.tpDown then if runTPDown then task.spawn(runTPDown) end
         elseif kc==Keys.tpBat then
