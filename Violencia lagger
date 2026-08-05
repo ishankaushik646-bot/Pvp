@@ -335,7 +335,7 @@ toggleClick.TextSize = 8
 toggleClick.TextColor3 = Color3.fromRGB(255, 0, 0)
 toggleClick.TextXAlignment = Enum.TextXAlignment.Center
 toggleClick.TextYAlignment = Enum.TextYAlignment.Center
-toggleClick.Activated:Connect(toggleLagger)
+toggleClick.MouseButton1Click:Connect(toggleLagger)
 toggleClick.AutoButtonColor = false
 local corner = Instance.new("UICorner", toggleClick)
 corner.CornerRadius = UDim.new(1,0)
@@ -470,94 +470,3 @@ UserInputService.InputBegan:Connect(function(input, gp)
 end)
 
 print("[Violencia Lagger] Loaded! Press M to toggle")
-
--- ============================================================
--- ADDED: GREEN DUELS STYLE BUTTON (Purple, different color) - Controls same lagger
--- ============================================================
-do
-    local C_GreenDuelsBtn = {
-        bg = Color3.fromRGB(28, 12, 48),
-        brd = Color3.fromRGB(150, 100, 220),
-        txt = Color3.fromRGB(220, 200, 255),
-        actBg = Color3.fromRGB(160, 90, 255),
-        actBrd = Color3.fromRGB(200, 150, 255),
-        actTxt = Color3.fromRGB(255,255,255),
-    }
-    local function mkCorner2(p,r) Instance.new("UICorner",{CornerRadius=UDim.new(0,r or 6), Parent=p}) end
-    local function mkStroke2(p,col,th) local s=Instance.new("UIStroke",p); s.Color=col; s.Thickness=th or 1; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; return s end
-
-    local gui2 = CoreGui:FindFirstChild("ViolenciaLaggerPurpleUI")
-    -- create separate gui for the extra button so it stays even if main is locked
-    local extraGui = Instance.new("ScreenGui")
-    extraGui.Name = "ViolenciaExtraBtnGUI"
-    extraGui.ResetOnSpawn = false
-    extraGui.Parent = CoreGui
-
-    local btn = Instance.new("TextButton", extraGui)
-    btn.Name = "ViolenciaGDStyleBtn"
-    btn.Size = UDim2.new(0,58,0,58)
-    btn.Position = UDim2.new(1,-80,0.5,80) -- below original Green Duels pos, purple
-    btn.BackgroundColor3 = C_GreenDuelsBtn.bg
-    btn.Text = "VIOLENCIA\nLAGGER"
-    btn.TextColor3 = C_GreenDuelsBtn.txt
-    btn.TextSize = 11
-    btn.Font = Enum.Font.GothamBold
-    btn.TextWrapped = true
-    btn.LineHeight = 1.2
-    btn.AutoButtonColor = false
-    mkCorner2(btn,12)
-    local stroke = mkStroke2(btn, C_GreenDuelsBtn.brd, 1)
-
-    local function setOn(on)
-        TweenService:Create(btn,TweenInfo.new(0.15),{
-            BackgroundColor3 = on and C_GreenDuelsBtn.actBg or C_GreenDuelsBtn.bg,
-            TextColor3 = on and C_GreenDuelsBtn.actTxt or C_GreenDuelsBtn.txt
-        }):Play()
-        TweenService:Create(stroke,TweenInfo.new(0.15),{
-            Color = on and C_GreenDuelsBtn.actBrd or C_GreenDuelsBtn.brd
-        }):Play()
-        btn.Text = on and "VIOLENCIA\nON" or "VIOLENCIA\nLAGGER"
-    end
-
-    -- Sync with existing lagger state
-    task.spawn(function()
-        while task.wait(0.2) do
-            if laggerActive then
-                setOn(true)
-            else
-                setOn(false)
-            end
-        end
-    end)
-
-    -- FIXED: Button now works on tap/click (mobile + PC)
-    btn.Activated:Connect(function()
-        pcall(toggleLagger)
-    end)
-
-    -- Draggable - FIXED to not block tap
-    local dragging, dragStart, startPos, hasDragged = false, nil, nil, false
-    btn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            hasDragged = false
-            dragStart = input.Position
-            startPos = btn.Position
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            if delta.Magnitude > 5 then
-                hasDragged = true
-            end
-            btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-end
-
