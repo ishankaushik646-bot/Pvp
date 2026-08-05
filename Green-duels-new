@@ -448,8 +448,7 @@ local State = {
     autoLeftPhase=1, autoRightPhase=1,
     medusaLastUsed=0, medusaDebounce=false, medusaCounterEnabled=false,
     batAimbotToggled=false,
-    useAntiBypass=false,
-    aimbotMode="Normal", autoSwingEnabled=false,
+    safeModeEnabled=false, autoSwingEnabled=false,
     hittingCooldown=false,
     batCounterEnabled=false, batCounterDebounce=false,
     dropEnabled=false, _tpInProgress=false,
@@ -1647,71 +1646,17 @@ local function Main()
             toggleSetters["batCounter"] = setBatCounter
             setMedusaCounter = makeToggleRow("Medusa Counter", false, function(on) State.medusaCounterEnabled=on; if on then setupMedusaCounter(LP.Character) else stopMedusaCounter() end end)
             toggleSetters["medusaCounter"] = setMedusaCounter
-            
-            makeGap(8); makeSectionHeader("Aimbot Mode"); makeGap(2)
-            -- Mode selector: Normal vs Anti Bypass
-            local modeRow = Instance.new("Frame", currentPage)
-            modeRow.Size = UDim2.new(1,-16,0,38)
-            modeRow.BackgroundTransparency=1
-            modeRow.BorderSizePixel=0
-            modeRow.LayoutOrder=LO()
-            local modeLayout = Instance.new("UIListLayout", modeRow)
-            modeLayout.FillDirection=Enum.FillDirection.Horizontal
-            modeLayout.Padding=UDim.new(0,8)
-            modeLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center
-            modeLayout.VerticalAlignment=Enum.VerticalAlignment.Center
-            
-            local function mkModeBtn(text, mode)
-                local btn=Instance.new("TextButton", modeRow)
-                btn.Size=UDim2.new(0.5,-12,1,0)
-                btn.BackgroundColor3 = (State.aimbotMode==mode) and Color3.fromRGB(0,170,90) or Color3.fromRGB(45,45,45)
-                btn.Text = text
-                btn.TextColor3=Color3.fromRGB(255,255,255)
-                btn.Font=Enum.Font.GothamBold
-                btn.TextSize=12
-                btn.BorderSizePixel=0
-                Instance.new("UICorner", btn).CornerRadius=UDim.new(0,6)
-                btn.MouseButton1Click:Connect(function()
-                    State.aimbotMode=mode
-                    State.useAntiBypass = (mode=="Bypass")
-                    -- update button colors
-                    for _,c in ipairs(modeRow:GetChildren()) do
-                        if c:IsA("TextButton") then
-                            if c.Text:find(mode=="Normal" and "NORMAL" or "BYPASS") then
-                                c.BackgroundColor3=Color3.fromRGB(0,170,90)
-                            else
-                                c.BackgroundColor3=Color3.fromRGB(45,45,45)
-                            end
-                        end
-                    end
-                    -- if aimbot is active, restart with new mode
-                    if State.batAimbotToggled or State.antiBypassAimbotToggled then
-                        if State.batAimbotToggled then stopBatAimbot() end
-                        if State.antiBypassAimbotToggled then if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end end
-                        State.batAimbotToggled=false
-                        State.antiBypassAimbotToggled=false
-                        task.wait(0.1)
-                        if mode=="Normal" then
-                            State.batAimbotToggled=true
-                            startBatAimbot()
-                            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(true); stackBtnRefs.aimbot.label.Text="AIMBOT\nNORMAL" end
-                        else
-                            State.antiBypassAimbotToggled=true
-                            if _G.GreenStartAntiBypass then _G.GreenStartAntiBypass() end
-                            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(true); stackBtnRefs.aimbot.label.Text="AIMBOT\nBYPASS" end
-                        end
-                    end
-                    requestSave()
-                end)
-                return btn
-            end
-            
-            mkModeBtn("NORMAL", "Normal")
-            mkModeBtn("ANTI BYPASS", "Bypass")
-            
-            makeGap(4)
             makeKeybindRow("Aimbot Key", Keys.aimbot, function(k) Keys.aimbot=k end, "aimbot")
             makeKeybindRow("TP Bat Key", Keys.tpBat, function(k) Keys.tpBat=k end, "tpBat")
+            makeGap(8); makeSectionHeader("Safety"); makeGap(2)
+            local safeModeToggle = makeToggleRow("Safe Mode (Anti-Kick)", State.safeModeEnabled, function(on)
+                State.safeModeEnabled=on
+                if on and _G.GreenSafeModeIsLocked and _G.GreenSafeModeIsLocked() then
+                    if _G.GreenSafeModeForceStop then _G.GreenSafeModeForceStop("SAFE MODE ENABLED") end
+                end
+                requestSave()
+            end)
+            toggleSetters["safeMode"] = safeModeToggle
         end)
         page.LayoutOrder = 2
     end
@@ -2409,6 +2354,7 @@ local function Main()
         return closest
     end
     startBatAimbot = function()
+        if _G.GreenSafeModeTryStart and not _G.GreenSafeModeTryStart() then return end
         if Conns.aimbot then Conns.aimbot:Disconnect() end
         if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
         if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
@@ -2567,7 +2513,116 @@ local function Main()
         end)
     end
 
+    
     -- ============================================================
+    -- SAFE MODE (from Ace Duels)
+    -- Prevents aimbot/auto movement during duel countdown and while carrying brainrot
+    -- ============================================================
+    _G.GreenSafeMode = _G.GreenSafeMode or {}
+    _G.GreenSafeMode.BlockedTools = {
+        bat=true, slap=true, sword=true, gun=true, pistol=true, rifle=true,
+        medusa=true, hammer=true, axe=true, knife=true, katana=true, blade=true, fist=true,
+    }
+
+    local function safeModeGetCountdownLabel()
+        local ok, label = pcall(function()
+            return LP.PlayerGui
+            and LP.PlayerGui:FindFirstChild("DuelsMachineTopFrame")
+            and LP.PlayerGui.DuelsMachineTopFrame:FindFirstChild("DuelsMachineTopFrame")
+            and LP.PlayerGui.DuelsMachineTopFrame.DuelsMachineTopFrame:FindFirstChild("Timer")
+            and LP.PlayerGui.DuelsMachineTopFrame.DuelsMachineTopFrame.Timer:FindFirstChild("Label")
+        end)
+        return (ok and label) or nil
+    end
+
+    local function safeModeCountdownNumber(text)
+        local t = tostring(text or ""):upper():gsub("^%s+", ""):gsub("%s+$", "")
+        if t == "GO" or t == "START" or t == "READY" then return true end
+        local n = tonumber(t)
+        return n ~= nil and n >= 0 and n <= 10
+    end
+
+    local function safeModeInDuelCountdown()
+        local label = safeModeGetCountdownLabel()
+        return label and safeModeCountdownNumber(label.Text) or false
+    end
+
+    local function safeModeHoldingBrainrot()
+        local ok, val = pcall(function() return LP:GetAttribute("Stealing") end)
+        if ok and val == true then return true end
+        local ok2, val2 = pcall(function() return LP:GetAttribute("AntiKick") end)
+        if ok2 and val2 == true then return true end
+        local char = LP.Character
+        if not char then return false end
+        local ok3, val3 = pcall(function() return char:GetAttribute("Stealing") end)
+        if ok3 and val3 == true then return true end
+        -- Check if carrying brainrot by tool name
+        for _, tool in ipairs(char:GetChildren()) do
+            if tool:IsA("Tool") then
+                local n = tool.Name:lower()
+                if n:find("brainrot") or n:find("animal") or n:find("carry") or n:find("steal") then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    _G.GreenSafeModeIsLocked = function()
+        if not State.safeModeEnabled then return false end
+        return safeModeInDuelCountdown() or safeModeHoldingBrainrot()
+    end
+
+    _G.GreenSafeModeForceStop = function(reason)
+        local stopped = false
+        if State.batAimbotToggled then
+            State.batAimbotToggled=false
+            stopBatAimbot()
+            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end
+            stopped=true
+        end
+        if State.antiBypassAimbotToggled then
+            State.antiBypassAimbotToggled=false
+            if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end
+            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end
+            stopped=true
+        end
+        if State.autoLeftEnabled then
+            State.autoLeftEnabled=false
+            if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end
+            stopAutoLeft()
+            stopped=true
+        end
+        if State.autoRightEnabled then
+            State.autoRightEnabled=false
+            if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end
+            stopAutoRight()
+            stopped=true
+        end
+        if stopped then
+            print("[Green Duels] SAFE MODE LOCK - stopped aimbot/movement: " .. (reason or ""))
+        end
+    end
+
+    _G.GreenSafeModeTryStart = function()
+        if _G.GreenSafeModeIsLocked and _G.GreenSafeModeIsLocked() then
+            _G.GreenSafeModeForceStop("SAFE MODE LOCK")
+            return false
+        end
+        return true
+    end
+
+    -- Monitor heartbeat for safe mode
+    task.spawn(function()
+        while task.wait(0.2) do
+            if State.safeModeEnabled and _G.GreenSafeModeIsLocked and _G.GreenSafeModeIsLocked() then
+                _G.GreenSafeModeForceStop("SAFE MODE")
+            end
+        end
+    end)
+
+    
+-- ============================================================
     -- AUTO-STEAL
     -- ============================================================
     local isStealing=false
