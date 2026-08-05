@@ -512,12 +512,14 @@ end
 -- Single tap jump
 UserInputService.JumpRequest:Connect(function()
     if not State.infJumpEnabled then return end
+    if _G._AutoTPDownLock and tick() < _G._AutoTPDownLock then return end
     ApplyHoldInfJumpBoost()
 end)
 
 -- Hold logic + fall clamp - single Heartbeat for performance
 RunService.Heartbeat:Connect(function()
     if not State.infJumpEnabled then return end
+    if _G._AutoTPDownLock and tick() < _G._AutoTPDownLock then return end
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -821,7 +823,11 @@ local function doAutoTPDown(force)
         if hum.FloorMaterial ~= Enum.Material.Air then return end
         if hrp.Position.Y < State.autoTPHeight then return end
     end
+    -- Lock infinite jump for 0.6s so it doesn't push you back up
+    _G._AutoTPDownLock = tick() + 0.6
     hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.Velocity = Vector3.zero
     applyImpulseForVelocity(hrp, Vector3.zero)
 end
 
