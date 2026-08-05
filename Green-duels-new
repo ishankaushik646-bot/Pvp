@@ -21,8 +21,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local UserInputService   = game:GetService("UserInputService")
 local TweenService       = game:GetService("TweenService")
 
-local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request)
-if not request then return end
+local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or function() return {Body="{}"} end
 
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
@@ -1673,22 +1672,6 @@ local function Main()
                             end
                         end
                     end
-                    if State.batAimbotToggled or State.antiBypassAimbotToggled then
-                        if State.batAimbotToggled then stopBatAimbot() end
-                        if State.antiBypassAimbotToggled then if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end end
-                        State.batAimbotToggled=false
-                        State.antiBypassAimbotToggled=false
-                        task.wait(0.1)
-                        if mode=="Normal" then
-                            State.batAimbotToggled=true
-                            startBatAimbot()
-                            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(true) end
-                        else
-                            State.antiBypassAimbotToggled=true
-                            if _G.GreenStartAntiBypass then _G.GreenStartAntiBypass() end
-                            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(true) end
-                        end
-                    end
                     requestSave()
                 end)
                 return btn
@@ -1700,9 +1683,6 @@ local function Main()
             makeGap(8); makeSectionHeader("Safety"); makeGap(2)
             local safeModeToggle = makeToggleRow("Safe Mode (Anti-Kick)", State.safeModeEnabled, function(on)
                 State.safeModeEnabled=on
-                if on and _G.GreenSafeModeIsLocked and _G.GreenSafeModeIsLocked() then
-                    if _G.GreenSafeModeForceStop then _G.GreenSafeModeForceStop("SAFE MODE ENABLED") end
-                end
                 requestSave()
             end)
             toggleSetters["safeMode"] = safeModeToggle
@@ -2241,8 +2221,8 @@ local function Main()
                 if ns and State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot(); if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end end
                 if ns then startAutoRight() else stopAutoRight() end
             elseif def.key == "aimbot" then
-                local mode = State.aimbotMode or (State.useAntiBypass and "Bypass" or "Normal")
-                if mode=="Bypass" or State.useAntiBypass then
+                local mode = State.aimbotMode or "Normal"
+                if mode=="Bypass" then
                     State.antiBypassAimbotToggled = ns
                     if ns then
                         if State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot() end
@@ -2717,12 +2697,6 @@ local function Main()
     -- ============================================================
     -- SAFE MODE (from Ace Duels)
     -- ============================================================
-    _G.GreenSafeMode = _G.GreenSafeMode or {}
-    _G.GreenSafeMode.BlockedTools = {
-        bat=true, slap=true, sword=true, gun=true, pistol=true, rifle=true,
-        medusa=true, hammer=true, axe=true, knife=true, katana=true, blade=true, fist=true,
-    }
-
     local function safeModeGetCountdownLabel()
         local ok, label = pcall(function()
             return LP.PlayerGui
@@ -2749,18 +2723,12 @@ local function Main()
     local function safeModeHoldingBrainrot()
         local ok, val = pcall(function() return LP:GetAttribute("Stealing") end)
         if ok and val == true then return true end
-        local ok2, val2 = pcall(function() return LP:GetAttribute("AntiKick") end)
-        if ok2 and val2 == true then return true end
         local char = LP.Character
         if not char then return false end
-        local ok3, val3 = pcall(function() return char:GetAttribute("Stealing") end)
-        if ok3 and val3 == true then return true end
         for _, tool in ipairs(char:GetChildren()) do
             if tool:IsA("Tool") then
                 local n = tool.Name:lower()
-                if n:find("brainrot") or n:find("animal") or n:find("carry") or n:find("steal") then
-                    return true
-                end
+                if n:find("brainrot") or n:find("carry") or n:find("steal") then return true end
             end
         end
         return false
@@ -2772,41 +2740,14 @@ local function Main()
     end
 
     _G.GreenSafeModeForceStop = function(reason)
-        local stopped = false
-        if State.batAimbotToggled then
-            State.batAimbotToggled=false
-            stopBatAimbot()
-            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end
-            stopped=true
-        end
-        if State.antiBypassAimbotToggled then
-            State.antiBypassAimbotToggled=false
-            if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end
-            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end
-            stopped=true
-        end
-        if State.autoLeftEnabled then
-            State.autoLeftEnabled=false
-            if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end
-            stopAutoLeft()
-            stopped=true
-        end
-        if State.autoRightEnabled then
-            State.autoRightEnabled=false
-            if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end
-            stopAutoRight()
-            stopped=true
-        end
-        if stopped then
-            print("[Green Duels] SAFE MODE LOCK: " .. (reason or ""))
-        end
+        if State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot(); if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end end
+        if State.antiBypassAimbotToggled then State.antiBypassAimbotToggled=false; if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end; if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end end
+        if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
+        if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
     end
 
     _G.GreenSafeModeTryStart = function()
-        if _G.GreenSafeModeIsLocked and _G.GreenSafeModeIsLocked() then
-            _G.GreenSafeModeForceStop("SAFE MODE LOCK")
-            return false
-        end
+        if _G.GreenSafeModeIsLocked and _G.GreenSafeModeIsLocked() then _G.GreenSafeModeForceStop("SAFE MODE LOCK"); return false end
         return true
     end
 
@@ -3148,31 +3089,20 @@ local function Main()
                 stackBtnRefs.reset.setOn(false)
             end
         elseif kc==Keys.aimbot then
-            if _G.GreenSafeModeTryStart and not _G.GreenSafeModeTryStart() then return end
-            local mode = State.aimbotMode or (State.useAntiBypass and "Bypass" or "Normal")
-            if mode=="Bypass" or State.useAntiBypass then
-                State.antiBypassAimbotToggled=not State.antiBypassAimbotToggled
-                if State.antiBypassAimbotToggled then
-                    if State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot() end
-                    if _G.GreenStartAntiBypass then _G.GreenStartAntiBypass() end
-                    if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(true) end
-                else
-                    if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end
-                    if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end
-                end
-            else
-                State.batAimbotToggled=not State.batAimbotToggled
-                if State.batAimbotToggled then
-                    if State.antiBypassAimbotToggled then State.antiBypassAimbotToggled=false; if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end end
-                    pcall(startBatAimbot)
-                    if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(true) end
-                else
-                    stopBatAimbot()
-                    if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end
-                end
-            end
+            State.batAimbotToggled=not State.batAimbotToggled
+            if State.batAimbotToggled then
+                if State.autoLeftEnabled then State.autoLeftEnabled=false; stopAutoLeft(); if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end end
+                if State.autoRightEnabled then State.autoRightEnabled=false; stopAutoRight(); if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end end
+                pcall(startBatAimbot)
+            else stopBatAimbot() end
+            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(State.batAimbotToggled) end
             requestSave()
-        end
+        elseif kc==Keys.guiHide then
+            if isKb then
+                State.guiVisible=not State.guiVisible; mainOuter.Visible=State.guiVisible
+                if _G.GreenDuelsQAHide then pcall(_G.GreenDuelsQAHide, not State.guiVisible) end
+                requestSave()
+            end
         end
     end)
 
