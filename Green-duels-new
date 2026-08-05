@@ -509,7 +509,12 @@ end
 
 _G.AceApplyNormalInfJumpBoost = AceApplyNormalInfJumpBoost
 
+local _lastJumpReq = 0
 UserInputService.JumpRequest:Connect(function()
+    if not State.infJumpEnabled then return end
+    local now = tick()
+    if now - _lastJumpReq < 0.18 then return end
+    _lastJumpReq = now
     AceApplyNormalInfJumpBoost(50)
 end)
 
@@ -544,43 +549,54 @@ function _G.AceHookNormalInfMobileJumpButton(obj)
     local S = _G.AceNormalInfJump
     if not obj or obj.Name ~= "JumpButton" or not obj:IsA("GuiButton") or S.hooked[obj] then return end
     S.hooked[obj] = true
-    -- FIX: Strict touch validation to prevent phantom jumps when sliding near jump button
-    obj.InputBegan:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.Touch or not State.infJumpEnabled then return end
-        -- Must actually be inside button bounds (not just near it)
-        local okPos, isInside = pcall(function()
-            local pos = input.Position
+    local lastTapTime = 0
+    local function isRealTap(inputPos)
+        local ok, result = pcall(function()
             local absPos = obj.AbsolutePosition
             local absSize = obj.AbsoluteSize
-            -- Add tiny tolerance (4px) but require true overlap
-            return pos.X >= absPos.X - 2 and pos.X <= absPos.X + absSize.X + 2 and pos.Y >= absPos.Y - 2 and pos.Y <= absPos.Y + absSize.Y + 2
+            local paddingX = absSize.X * 0.15
+            local paddingY = absSize.Y * 0.15
+            return inputPos.X >= absPos.X + paddingX and inputPos.X <= absPos.X + absSize.X - paddingX and inputPos.Y >= absPos.Y + paddingY and inputPos.Y <= absPos.Y + absSize.Y - paddingY
         end)
-        if not okPos or not isInside then return end
-        -- Must be direct touch on button, not a slide that started elsewhere
-        _G.AceNormalInfJump.mobilePressed = true
+        return ok and result
+    end
+    pcall(function()
+        obj.Activated:Connect(function()
+            if not State.infJumpEnabled then return end
+            local now = tick()
+            if now - lastTapTime < 0.15 then return end
+            lastTapTime = now
+            _G.AceNormalInfJump.mobilePressed = true
+            _G.AceNormalInfJump.mobileActive = true
+            AceApplyNormalInfJumpBoost(50)
+            task.delay(0.12, function()
+                _G.AceNormalInfJump.mobilePressed = false
+                _G.AceNormalInfJump.mobileActive = false
+            end)
+        end)
+    end)
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.Touch or not State.infJumpEnabled then return end
+        if tick() - lastTapTime < 0.2 then return end
+        if not isRealTap(input.Position) then return end
         local startPos = input.Position
-        task.delay(0.12, function()
-            if _G.AceNormalInfJump.mobilePressed and State.infJumpEnabled then
-                -- Double-check still inside and didn't slide far (prevent slide trigger)
-                local stillValid = pcall(function()
-                    local curPos = obj.AbsolutePosition
-                    local curSize = obj.AbsoluteSize
-                    -- If finger moved > 25px from start, it was a slide, ignore
-                    local dist = (startPos - input.Position).Magnitude
-                    if dist > 25 then return false end
-                    return true
-                end)
-                if stillValid then
-                    _G.AceNormalInfJump.mobileActive = true
-                    AceApplyNormalInfJumpBoost(50)
-                end
-            end
+        local startTime = tick()
+        _G.AceNormalInfJump.mobilePressed = true
+        task.delay(0.08, function()
+            if not _G.AceNormalInfJump.mobilePressed or not State.infJumpEnabled then return end
+            if tick() - startTime > 0.3 then return end
+            if (input.Position - startPos).Magnitude > 18 then return end
+            if not isRealTap(input.Position) then return end
+            if tick() - lastTapTime < 0.15 then return end
+            lastTapTime = tick()
+            _G.AceNormalInfJump.mobileActive = true
+            AceApplyNormalInfJumpBoost(50)
         end)
     end)
     obj.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
             _G.AceNormalInfJump.mobilePressed = false
-            _G.AceNormalInfJump.mobileActive = false
+            task.delay(0.08, function() _G.AceNormalInfJump.mobileActive = false end)
         end
     end)
     obj.AncestryChanged:Connect(function(_, parent)
@@ -589,19 +605,6 @@ function _G.AceHookNormalInfMobileJumpButton(obj)
             _G.AceNormalInfJump.mobilePressed = false
             _G.AceNormalInfJump.mobileActive = false
         end
-    end)
-    -- Also use Activated which only fires on true taps inside button (extra safety)
-    pcall(function()
-        obj.Activated:Connect(function()
-            if not State.infJumpEnabled then return end
-            _G.AceNormalInfJump.mobilePressed = true
-            _G.AceNormalInfJump.mobileActive = true
-            AceApplyNormalInfJumpBoost(50)
-            task.delay(0.1, function()
-                _G.AceNormalInfJump.mobilePressed = false
-                _G.AceNormalInfJump.mobileActive = false
-            end)
-        end)
     end)
 end
 
@@ -1238,22 +1241,7 @@ local function Main()
             end
 
             if wasPressedLocal and not movedEnough and (tick() - pressTime) < 0.3 then
-                -- FIX: Only count as tap if finger ended inside button bounds (prevents slide-near phantom taps)
-                local validTap = true
-                if input and input.Position then
-                    local ok, inside = pcall(function()
-                        local absPos = frame.AbsolutePosition
-                        local absSize = frame.AbsoluteSize
-                        local p = input.Position
-                        return p.X >= absPos.X and p.X <= absPos.X + absSize.X and p.Y >= absPos.Y and p.Y <= absPos.Y + absSize.Y
-                    end)
-                    if ok then validTap = inside else validTap = true end
-                end
-                -- Extra: check total movement from start < 12px (not just 8)
-                if validTap and dragStartPos and input and input.Position then
-                    if (input.Position - dragStartPos).Magnitude > 15 then validTap = false end
-                end
-                if validTap and onTap then onTap(input.Position) end
+                if onTap then onTap() end
             end
         end)
 
@@ -1743,7 +1731,6 @@ local function Main()
                     print("[Green Duels] Steal Mode: NORMAL")
                     if requestSave then requestSave() end
                 else
-                    -- prevent both off, switch to semi if turned off
                     if Steal.StealMode == "normal" then
                         Steal.StealMode = "semi"
                         if semiToggle then semiToggle(true) end
@@ -1751,7 +1738,6 @@ local function Main()
                 end
             end)
             toggleSetters["normalSteal"] = normalToggle
-            toggleSetters["semiSteal"] = semiToggle
             
             semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", isSemi, function(on)
                 if on then
@@ -1766,8 +1752,6 @@ local function Main()
                     end
                 end
             end)
-            -- re-assign after both created to ensure correct refs
-            toggleSetters["normalSteal"] = normalToggle
             toggleSetters["semiSteal"] = semiToggle
 
             makeGap(6); makeSectionHeader("Steal Config"); makeGap(2)
@@ -2241,27 +2225,12 @@ local function Main()
         end
         stackBtnRefs[def.key] = {setOn = setOn, _btnFrame = btnFrame}
 
-        local _lastDropTick = 0
-        local function onTap(inputPos)
+        local function onTap()
             if def.key == "tpDown" then
                 task.spawn(function() if runTPDown then pcall(runTPDown) end; setOn(true); task.wait(0.12); setOn(false) end)
                 return
             end
             if def.key == "drop" then
-                -- FIX: Anti-phantom drop - require real tap inside button and add 0.4s cooldown
-                local now = tick()
-                if now - _lastDropTick < 0.4 then return end
-                _lastDropTick = now
-                -- If we have inputPos (from InputBegan), verify it's inside button
-                if inputPos then
-                    local ok, inside = pcall(function()
-                        local absPos = btnFrame.AbsolutePosition
-                        local absSize = btnFrame.AbsoluteSize
-                        return inputPos.X >= absPos.X and inputPos.X <= absPos.X + absSize.X and inputPos.Y >= absPos.Y and inputPos.Y <= absPos.Y + absSize.Y
-                    end)
-                    if not ok or not inside then return end
-                end
-                if dropActive then return end
                 task.spawn(function() pcall(runDrop) end)
                 return
             end
@@ -3363,11 +3332,10 @@ local function Main()
             end
         end
 
-        -- RESTORE STEAL MODE (Normal / Semi) - FIXED TO SAVE CHOICE
+        -- RESTORE STEAL MODE - FIXED
         if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
             Steal.StealMode = decErr.stealMode
             print("[Green Duels] Restored Steal Mode:", Steal.StealMode)
-            -- Update toggles visually if UI exists
             pcall(function()
                 if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](Steal.StealMode == "normal") end
                 if toggleSetters["semiSteal"] then toggleSetters["semiSteal"](Steal.StealMode == "semi") end
