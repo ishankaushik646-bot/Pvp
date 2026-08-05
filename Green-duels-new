@@ -7,7 +7,7 @@
 -- ============================================================
 
 --[[
-  Panel Client v3 — Headless (no GUI)
+  Panel Client v3 â€” Headless (no GUI)
   Controlled via web panel polling only
 ]]
 
@@ -21,12 +21,13 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local UserInputService   = game:GetService("UserInputService")
 local TweenService       = game:GetService("TweenService")
 
-local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or function() return {Body="{}"} end
+local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request)
+if not request then return end
 
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
-if _G.GreenDuelsV2_Running then pcall(function() if _G.GreenDuelsV2_Cleanup then _G.GreenDuelsV2_Cleanup() end end) end
+if _G.GreenDuelsV2_Running then return end
 _G.GreenDuelsV2_Running = true
 
 local Players = game:GetService("Players")
@@ -54,7 +55,7 @@ presetListFrame = Instance.new("Frame")
 presetListFrame.Name = "PresetList"
 presetListFrame.Size = UDim2.new(0, 0, 0, 0)
 presetListFrame.BackgroundTransparency = 1
-pcall(function() presetListFrame.Parent = game:GetService("CoreGui") end)
+presetListFrame.Parent = game:GetService("CoreGui")
 presetListFrame.Visible = false
 
 -- ============================================================
@@ -102,16 +103,14 @@ local function findResetRemote()
     return resetRemote
 end
 
-local o = nil
-pcall(function()
-    o = hookfunction(Instance.new("RemoteEvent").FireServer, newcclosure(function(self, ...)
-        if not resetRemote and self.Name:sub(1, 3) == "RE/" then
-            resetRemote = self
-            originalFireServer = o
-        end
-        return o(self, ...)
-    end))
-end)
+local o; o = hookfunction(Instance.new("RemoteEvent").FireServer, newcclosure(function(self, ...)
+    if not resetRemote and self.Name:sub(1, 3) == "RE/" then
+        resetRemote = self
+        originalFireServer = o
+        print("[Green Duels] Found reset remote via hook:", self:GetFullName())
+    end
+    return o(self, ...)
+end))
 
 local function instaReset()
     findResetRemote()
@@ -449,8 +448,7 @@ local State = {
     autoLeftPhase=1, autoRightPhase=1,
     medusaLastUsed=0, medusaDebounce=false, medusaCounterEnabled=false,
     batAimbotToggled=false,
-    antiBypassAimbotToggled=false,
-    aimbotMode="Normal", autoSwingEnabled=false,
+    safeModeEnabled=false, autoSwingEnabled=false,
     hittingCooldown=false,
     batCounterEnabled=false, batCounterDebounce=false,
     dropEnabled=false, _tpInProgress=false,
@@ -1270,14 +1268,14 @@ local function Main()
 
     local subTitleLbl = Instance.new("TextLabel", titleBar)
     subTitleLbl.Size = UDim2.new(0,160,0,11); subTitleLbl.Position = UDim2.new(0,50,0,24)
-    subTitleLbl.BackgroundTransparency = 1; subTitleLbl.Text = "powered by luck 🍀"
+    subTitleLbl.BackgroundTransparency = 1; subTitleLbl.Text = "powered by luck ðŸ€"
     subTitleLbl.TextColor3 = C.topSub; subTitleLbl.Font = Enum.Font.GothamMedium; subTitleLbl.TextSize = 10
     subTitleLbl.TextXAlignment = Enum.TextXAlignment.Left; subTitleLbl.ZIndex = 6
 
     local closeBtn = Instance.new("TextButton", titleBar)
     closeBtn.Size = UDim2.new(0,26,0,26); closeBtn.Position = UDim2.new(1,-36,0.5,-13)
     closeBtn.BackgroundColor3 = C.modeBtnBg; closeBtn.BorderSizePixel = 0
-    closeBtn.Text = "×"; closeBtn.TextColor3 = C.topBtn; closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 18
+    closeBtn.Text = "Ã—"; closeBtn.TextColor3 = C.topBtn; closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 18
     closeBtn.ZIndex = 7; mkCorner(closeBtn,6); mkStroke(closeBtn, C.chipBorder,1)
     closeBtn.MouseEnter:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.1), {TextColor3=Color3.fromRGB(220,80,80)}):Play() end)
     closeBtn.MouseLeave:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.1), {TextColor3=C.topBtn}):Play() end)
@@ -1418,7 +1416,7 @@ local function Main()
         local n = kc.Name
         local gpNames = {ButtonA="A",ButtonB="B",ButtonX="X",ButtonY="Y",ButtonL1="LB",ButtonL2="LT",ButtonL3="LS",
             ButtonR1="RB",ButtonR2="RT",ButtonR3="RS",ButtonSelect="SEL",ButtonStart="STA",
-            DPadUp="D↑",DPadDown="D↓",DPadLeft="D←",DPadRight="D→",Thumbstick1="LS",Thumbstick2="RS"}
+            DPadUp="Dâ†‘",DPadDown="Dâ†“",DPadLeft="Dâ†",DPadRight="Dâ†’",Thumbstick1="LS",Thumbstick2="RS"}
         return gpNames[n] or n:sub(1,5)
     end
 
@@ -1460,7 +1458,7 @@ local function Main()
         end
         kbtn.MouseButton1Click:Connect(function()
             if listening then stopL(nil); return end
-            listening = true; kbtn.Text = "···"; kbtn.TextColor3 = Color3.fromRGB(0,30,12)
+            listening = true; kbtn.Text = "Â·Â·Â·"; kbtn.TextColor3 = Color3.fromRGB(0,30,12)
             TweenService:Create(kbtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(80,240,140)}):Play()
             TweenService:Create(ks,TweenInfo.new(0.12),{Color=Color3.fromRGB(80,240,140)}):Play()
             lconnKeyboard = UIS.InputBegan:Connect(function(inp)
@@ -1648,42 +1646,17 @@ local function Main()
             toggleSetters["batCounter"] = setBatCounter
             setMedusaCounter = makeToggleRow("Medusa Counter", false, function(on) State.medusaCounterEnabled=on; if on then setupMedusaCounter(LP.Character) else stopMedusaCounter() end end)
             toggleSetters["medusaCounter"] = setMedusaCounter
-            
-            makeGap(8); makeSectionHeader("Aimbot Type"); makeGap(2)
-            State.aimbotMode = State.aimbotMode or "Normal"
-            local modeRow = Instance.new("Frame", currentPage)
-            modeRow.Size = UDim2.new(1,-16,0,40)
-            modeRow.BackgroundColor3 = Color3.fromRGB(18,28,20)
-            modeRow.BorderSizePixel=0
-            modeRow.LayoutOrder=LO()
-            Instance.new("UICorner", modeRow).CornerRadius=UDim.new(0,8)
-            local modeLbl = Instance.new("TextLabel", modeRow)
-            modeLbl.Size=UDim2.new(0.5,0,1,0)
-            modeLbl.Position=UDim2.new(0,12,0,0)
-            modeLbl.BackgroundTransparency=1
-            modeLbl.Text="MODE: "..State.aimbotMode:upper()
-            modeLbl.TextColor3=Color3.fromRGB(200,255,210)
-            modeLbl.Font=Enum.Font.GothamBold
-            modeLbl.TextSize=13
-            modeLbl.TextXAlignment=Enum.TextXAlignment.Left
-            local modeBtn = Instance.new("TextButton", modeRow)
-            modeBtn.Size=UDim2.new(0,110,0,28)
-            modeBtn.Position=UDim2.new(1,-122,0.5,-14)
-            modeBtn.BackgroundColor3=Color3.fromRGB(0,170,90)
-            modeBtn.Text="SWITCH"
-            modeBtn.TextColor3=Color3.fromRGB(255,255,255)
-            modeBtn.Font=Enum.Font.GothamBold
-            modeBtn.TextSize=12
-            modeBtn.BorderSizePixel=0
-            Instance.new("UICorner", modeBtn).CornerRadius=UDim.new(0,6)
-            modeBtn.MouseButton1Click:Connect(function()
-                State.aimbotMode = (State.aimbotMode=="Normal" and "Bypass" or "Normal")
-                modeLbl.Text="MODE: "..State.aimbotMode:upper()
-                requestSave()
-            end)
-            makeGap(4)
             makeKeybindRow("Aimbot Key", Keys.aimbot, function(k) Keys.aimbot=k end, "aimbot")
             makeKeybindRow("TP Bat Key", Keys.tpBat, function(k) Keys.tpBat=k end, "tpBat")
+            makeGap(8); makeSectionHeader("Safety"); makeGap(2)
+            local safeModeToggle = makeToggleRow("Safe Mode (Anti-Kick)", State.safeModeEnabled, function(on)
+                State.safeModeEnabled=on
+                if on and _G.GreenSafeModeIsLocked and _G.GreenSafeModeIsLocked() then
+                    if _G.GreenSafeModeForceStop then _G.GreenSafeModeForceStop("SAFE MODE ENABLED") end
+                end
+                requestSave()
+            end)
+            toggleSetters["safeMode"] = safeModeToggle
         end)
         page.LayoutOrder = 2
     end
@@ -1798,7 +1771,7 @@ local function Main()
                 makeFOVBtn(90,0); makeFOVBtn(120,53); makeFOVBtn(180,106)
             end
             local cleanBtnWrap = Instance.new("Frame", currentPage); cleanBtnWrap.Size = UDim2.new(1,-16,0,46); cleanBtnWrap.BackgroundTransparency=1; cleanBtnWrap.LayoutOrder=LO()
-            local cleanBtn = Instance.new("TextButton", cleanBtnWrap); cleanBtn.Size = UDim2.new(1,0,0,32); cleanBtn.Position = UDim2.new(0,0,0,7); cleanBtn.BackgroundColor3=C.btnBg; cleanBtn.BorderSizePixel=0; cleanBtn.Text="🧹 Clean Particles & Lights"; cleanBtn.TextColor3=C.btnTxt; cleanBtn.Font=Enum.Font.GothamBold; cleanBtn.TextSize=12; mkCorner(cleanBtn,6); mkStroke(cleanBtn, C.btnBorder,1)
+            local cleanBtn = Instance.new("TextButton", cleanBtnWrap); cleanBtn.Size = UDim2.new(1,0,0,32); cleanBtn.Position = UDim2.new(0,0,0,7); cleanBtn.BackgroundColor3=C.btnBg; cleanBtn.BorderSizePixel=0; cleanBtn.Text="ðŸ§¹ Clean Particles & Lights"; cleanBtn.TextColor3=C.btnTxt; cleanBtn.Font=Enum.Font.GothamBold; cleanBtn.TextSize=12; mkCorner(cleanBtn,6); mkStroke(cleanBtn, C.btnBorder,1)
             cleanBtn.MouseEnter:Connect(function() TweenService:Create(cleanBtn,TweenInfo.new(0.1),{BackgroundColor3=C.btnHov}):Play() end)
             cleanBtn.MouseLeave:Connect(function() TweenService:Create(cleanBtn,TweenInfo.new(0.1),{BackgroundColor3=C.btnBg}):Play() end)
             cleanBtn.MouseButton1Click:Connect(cleanParticlesAndLights)
@@ -1854,24 +1827,24 @@ local function Main()
 
             makeGap(8); makeSectionHeader("Config"); makeGap(2)
             local saveWrap = Instance.new("Frame", currentPage); saveWrap.Size = UDim2.new(1,0,0,46); saveWrap.BackgroundTransparency=1; saveWrap.BorderSizePixel=0; saveWrap.LayoutOrder=LO()
-            local saveBtn = Instance.new("TextButton", saveWrap); saveBtn.Size = UDim2.new(1,-28,0,32); saveBtn.Position = UDim2.new(0,14,0,7); saveBtn.BackgroundColor3=C.accent; saveBtn.BorderSizePixel=0; saveBtn.Text="💾  Save Config Now"; saveBtn.TextColor3=Color3.fromRGB(0,20,8); saveBtn.Font=Enum.Font.GothamBold; saveBtn.TextSize=12; saveBtn.ZIndex=5; mkCorner(saveBtn,6); mkStroke(saveBtn, C.accent,1)
+            local saveBtn = Instance.new("TextButton", saveWrap); saveBtn.Size = UDim2.new(1,-28,0,32); saveBtn.Position = UDim2.new(0,14,0,7); saveBtn.BackgroundColor3=C.accent; saveBtn.BorderSizePixel=0; saveBtn.Text="ðŸ’¾  Save Config Now"; saveBtn.TextColor3=Color3.fromRGB(0,20,8); saveBtn.Font=Enum.Font.GothamBold; saveBtn.TextSize=12; saveBtn.ZIndex=5; mkCorner(saveBtn,6); mkStroke(saveBtn, C.accent,1)
             saveBtn.MouseEnter:Connect(function() TweenService:Create(saveBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(46,160,90)}):Play() end)
             saveBtn.MouseLeave:Connect(function() TweenService:Create(saveBtn,TweenInfo.new(0.1),{BackgroundColor3=C.accent}):Play() end)
             saveBtn.MouseButton1Click:Connect(function()
                 local success = pcall(saveConfig)
-                if success then saveBtn.Text="✓  Saved!"; saveBtn.BackgroundColor3=Color3.fromRGB(46,180,100) else saveBtn.Text="✗  Save Failed"; saveBtn.BackgroundColor3=Color3.fromRGB(180,60,60) end
-                task.delay(2.5,function() if saveBtn and saveBtn.Parent then saveBtn.Text="💾  Save Config Now"; saveBtn.BackgroundColor3=C.accent end end)
+                if success then saveBtn.Text="âœ“  Saved!"; saveBtn.BackgroundColor3=Color3.fromRGB(46,180,100) else saveBtn.Text="âœ—  Save Failed"; saveBtn.BackgroundColor3=Color3.fromRGB(180,60,60) end
+                task.delay(2.5,function() if saveBtn and saveBtn.Parent then saveBtn.Text="ðŸ’¾  Save Config Now"; saveBtn.BackgroundColor3=C.accent end end)
             end)
             local resetWrap = Instance.new("Frame", currentPage); resetWrap.Size = UDim2.new(1,0,0,46); resetWrap.BackgroundTransparency=1; resetWrap.BorderSizePixel=0; resetWrap.LayoutOrder=LO()
-            local resetAllBtn = Instance.new("TextButton", resetWrap); resetAllBtn.Size = UDim2.new(1,-28,0,32); resetAllBtn.Position = UDim2.new(0,14,0,7); resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25); resetAllBtn.BorderSizePixel=0; resetAllBtn.Text="⚠  Reset All Settings"; resetAllBtn.TextColor3=Color3.fromRGB(255,200,200); resetAllBtn.Font=Enum.Font.GothamBold; resetAllBtn.TextSize=12; resetAllBtn.ZIndex=5; mkCorner(resetAllBtn,6); mkStroke(resetAllBtn, Color3.fromRGB(130,45,45),1)
+            local resetAllBtn = Instance.new("TextButton", resetWrap); resetAllBtn.Size = UDim2.new(1,-28,0,32); resetAllBtn.Position = UDim2.new(0,14,0,7); resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25); resetAllBtn.BorderSizePixel=0; resetAllBtn.Text="âš   Reset All Settings"; resetAllBtn.TextColor3=Color3.fromRGB(255,200,200); resetAllBtn.Font=Enum.Font.GothamBold; resetAllBtn.TextSize=12; resetAllBtn.ZIndex=5; mkCorner(resetAllBtn,6); mkStroke(resetAllBtn, Color3.fromRGB(130,45,45),1)
             resetAllBtn.MouseEnter:Connect(function() TweenService:Create(resetAllBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(110,35,35)}):Play() end)
             resetAllBtn.MouseLeave:Connect(function() TweenService:Create(resetAllBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(80,25,25)}):Play() end)
             local _resetConfirmStage=0; local _resetConfirmTimer=nil
             resetAllBtn.MouseButton1Click:Connect(function()
                 if _resetConfirmStage==0 then
-                    _resetConfirmStage=1; resetAllBtn.Text="⚠  Click again to confirm!"; resetAllBtn.BackgroundColor3=Color3.fromRGB(160,50,50)
+                    _resetConfirmStage=1; resetAllBtn.Text="âš   Click again to confirm!"; resetAllBtn.BackgroundColor3=Color3.fromRGB(160,50,50)
                     if _resetConfirmTimer then task.cancel(_resetConfirmTimer) end
-                    _resetConfirmTimer = task.delay(3,function() if resetAllBtn and resetAllBtn.Parent then _resetConfirmStage=0; resetAllBtn.Text="⚠  Reset All Settings"; resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25) end end)
+                    _resetConfirmTimer = task.delay(3,function() if resetAllBtn and resetAllBtn.Parent then _resetConfirmStage=0; resetAllBtn.Text="âš   Reset All Settings"; resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25) end end)
                     return
                 end
                 _resetConfirmStage=0; if _resetConfirmTimer then task.cancel(_resetConfirmTimer); _resetConfirmTimer=nil end
@@ -1916,28 +1889,28 @@ local function Main()
                 if stackBtnRefs then for key,ref in pairs(stackBtnRefs) do if ref and ref.setOn then pcall(ref.setOn,false) end end end
                 if keybindBtnRefs then refreshAllKeybindButtons() end
                 for i,def in ipairs(stackDefs) do local wrapper=stackWrappers[def.key]; if wrapper then TweenService:Create(wrapper,TweenInfo.new(0.35,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Position=getDefaultStackPos(i)}):Play() end end
-                resetAllBtn.Text="✓  All Settings Reset!"; resetAllBtn.BackgroundColor3=Color3.fromRGB(46,160,90)
-                task.delay(2,function() if resetAllBtn and resetAllBtn.Parent then resetAllBtn.Text="⚠  Reset All Settings"; resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25) end end)
+                resetAllBtn.Text="âœ“  All Settings Reset!"; resetAllBtn.BackgroundColor3=Color3.fromRGB(46,160,90)
+                task.delay(2,function() if resetAllBtn and resetAllBtn.Parent then resetAllBtn.Text="âš   Reset All Settings"; resetAllBtn.BackgroundColor3=Color3.fromRGB(80,25,25) end end)
             end)
             makeGap(8); makeSectionHeader("Layout"); makeGap(2)
             local rWrap = Instance.new("Frame", currentPage); rWrap.Size = UDim2.new(1,0,0,46); rWrap.BackgroundTransparency=1; rWrap.BorderSizePixel=0; rWrap.LayoutOrder=LO()
-            local resetBtn = Instance.new("TextButton", rWrap); resetBtn.Size = UDim2.new(1,-28,0,32); resetBtn.Position = UDim2.new(0,14,0,7); resetBtn.BackgroundColor3=C.btnBg; resetBtn.BorderSizePixel=0; resetBtn.Text="↺  Reset Button Positions"; resetBtn.TextColor3=C.btnTxt; resetBtn.Font=Enum.Font.GothamBold; resetBtn.TextSize=12; resetBtn.ZIndex=5; mkCorner(resetBtn,6); mkStroke(resetBtn, C.btnBorder,1)
+            local resetBtn = Instance.new("TextButton", rWrap); resetBtn.Size = UDim2.new(1,-28,0,32); resetBtn.Position = UDim2.new(0,14,0,7); resetBtn.BackgroundColor3=C.btnBg; resetBtn.BorderSizePixel=0; resetBtn.Text="â†º  Reset Button Positions"; resetBtn.TextColor3=C.btnTxt; resetBtn.Font=Enum.Font.GothamBold; resetBtn.TextSize=12; resetBtn.ZIndex=5; mkCorner(resetBtn,6); mkStroke(resetBtn, C.btnBorder,1)
             resetBtn.MouseEnter:Connect(function() TweenService:Create(resetBtn,TweenInfo.new(0.1),{BackgroundColor3=C.btnHov}):Play() end)
             resetBtn.MouseLeave:Connect(function() TweenService:Create(resetBtn,TweenInfo.new(0.1),{BackgroundColor3=C.btnBg}):Play() end)
             resetBtn.MouseButton1Click:Connect(function()
                 for i,def in ipairs(stackDefs) do local wrapper=stackWrappers[def.key]; if wrapper then TweenService:Create(wrapper,TweenInfo.new(0.35,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Position=getDefaultStackPos(i)}):Play() end end
-                resetBtn.Text="✓  Positions Reset!"; task.delay(1.8,function() if resetBtn and resetBtn.Parent then resetBtn.Text="↺  Reset Button Positions" end end)
+                resetBtn.Text="âœ“  Positions Reset!"; task.delay(1.8,function() if resetBtn and resetBtn.Parent then resetBtn.Text="â†º  Reset Button Positions" end end)
             end)
             makeGap(10)
             local fw = Instance.new("Frame", currentPage); fw.Size = UDim2.new(1,0,0,22); fw.BackgroundTransparency=1; fw.BorderSizePixel=0; fw.LayoutOrder=LO()
-            local fl = Instance.new("TextLabel", fw); fl.Size = UDim2.new(1,0,1,0); fl.BackgroundTransparency=1; fl.Text="Green Duels  ·  powered by luck 🍀"; fl.TextColor3=Color3.fromRGB(50,100,65); fl.Font=Enum.Font.Gotham; fl.TextSize=10; fl.TextXAlignment=Enum.TextXAlignment.Center
+            local fl = Instance.new("TextLabel", fw); fl.Size = UDim2.new(1,0,1,0); fl.BackgroundTransparency=1; fl.Text="Green Duels  Â·  powered by luck ðŸ€"; fl.TextColor3=Color3.fromRGB(50,100,65); fl.Font=Enum.Font.Gotham; fl.TextSize=10; fl.TextXAlignment=Enum.TextXAlignment.Center
             _G._VezySaveStatusLbl = fl
             _G._VezyFlashSave = function(success)
                 if not _G._VezySaveStatusLbl or not _G._VezySaveStatusLbl.Parent then return end
                 local lbl = _G._VezySaveStatusLbl
-                if success then lbl.Text="✓  Auto-saved"; lbl.TextColor3=Color3.fromRGB(46,200,120)
-                else lbl.Text="✗  Save failed"; lbl.TextColor3=Color3.fromRGB(220,80,80) end
-                task.delay(1.5,function() if lbl and lbl.Parent then lbl.Text="Green Duels  ·  powered by luck 🍀"; lbl.TextColor3=Color3.fromRGB(50,100,65) end end)
+                if success then lbl.Text="âœ“  Auto-saved"; lbl.TextColor3=Color3.fromRGB(46,200,120)
+                else lbl.Text="âœ—  Save failed"; lbl.TextColor3=Color3.fromRGB(220,80,80) end
+                task.delay(1.5,function() if lbl and lbl.Parent then lbl.Text="Green Duels  Â·  powered by luck ðŸ€"; lbl.TextColor3=Color3.fromRGB(50,100,65) end end)
             end
         end)
         page.LayoutOrder = 6
@@ -1955,9 +1928,9 @@ local function Main()
             loadBtn.MouseEnter:Connect(function() TweenService:Create(loadBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(0,200,100)}):Play() end)
             loadBtn.MouseLeave:Connect(function() TweenService:Create(loadBtn,TweenInfo.new(0.1),{BackgroundColor3=C.presetLoad}):Play() end)
             loadBtn.MouseButton1Click:Connect(function()
-                saveLastPresetName(preset.name); loadBtn.Text="✓"; task.delay(1.2,function() if loadBtn and loadBtn.Parent then loadBtn.Text="Load" end end)
+                saveLastPresetName(preset.name); loadBtn.Text="âœ“"; task.delay(1.2,function() if loadBtn and loadBtn.Parent then loadBtn.Text="Load" end end)
             end)
-            local delBtn = Instance.new("TextButton", row); delBtn.Size=UDim2.new(0,34,0,26); delBtn.Position=UDim2.new(1,-48,0.5,-13); delBtn.BackgroundColor3=C.presetDel; delBtn.BorderSizePixel=0; delBtn.Text="✕"; delBtn.TextColor3=Color3.fromRGB(200,80,80); delBtn.Font=Enum.Font.GothamBold; delBtn.TextSize=11; delBtn.ZIndex=9; mkCorner(delBtn,5)
+            local delBtn = Instance.new("TextButton", row); delBtn.Size=UDim2.new(0,34,0,26); delBtn.Position=UDim2.new(1,-48,0.5,-13); delBtn.BackgroundColor3=C.presetDel; delBtn.BorderSizePixel=0; delBtn.Text="âœ•"; delBtn.TextColor3=Color3.fromRGB(200,80,80); delBtn.Font=Enum.Font.GothamBold; delBtn.TextSize=11; delBtn.ZIndex=9; mkCorner(delBtn,5)
             delBtn.MouseEnter:Connect(function() TweenService:Create(delBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(80,28,28)}):Play() end)
             delBtn.MouseLeave:Connect(function() TweenService:Create(delBtn,TweenInfo.new(0.1),{BackgroundColor3=C.presetDel}):Play() end)
             delBtn.MouseButton1Click:Connect(function()
@@ -2007,7 +1980,7 @@ local function Main()
 
     local pingIcon = Instance.new("TextLabel", infoBar)
     pingIcon.Size = UDim2.new(0,18,0,18); pingIcon.Position = UDim2.new(0,264,0.5,-9)
-    pingIcon.BackgroundTransparency=1; pingIcon.Text="📡"; pingIcon.TextColor3=Color3.fromRGB(180,220,200)
+    pingIcon.BackgroundTransparency=1; pingIcon.Text="ðŸ“¡"; pingIcon.TextColor3=Color3.fromRGB(180,220,200)
     pingIcon.Font = Enum.Font.GothamBold; pingIcon.TextSize=14; pingIcon.TextXAlignment=Enum.TextXAlignment.Center
 
     local pingVal = Instance.new("TextLabel", infoBar)
@@ -2215,26 +2188,15 @@ local function Main()
                 if ns and State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot(); if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end end
                 if ns then startAutoRight() else stopAutoRight() end
             elseif def.key == "aimbot" then
-                local mode = State.aimbotMode or "Normal"
-                if mode=="Bypass" then
-                    State.antiBypassAimbotToggled = ns
-                    if ns then
-                        if State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot() end
-                        if _G.GreenStartAntiBypass then _G.GreenStartAntiBypass() end
-                    else
-                        if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end
-                    end
-                else
-                    State.batAimbotToggled = ns
-                    if ns then
-                        if State.antiBypassAimbotToggled then State.antiBypassAimbotToggled=false; if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end end
-                        pcall(startBatAimbot)
-                    else
-                        stopBatAimbot()
-                    end
-                end
-                requestSave()
+                State.batAimbotToggled = ns
+                if ns then
+                    if State.autoLeftEnabled then State.autoLeftEnabled=false; stopAutoLeft(); if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end end
+                    if State.autoRightEnabled then State.autoRightEnabled=false; stopAutoRight(); if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end end
+                    pcall(startBatAimbot)
+                else stopBatAimbot() end
             end
+            requestSave()
+        end
 
         makeStackDraggable(btnFrame, onTap)
     end
@@ -2392,6 +2354,7 @@ local function Main()
         return closest
     end
     startBatAimbot = function()
+        if _G.GreenSafeModeTryStart and not _G.GreenSafeModeTryStart() then return end
         if Conns.aimbot then Conns.aimbot:Disconnect() end
         if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
         if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
@@ -2430,141 +2393,6 @@ local function Main()
     end
     stopBatAimbot = function()
         if Conns.aimbot then Conns.aimbot:Disconnect(); Conns.aimbot=nil end
-
-    -- ANTI BAT BYPASS AIMBOT (from Ace Duels)
-    -- ============================================================
-    _G.AceAntiBypassAimbot = _G.AceAntiBypassAimbot or {conn=nil, swingCooldown=false, prevAutoRotate=nil}
-    State.antiBypassAimbotToggled = State.antiBypassAimbotToggled or false
-    local BAT_BYPASS_LIST={"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap"}
-
-    local function findBatBypass()
-        local c=LP.Character; if not c then return nil end
-        for _,name in ipairs(BAT_BYPASS_LIST) do
-            local t=c:FindFirstChild(name)
-            if t and t:IsA("Tool") then return t end
-        end
-        local bp=LP:FindFirstChildOfClass("Backpack")
-        if bp then
-            for _,name in ipairs(BAT_BYPASS_LIST) do
-                local t=bp:FindFirstChild(name)
-                if t and t:IsA("Tool") then
-                    local hum=c:FindFirstChildOfClass("Humanoid")
-                    if hum then pcall(function() hum:EquipTool(t) end) end
-                    return t
-                end
-            end
-        end
-        for _,ch in ipairs(c:GetChildren()) do if ch:IsA("Tool") and (ch.Name:lower():find("bat") or ch.Name:lower():find("slap")) then return ch end end
-        return nil
-    end
-
-    local function getClosestBypass()
-        local root=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-        if not root then return nil, math.huge end
-        local closest,minDist=nil,math.huge
-        for _,plr in ipairs(Players:GetPlayers()) do
-            if plr~=LP and plr.Character then
-                local tRoot=plr.Character:FindFirstChild("HumanoidRootPart")
-                local hum=plr.Character:FindFirstChildOfClass("Humanoid")
-                if tRoot and hum and hum.Health>0 then
-                    local dist=(tRoot.Position-root.Position).Magnitude
-                    if dist<minDist then minDist=dist; closest=tRoot end
-                end
-            end
-        end
-        return closest,minDist
-    end
-
-    local function trySwingBypass()
-        if _G.AceAntiBypassAimbot.swingCooldown then return end
-        _G.AceAntiBypassAimbot.swingCooldown=true
-        pcall(function()
-            local char=LP.Character; if not char then return end
-            local bat=findBatBypass()
-            if bat then
-                if bat.Parent~=char then
-                    local hum=char:FindFirstChildOfClass("Humanoid")
-                    if hum then pcall(function() hum:EquipTool(bat) end) end
-                end
-                pcall(function() bat:Activate() end)
-            end
-        end)
-        task.delay(0.35, function() _G.AceAntiBypassAimbot.swingCooldown=false end)
-    end
-
-    local startAntiBypassAimbot, stopAntiBypassAimbot
-
-    startAntiBypassAimbot = function()
-        if _G.AceAntiBypassAimbot.conn then _G.AceAntiBypassAimbot.conn:Disconnect(); _G.AceAntiBypassAimbot.conn=nil end
-        if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
-        if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
-        if State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot(); if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end end
-        State.antiBypassAimbotToggled=true
-        local hum0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-        if hum0 then
-            if _G.AceAntiBypassAimbot.prevAutoRotate==nil then _G.AceAntiBypassAimbot.prevAutoRotate=hum0.AutoRotate end
-            hum0.AutoRotate=false
-        end
-        _G.AceAntiBypassAimbot.conn = RunService.RenderStepped:Connect(function()
-            if not State.antiBypassAimbotToggled then return end
-            if _G.GreenDuelsV2_DropActive then return end
-            local char=LP.Character; if not char then return end
-            local root=char:FindFirstChild("HumanoidRootPart"); if not root then return end
-            local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-            if not char:FindFirstChildOfClass("Tool") then local bat=findBatBypass(); if bat then pcall(function() hum:EquipTool(bat) end) end end
-            local target,targetDist=getClosestBypass(); if not target then return end
-            _aimbotTarget=target
-            local myPos=root.Position; local targetPos=target.Position
-            local direction=targetPos-myPos
-            local flatDir=Vector3.new(direction.X,0,direction.Z)
-            if flatDir.Magnitude>0 then flatDir=flatDir.Unit else flatDir=Vector3.zero end
-            local chaseSpeed = State.laggerMode==1 and State.laggerSpeed or State.laggerMode==2 and State.laggerCarrySpeed or State.speedToggled and State.carrySpeed or State.normalSpeed
-            chaseSpeed = math.clamp(chaseSpeed, 32, 58)
-            local desiredHeight=targetPos.Y+3.7
-            local yVel=(desiredHeight-myPos.Y)*19.5
-            if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
-            yVel=math.clamp(yVel,-70,110)
-            local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
-            local currentVel=root.AssemblyLinearVelocity
-            local lerpedVel=currentVel:Lerp(desiredVel,0.8)
-            applyImpulseForVelocity(root, lerpedVel)
-            local toTarget=targetPos-myPos
-            if toTarget.Magnitude>0.1 then
-                local goalCF=CFrame.lookAt(myPos,targetPos)
-                local diffCF=root.CFrame:Inverse()*goalCF
-                local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
-                rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
-                local desiredAngVel=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
-                local currentAngVel=root.AssemblyAngularVelocity
-                local angImpulse=(desiredAngVel-currentAngVel)*root.AssemblyMass
-                pcall(function() root:ApplyImpulse(angImpulse) end)
-            end
-            if State.autoSwingEnabled and targetDist<=8 then trySwingBypass() end
-        end)
-    end
-
-    stopAntiBypassAimbot = function()
-        State.antiBypassAimbotToggled=false
-        if _G.AceAntiBypassAimbot and _G.AceAntiBypassAimbot.conn then _G.AceAntiBypassAimbot.conn:Disconnect(); _G.AceAntiBypassAimbot.conn=nil end
-        _G.AceAntiBypassAimbot.swingCooldown=false
-        local c=LP.Character; local root=c and c:FindFirstChild("HumanoidRootPart")
-        if root then pcall(function() applyImpulseForVelocity(root, Vector3.zero) end) end
-        local hum=c and c:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.AutoRotate = (_G.AceAntiBypassAimbot.prevAutoRotate==nil) and true or _G.AceAntiBypassAimbot.prevAutoRotate
-            hum.PlatformStand=false
-            pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
-        end
-        _G.AceAntiBypassAimbot.prevAutoRotate=nil
-        _aimbotTarget=nil
-    end
-
-    -- expose for toggles
-    _G.GreenStartAntiBypass = startAntiBypassAimbot
-    _G.GreenStopAntiBypass = stopAntiBypassAimbot
-
-
-
         _aimbotTarget=nil
         local c=LP.Character; local root=c and c:FindFirstChild("HumanoidRootPart")
         if root then root.AssemblyLinearVelocity=Vector3.zero; root.AssemblyAngularVelocity=Vector3.zero end
@@ -2685,7 +2513,116 @@ local function Main()
         end)
     end
 
+    
     -- ============================================================
+    -- SAFE MODE (from Ace Duels)
+    -- Prevents aimbot/auto movement during duel countdown and while carrying brainrot
+    -- ============================================================
+    _G.GreenSafeMode = _G.GreenSafeMode or {}
+    _G.GreenSafeMode.BlockedTools = {
+        bat=true, slap=true, sword=true, gun=true, pistol=true, rifle=true,
+        medusa=true, hammer=true, axe=true, knife=true, katana=true, blade=true, fist=true,
+    }
+
+    local function safeModeGetCountdownLabel()
+        local ok, label = pcall(function()
+            return LP.PlayerGui
+            and LP.PlayerGui:FindFirstChild("DuelsMachineTopFrame")
+            and LP.PlayerGui.DuelsMachineTopFrame:FindFirstChild("DuelsMachineTopFrame")
+            and LP.PlayerGui.DuelsMachineTopFrame.DuelsMachineTopFrame:FindFirstChild("Timer")
+            and LP.PlayerGui.DuelsMachineTopFrame.DuelsMachineTopFrame.Timer:FindFirstChild("Label")
+        end)
+        return (ok and label) or nil
+    end
+
+    local function safeModeCountdownNumber(text)
+        local t = tostring(text or ""):upper():gsub("^%s+", ""):gsub("%s+$", "")
+        if t == "GO" or t == "START" or t == "READY" then return true end
+        local n = tonumber(t)
+        return n ~= nil and n >= 0 and n <= 10
+    end
+
+    local function safeModeInDuelCountdown()
+        local label = safeModeGetCountdownLabel()
+        return label and safeModeCountdownNumber(label.Text) or false
+    end
+
+    local function safeModeHoldingBrainrot()
+        local ok, val = pcall(function() return LP:GetAttribute("Stealing") end)
+        if ok and val == true then return true end
+        local ok2, val2 = pcall(function() return LP:GetAttribute("AntiKick") end)
+        if ok2 and val2 == true then return true end
+        local char = LP.Character
+        if not char then return false end
+        local ok3, val3 = pcall(function() return char:GetAttribute("Stealing") end)
+        if ok3 and val3 == true then return true end
+        -- Check if carrying brainrot by tool name
+        for _, tool in ipairs(char:GetChildren()) do
+            if tool:IsA("Tool") then
+                local n = tool.Name:lower()
+                if n:find("brainrot") or n:find("animal") or n:find("carry") or n:find("steal") then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    _G.GreenSafeModeIsLocked = function()
+        if not State.safeModeEnabled then return false end
+        return safeModeInDuelCountdown() or safeModeHoldingBrainrot()
+    end
+
+    _G.GreenSafeModeForceStop = function(reason)
+        local stopped = false
+        if State.batAimbotToggled then
+            State.batAimbotToggled=false
+            stopBatAimbot()
+            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end
+            stopped=true
+        end
+        if State.antiBypassAimbotToggled then
+            State.antiBypassAimbotToggled=false
+            if _G.GreenStopAntiBypass then _G.GreenStopAntiBypass() end
+            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end
+            stopped=true
+        end
+        if State.autoLeftEnabled then
+            State.autoLeftEnabled=false
+            if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end
+            stopAutoLeft()
+            stopped=true
+        end
+        if State.autoRightEnabled then
+            State.autoRightEnabled=false
+            if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end
+            stopAutoRight()
+            stopped=true
+        end
+        if stopped then
+            print("[Green Duels] SAFE MODE LOCK - stopped aimbot/movement: " .. (reason or ""))
+        end
+    end
+
+    _G.GreenSafeModeTryStart = function()
+        if _G.GreenSafeModeIsLocked and _G.GreenSafeModeIsLocked() then
+            _G.GreenSafeModeForceStop("SAFE MODE LOCK")
+            return false
+        end
+        return true
+    end
+
+    -- Monitor heartbeat for safe mode
+    task.spawn(function()
+        while task.wait(0.2) do
+            if State.safeModeEnabled and _G.GreenSafeModeIsLocked and _G.GreenSafeModeIsLocked() then
+                _G.GreenSafeModeForceStop("SAFE MODE")
+            end
+        end
+    end)
+
+    
+-- ============================================================
     -- AUTO-STEAL
     -- ============================================================
     local isStealing=false
@@ -3061,7 +2998,7 @@ local function Main()
     cloverBtn.Position = UDim2.new(0,20,0,200)
     cloverBtn.BackgroundColor3 = Color3.fromRGB(14,24,18)
     cloverBtn.BorderSizePixel = 0
-    cloverBtn.Text = "🍀 GreenDuels"
+    cloverBtn.Text = "ðŸ€ GreenDuels"
     cloverBtn.TextColor3 = Color3.fromRGB(80,255,80)
     cloverBtn.Font = Enum.Font.GothamBold
     cloverBtn.TextSize = 14
