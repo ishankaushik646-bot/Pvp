@@ -2274,38 +2274,28 @@ local function Main()
 
     startAutoLeft = function()
         if alConn then alConn:Disconnect() end; alPhase = 1
-        local _stuckTime = tick()
-        local _lastPos = nil
         alConn = RunService.Heartbeat:Connect(function()
             if not State.autoLeftEnabled then return end
             local char = LP.Character; if not char then return end
             local hrp2 = char:FindFirstChild("HumanoidRootPart")
             local hum2 = char:FindFirstChildOfClass("Humanoid")
             if not hrp2 or not hum2 then return end
-            -- anti-stuck: if not moving for 2 sec, reset to phase 1
-            if _lastPos and (hrp2.Position - _lastPos).Magnitude < 0.5 then
-                if tick() - _stuckTime > 2 then
-                    alPhase = 1
-                    _stuckTime = tick()
-                end
-            else
-                _lastPos = hrp2.Position
-                _stuckTime = tick()
-            end
             local spd = State.normalSpeed
             if alPhase == 1 then
                 local tgt = Vector3.new(AP_L1.X, hrp2.Position.Y, AP_L1.Z)
-                if (tgt - hrp2.Position).Magnitude < 1.5 then
+                if (tgt - hrp2.Position).Magnitude < 1 then
                     alPhase = 2
-                    return
+                    local d = AP_L2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
+                    hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd)); return
                 end
                 local d = AP_L1 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
                 hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
             elseif alPhase == 2 then
                 local tgt = Vector3.new(AP_L2.X, hrp2.Position.Y, AP_L2.Z)
-                if (tgt - hrp2.Position).Magnitude < 1.5 then
-                    -- LOOP instead of stopping - go back to phase 1 and face target
-                    alPhase = 1
+                if (tgt - hrp2.Position).Magnitude < 1 then
+                    hum2:Move(Vector3.zero, false); hrp2.AssemblyLinearVelocity = Vector3.zero
+                    State.autoLeftEnabled = false; if alConn then alConn:Disconnect(); alConn = nil end
+                    alPhase = 1; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end
                     if (AP_L_FACE - hrp2.Position).Magnitude > 0.01 then
                         hrp2.CFrame = CFrame.new(hrp2.Position, Vector3.new(AP_L_FACE.X, hrp2.Position.Y, AP_L_FACE.Z))
                     end
@@ -2319,36 +2309,28 @@ local function Main()
 
     startAutoRight = function()
         if arConn then arConn:Disconnect() end; arPhase = 1
-        local _stuckTime = tick()
-        local _lastPos = nil
         arConn = RunService.Heartbeat:Connect(function()
             if not State.autoRightEnabled then return end
             local char = LP.Character; if not char then return end
             local hrp2 = char:FindFirstChild("HumanoidRootPart")
             local hum2 = char:FindFirstChildOfClass("Humanoid")
             if not hrp2 or not hum2 then return end
-            if _lastPos and (hrp2.Position - _lastPos).Magnitude < 0.5 then
-                if tick() - _stuckTime > 2 then
-                    arPhase = 1
-                    _stuckTime = tick()
-                end
-            else
-                _lastPos = hrp2.Position
-                _stuckTime = tick()
-            end
             local spd = State.normalSpeed
             if arPhase == 1 then
                 local tgt = Vector3.new(AP_R1.X, hrp2.Position.Y, AP_R1.Z)
-                if (tgt - hrp2.Position).Magnitude < 1.5 then
+                if (tgt - hrp2.Position).Magnitude < 1 then
                     arPhase = 2
-                    return
+                    local d = AP_R2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
+                    hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd)); return
                 end
                 local d = AP_R1 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
                 hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
             elseif arPhase == 2 then
                 local tgt = Vector3.new(AP_R2.X, hrp2.Position.Y, AP_R2.Z)
-                if (tgt - hrp2.Position).Magnitude < 1.5 then
-                    arPhase = 1
+                if (tgt - hrp2.Position).Magnitude < 1 then
+                    hum2:Move(Vector3.zero, false); hrp2.AssemblyLinearVelocity = Vector3.zero
+                    State.autoRightEnabled = false; if arConn then arConn:Disconnect(); arConn = nil end
+                    arPhase = 1; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end
                     if (AP_R_FACE - hrp2.Position).Magnitude > 0.01 then
                         hrp2.CFrame = CFrame.new(hrp2.Position, Vector3.new(AP_R_FACE.X, hrp2.Position.Y, AP_R_FACE.Z))
                     end
