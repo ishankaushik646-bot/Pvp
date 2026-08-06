@@ -1612,71 +1612,50 @@ local function Main()
         page.LayoutOrder = 2
     end
 
-    -- Auto Steal Page - FIXED SEMI/NORMAL LOGIC
+    -- Auto Steal Page - WITH SEMI STEAL SELECTOR (Native UI)
     do
         local page = buildPage("Auto Steal", function()
             makeGap(2); makeSectionHeader("Auto Steal"); makeGap(2)
-            setInstaGrab = makeToggleRow("Auto Steal", Steal.AutoStealEnabled, function(on) Steal.AutoStealEnabled=on; if on then startAutoSteal() else stopAutoSteal() end end)
+            setInstaGrab = makeToggleRow("Auto Steal", true, function(on) Steal.AutoStealEnabled=on; if on then startAutoSteal() else stopAutoSteal() end end)
             toggleSetters["autoSteal"] = setInstaGrab
             
             makeGap(8); makeSectionHeader("Choose Steal Type"); makeGap(2)
+            -- Simple selector using toggles (same UI style)
             local isNormal = Steal.StealMode == "normal"
             local isSemi = Steal.StealMode == "semi"
             local normalToggle, semiToggle
-            local _internalSwitch = false -- prevents recursive callback loop
-
-            local function applyMode(mode)
-                Steal.StealMode = mode
-                if requestSave then requestSave() end
-                print("[Green Duels] Steal Mode:", mode:upper())
-            end
             
             normalToggle = makeToggleRow("Normal Steal", isNormal, function(on)
-                if _internalSwitch then return end
                 if on then
-                    _internalSwitch = true
-                    applyMode("normal")
+                    Steal.StealMode = "normal"
                     if semiToggle then semiToggle(false) end
-                    _internalSwitch = false
+                    print("[Green Duels] Steal Mode: NORMAL")
+                    if requestSave then requestSave() end
                 else
-                    -- Don't allow both OFF. If user tries to turn off normal while in normal mode, force semi on.
-                    -- If already switching, ignore.
+                    -- prevent both off, switch to semi if turned off
                     if Steal.StealMode == "normal" then
-                        _internalSwitch = true
-                        applyMode("semi")
+                        Steal.StealMode = "semi"
                         if semiToggle then semiToggle(true) end
-                        -- keep this toggle visually OFF? Actually we want normal OFF, semi ON -> so leave normal OFF
-                        _internalSwitch = false
-                    else
-                        -- user turned off normal but mode is already semi, keep it off visually
-                        -- ensure semi stays on
-                        _internalSwitch = true
-                        if semiToggle then semiToggle(true) end
-                        _internalSwitch = false
                     end
                 end
             end)
+            toggleSetters["normalSteal"] = normalToggle
+            toggleSetters["semiSteal"] = semiToggle
             
             semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", isSemi, function(on)
-                if _internalSwitch then return end
                 if on then
-                    _internalSwitch = true
-                    applyMode("semi")
+                    Steal.StealMode = "semi"
                     if normalToggle then normalToggle(false) end
-                    _internalSwitch = false
+                    print("[Green Duels] Steal Mode: SEMI STEAL")
+                    if requestSave then requestSave() end
                 else
                     if Steal.StealMode == "semi" then
-                        _internalSwitch = true
-                        applyMode("normal")
+                        Steal.StealMode = "normal"
                         if normalToggle then normalToggle(true) end
-                        _internalSwitch = false
-                    else
-                        _internalSwitch = true
-                        if normalToggle then normalToggle(true) end
-                        _internalSwitch = false
                     end
                 end
             end)
+            -- re-assign after both created to ensure correct refs
             toggleSetters["normalSteal"] = normalToggle
             toggleSetters["semiSteal"] = semiToggle
 
@@ -3351,8 +3330,6 @@ local function Main()
         for key, setter in pairs(toggleSetters) do
             local stateValue = nil
             if key=="autoSteal" then stateValue=Steal.AutoStealEnabled
-            elseif key=="normalSteal" then stateValue=(Steal.StealMode=="normal")
-            elseif key=="semiSteal" then stateValue=(Steal.StealMode=="semi")
             elseif key=="infJump" then stateValue=State.infJumpEnabled
             elseif key=="antiRagdoll" then stateValue=State.antiRagdollEnabled
             elseif key=="medusaCounter" then stateValue=State.medusaCounterEnabled
