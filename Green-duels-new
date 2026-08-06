@@ -470,8 +470,13 @@ local State = {
     autoTPConn=nil,
 }
 
-if earlyConfig and earlyConfig.introEnabled ~= nil then
-    State.introEnabled = earlyConfig.introEnabled
+if earlyConfig then
+    if earlyConfig.introEnabled ~= nil then State.introEnabled = earlyConfig.introEnabled end
+    if earlyConfig.stealMode and (earlyConfig.stealMode=="normal" or earlyConfig.stealMode=="semi") then
+        -- preload steal mode before UI so toggles start correct
+        pcall(function() Steal.StealMode = earlyConfig.stealMode end)
+        print("[Green Duels] Early restored Steal Mode:", earlyConfig.stealMode)
+    end
 end
 
 local Keys = {
@@ -1620,44 +1625,38 @@ local function Main()
             toggleSetters["autoSteal"] = setInstaGrab
             
             makeGap(8); makeSectionHeader("Choose Steal Type"); makeGap(2)
-            -- Simple selector using toggles (same UI style)
-            local isNormal = Steal.StealMode == "normal"
-            local isSemi = Steal.StealMode == "semi"
+            -- FIXED: Robust selector - no nil refs, proper mutual exclusive logic
             local normalToggle, semiToggle
-            
-            normalToggle = makeToggleRow("Normal Steal", isNormal, function(on)
-                if on then
-                    Steal.StealMode = "normal"
-                    if semiToggle then semiToggle(false) end
-                    print("[Green Duels] Steal Mode: NORMAL")
-                    if requestSave then requestSave() end
-                else
-                    -- prevent both off, switch to semi if turned off
-                    if Steal.StealMode == "normal" then
-                        Steal.StealMode = "semi"
-                        if semiToggle then semiToggle(true) end
-                    end
-                end
+            local updatingStealMode = false
+
+            local function setStealMode(mode)
+                if updatingStealMode then return end
+                updatingStealMode = true
+                Steal.StealMode = mode
+                pcall(function()
+                    if normalToggle then normalToggle(mode=="normal") end
+                    if semiToggle then semiToggle(mode=="semi") end
+                end)
+                print("[Green Duels] Steal Mode:", string.upper(mode))
+                if requestSave then requestSave() end
+                task.wait()
+                updatingStealMode = false
+            end
+
+            normalToggle = makeToggleRow("Normal Steal", Steal.StealMode=="normal", function(on)
+                if updatingStealMode then return end
+                if on then setStealMode("normal") else setStealMode("semi") end
             end)
+
+            semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", Steal.StealMode=="semi", function(on)
+                if updatingStealMode then return end
+                if on then setStealMode("semi") else setStealMode("normal") end
+            end)
+
             toggleSetters["normalSteal"] = normalToggle
             toggleSetters["semiSteal"] = semiToggle
-            
-            semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", isSemi, function(on)
-                if on then
-                    Steal.StealMode = "semi"
-                    if normalToggle then normalToggle(false) end
-                    print("[Green Duels] Steal Mode: SEMI STEAL")
-                    if requestSave then requestSave() end
-                else
-                    if Steal.StealMode == "semi" then
-                        Steal.StealMode = "normal"
-                        if normalToggle then normalToggle(true) end
-                    end
-                end
-            end)
-            -- re-assign after both created to ensure correct refs
-            toggleSetters["normalSteal"] = normalToggle
-            toggleSetters["semiSteal"] = semiToggle
+            -- expose setter for config load
+            _G._SetStealMode = setStealMode
 
             makeGap(6); makeSectionHeader("Steal Config"); makeGap(2)
             stealRadBox = makeInputRow("Steal Radius", Steal.StealRadius, function(n) if n then n=math.floor(n); if n>=1 and n<=500 then Steal.StealRadius=n; Steal.SemiRadius=n end end end)
@@ -3237,15 +3236,21 @@ local function Main()
             end
         end
 
-        -- RESTORE STEAL MODE (Normal / Semi) - FIXED TO SAVE CHOICE
+        -- RESTORE STEAL MODE (Normal / Semi) - FIXED SAVE/LOAD
         if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
             Steal.StealMode = decErr.stealMode
             print("[Green Duels] Restored Steal Mode:", Steal.StealMode)
-            -- Update toggles visually if UI exists
             pcall(function()
-                if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](Steal.StealMode == "normal") end
-                if toggleSetters["semiSteal"] then toggleSetters["semiSteal"](Steal.StealMode == "semi") end
+                if _G._SetStealMode then
+                    _G._SetStealMode(Steal.StealMode)
+                else
+                    if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](Steal.StealMode == "normal") end
+                    if toggleSetters["semiSteal"] then toggleSetters["semiSteal"](Steal.StealMode == "semi") end
+                end
             end)
+        else
+            -- if config had no stealMode (old config), keep current but log
+            print("[Green Duels] No stealMode in config, using:", Steal.StealMode)
         end
 
         local bools = {
@@ -3406,6 +3411,14 @@ local function Main()
                     if d.laggerCarrySpeed then State.laggerCarrySpeed=d.laggerCarrySpeed; if laggerCarryBox then laggerCarryBox.Text=tostring(d.laggerCarrySpeed) end end
                     if d.stealRadius then Steal.StealRadius=d.stealRadius; if stealRadBox and not stealRadBox:IsFocused() then stealRadBox.Text=tostring(Steal.StealRadius) end end
                     if d.stealDuration then Steal.StealDuration=d.stealDuration; if stealDurBox then stealDurBox.Text=tostring(Steal.StealDuration) end end
+                    if d.stealMode and (d.stealMode=="normal" or d.stealMode=="semi") then
+                        Steal.StealMode=d.stealMode
+                        -- update toggles if they exist
+                        pcall(function()
+                            if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](Steal.StealMode=="normal") end
+                            if toggleSetters["semiSteal"] then toggleSetters["semiSteal"](Steal.StealMode=="semi") end
+                        end)
+                    end
                     if d.autoTP ~= nil then State.autoTPEnabled=d.autoTP; if toggleSetters["autoTP"] then toggleSetters["autoTP"](d.autoTP) end end
                     if d.autoTPHeight then State.autoTPHeight=d.autoTPHeight; if autoTPHeightBox then autoTPHeightBox.Text=tostring(d.autoTPHeight) end end
                 end)
