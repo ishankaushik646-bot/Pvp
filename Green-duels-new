@@ -470,13 +470,8 @@ local State = {
     autoTPConn=nil,
 }
 
-if earlyConfig then
-    if earlyConfig.introEnabled ~= nil then State.introEnabled = earlyConfig.introEnabled end
-    if earlyConfig.stealMode and (earlyConfig.stealMode=="normal" or earlyConfig.stealMode=="semi") then
-        -- preload steal mode before UI so toggles start correct
-        pcall(function() Steal.StealMode = earlyConfig.stealMode end)
-        print("[Green Duels] Early restored Steal Mode:", earlyConfig.stealMode)
-    end
+if earlyConfig and earlyConfig.introEnabled ~= nil then
+    State.introEnabled = earlyConfig.introEnabled
 end
 
 local Keys = {
@@ -664,13 +659,14 @@ local Steal = {
     AutoStealEnabled=true, 
     StealRadius=55, 
     StealDuration=0.25, 
-    StealMode="normal", -- "normal" or "semi" (semi = weekly auto grab)
+    StealMode="normal", -- "normal", "semi", "auto" (auto = Auto Grab from Steal a Brainrot)
     Data={},
     HalfFireRange=10, 
     HalfHoldMin=1.3, 
     HalfHoldMax=2.6, 
     HalfEntryDelay=0.3,
-    SemiRadius=62
+    SemiRadius=62,
+    AutoRadius=55 -- same as normal but separate for Auto Grab file
 }
 
 -- ============================================================
@@ -1617,51 +1613,81 @@ local function Main()
         page.LayoutOrder = 2
     end
 
-    -- Auto Steal Page - WITH SEMI STEAL SELECTOR (Native UI)
+    -- Auto Steal Page - WITH 3 STEAL TYPES (Normal / Semi / Auto Grab) MERGED - NO SEPARATE UI
     do
         local page = buildPage("Auto Steal", function()
             makeGap(2); makeSectionHeader("Auto Steal"); makeGap(2)
-            setInstaGrab = makeToggleRow("Auto Steal", true, function(on) Steal.AutoStealEnabled=on; if on then startAutoSteal() else stopAutoSteal() end end)
+            setInstaGrab = makeToggleRow("Auto Steal", Steal.AutoStealEnabled, function(on) Steal.AutoStealEnabled=on; if on then startAutoSteal() else stopAutoSteal() end; if requestSave then requestSave() end end)
             toggleSetters["autoSteal"] = setInstaGrab
             
             makeGap(8); makeSectionHeader("Choose Steal Type"); makeGap(2)
-            -- FIXED: Robust selector - no nil refs, proper mutual exclusive logic
-            local normalToggle, semiToggle
-            local updatingStealMode = false
-
-            local function setStealMode(mode)
-                if updatingStealMode then return end
-                updatingStealMode = true
-                Steal.StealMode = mode
-                pcall(function()
-                    if normalToggle then normalToggle(mode=="normal") end
-                    if semiToggle then semiToggle(mode=="semi") end
-                end)
-                print("[Green Duels] Steal Mode:", string.upper(mode))
-                if requestSave then requestSave() end
-                task.wait()
-                updatingStealMode = false
+            -- 3-way exclusive selector merged in Green Duels UI (saves choice)
+            local isNormal = Steal.StealMode == "normal"
+            local isSemi = Steal.StealMode == "semi"
+            local isAuto = Steal.StealMode == "auto" or Steal.StealMode == "half"
+            local normalToggle, semiToggle, autoToggle
+            
+            -- forward declare setters to avoid nil
+            local function setVisuals()
+                -- placeholder, actual toggleSetters will update UI
             end
-
-            normalToggle = makeToggleRow("Normal Steal", Steal.StealMode=="normal", function(on)
-                if updatingStealMode then return end
-                if on then setStealMode("normal") else setStealMode("semi") end
+            
+            normalToggle = makeToggleRow("Normal Steal", isNormal, function(on)
+                if on then
+                    Steal.StealMode = "normal"
+                    if semiToggle then semiToggle(false) end
+                    if autoToggle then autoToggle(false) end
+                    print("[Green Duels] Steal Mode: NORMAL")
+                    if requestSave then requestSave() end
+                else
+                    if Steal.StealMode == "normal" then
+                        -- prevent all off, keep at least one on
+                        task.defer(function() if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](true) end end)
+                    end
+                end
             end)
-
-            semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", Steal.StealMode=="semi", function(on)
-                if updatingStealMode then return end
-                if on then setStealMode("semi") else setStealMode("normal") end
+            
+            semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", isSemi, function(on)
+                if on then
+                    Steal.StealMode = "semi"
+                    if normalToggle then normalToggle(false) end
+                    if autoToggle then autoToggle(false) end
+                    print("[Green Duels] Steal Mode: SEMI STEAL")
+                    if requestSave then requestSave() end
+                else
+                    if Steal.StealMode == "semi" then
+                        task.defer(function() if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](true) end end)
+                    end
+                end
             end)
-
+            
+            autoToggle = makeToggleRow("Fast Semi Steal", isAuto, function(on)
+                if on then
+                    Steal.StealMode = "auto"
+                    if normalToggle then normalToggle(false) end
+                    if semiToggle then semiToggle(false) end
+                    print("[Green Duels] Steal Mode: FAST SEMI STEAL")
+                    if requestSave then requestSave() end
+                else
+                    if Steal.StealMode == "auto" or Steal.StealMode == "half" then
+                        task.defer(function() if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](true) end end)
+                    end
+                end
+            end)
+            
             toggleSetters["normalSteal"] = normalToggle
             toggleSetters["semiSteal"] = semiToggle
-            -- expose setter for config load
-            _G._SetStealMode = setStealMode
+            toggleSetters["autoStealType"] = autoToggle
 
             makeGap(6); makeSectionHeader("Steal Config"); makeGap(2)
-            stealRadBox = makeInputRow("Steal Radius", Steal.StealRadius, function(n) if n then n=math.floor(n); if n>=1 and n<=500 then Steal.StealRadius=n; Steal.SemiRadius=n end end end)
+            stealRadBox = makeInputRow("Steal Radius", Steal.StealRadius, function(n) if n then n=math.floor(n); if n>=1 and n<=500 then Steal.StealRadius=n; Steal.SemiRadius=n; Steal.AutoRadius=n end end end)
             local durBox,_ = makeInputRow("Steal Duration [Normal Only]", Steal.StealDuration, function(n) if n then n=math.min(n,10); if n>=0.05 then Steal.StealDuration=n end end end)
             stealDurBox = durBox
+            makeGap(4)
+            makeSectionHeader("Fast Semi Tuning [Semi/Fast Semi]"); makeGap(2)
+            local holdMinBox,_ = makeInputRow("Hold Min (sec)", Steal.HalfHoldMin, function(n) if n then Steal.HalfHoldMin=math.clamp(n,0.1,5) end end)
+            local holdMaxBox,_ = makeInputRow("Hold Max (sec)", Steal.HalfHoldMax, function(n) if n then Steal.HalfHoldMax=math.clamp(n,0.2,10) end end)
+            local fireRangeBox,_ = makeInputRow("Fire Range", Steal.HalfFireRange, function(n) if n then Steal.HalfFireRange=math.floor(math.clamp(n,1,30)) end end)
         end)
         page.LayoutOrder = 3
     end
@@ -2641,7 +2667,7 @@ local function Main()
         local hrp=getHRP(); if not hrp then return nil end
         local plots=workspace:FindFirstChild("Plots"); if not plots then return nil end
         local bestPrompt,bestDist=nil,math.huge
-        local radius = (Steal.StealMode=="semi") and Steal.SemiRadius or Steal.StealRadius
+        local radius = (Steal.StealMode=="semi" and Steal.SemiRadius) or (Steal.StealMode=="auto" and Steal.AutoRadius) or (Steal.StealMode=="half" and Steal.AutoRadius) or Steal.StealRadius
         for _,plot in ipairs(plots:GetChildren()) do
             if plot:IsA("Model") and not isMyPlot(plot.Name) then
                 local pods=plot:FindFirstChild("AnimalPodiums")
@@ -2690,8 +2716,8 @@ local function Main()
         isStealing=true; State.isStealing=true
         stealStartTick=tick()
         
-        if Steal.StealMode=="semi" then
-            -- SEMI STEAL = Weekly Auto Grab logic
+        if Steal.StealMode=="semi" or Steal.StealMode=="auto" or Steal.StealMode=="half" then
+            -- SEMI / AUTO GRAB = Weekly Auto Grab logic (merged from Auto Steal file)
             if stealProgressConn then stealProgressConn:Disconnect() end
             stealProgressConn=RunService.Heartbeat:Connect(function()
                 if not isStealing or not stealStartTick then return end
@@ -3236,21 +3262,18 @@ local function Main()
             end
         end
 
-        -- RESTORE STEAL MODE (Normal / Semi) - FIXED SAVE/LOAD
-        if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
-            Steal.StealMode = decErr.stealMode
+        -- RESTORE STEAL MODE (Normal / Semi / Auto) - FIXED TO SAVE CHOICE + MERGED AUTO STEAL
+        if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi" or decErr.stealMode == "auto" or decErr.stealMode == "half") then
+            local mode = decErr.stealMode
+            if mode == "half" then mode = "auto" end
+            Steal.StealMode = mode
             print("[Green Duels] Restored Steal Mode:", Steal.StealMode)
+            -- Update toggles visually if UI exists
             pcall(function()
-                if _G._SetStealMode then
-                    _G._SetStealMode(Steal.StealMode)
-                else
-                    if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](Steal.StealMode == "normal") end
-                    if toggleSetters["semiSteal"] then toggleSetters["semiSteal"](Steal.StealMode == "semi") end
-                end
+                if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](Steal.StealMode == "normal") end
+                if toggleSetters["semiSteal"] then toggleSetters["semiSteal"](Steal.StealMode == "semi") end
+                if toggleSetters["autoStealType"] then toggleSetters["autoStealType"](Steal.StealMode == "auto") end
             end)
-        else
-            -- if config had no stealMode (old config), keep current but log
-            print("[Green Duels] No stealMode in config, using:", Steal.StealMode)
         end
 
         local bools = {
@@ -3411,14 +3434,6 @@ local function Main()
                     if d.laggerCarrySpeed then State.laggerCarrySpeed=d.laggerCarrySpeed; if laggerCarryBox then laggerCarryBox.Text=tostring(d.laggerCarrySpeed) end end
                     if d.stealRadius then Steal.StealRadius=d.stealRadius; if stealRadBox and not stealRadBox:IsFocused() then stealRadBox.Text=tostring(Steal.StealRadius) end end
                     if d.stealDuration then Steal.StealDuration=d.stealDuration; if stealDurBox then stealDurBox.Text=tostring(Steal.StealDuration) end end
-                    if d.stealMode and (d.stealMode=="normal" or d.stealMode=="semi") then
-                        Steal.StealMode=d.stealMode
-                        -- update toggles if they exist
-                        pcall(function()
-                            if toggleSetters["normalSteal"] then toggleSetters["normalSteal"](Steal.StealMode=="normal") end
-                            if toggleSetters["semiSteal"] then toggleSetters["semiSteal"](Steal.StealMode=="semi") end
-                        end)
-                    end
                     if d.autoTP ~= nil then State.autoTPEnabled=d.autoTP; if toggleSetters["autoTP"] then toggleSetters["autoTP"](d.autoTP) end end
                     if d.autoTPHeight then State.autoTPHeight=d.autoTPHeight; if autoTPHeightBox then autoTPHeightBox.Text=tostring(d.autoTPHeight) end end
                 end)
