@@ -2716,8 +2716,66 @@ local function Main()
         isStealing=true; State.isStealing=true
         stealStartTick=tick()
         
-        if Steal.StealMode=="semi" or Steal.StealMode=="auto" or Steal.StealMode=="half" then
-            -- SEMI / AUTO GRAB = Weekly Auto Grab logic (merged from Auto Steal file)
+        if Steal.StealMode=="semi" then
+            -- SEMI STEAL = Original Slow Weekly Grab
+            if stealProgressConn then stealProgressConn:Disconnect() end
+            stealProgressConn=RunService.Heartbeat:Connect(function()
+                if not isStealing or not stealStartTick then return end
+                local elapsed=tick()-stealStartTick
+                local prog=math.clamp(elapsed / math.max(Steal.HalfHoldMin,0.01),0,1)
+                updateProgressBar(prog)
+            end)
+            task.spawn(function()
+                for _,fn in ipairs(data.hold) do task.spawn(fn) end
+                task.wait(Steal.HalfHoldMin)
+                local inRange = _getPromptDist(prompt) <= Steal.HalfFireRange
+                while true do
+                    local el=tick()-stealStartTick
+                    if el>Steal.HalfHoldMax or not prompt.Parent then break end
+                    if _getPromptDist(prompt) <= Steal.HalfFireRange then
+                        if not inRange then task.wait(Steal.HalfEntryDelay) end
+                        for _,fn in ipairs(data.trigger) do task.spawn(fn) end
+                        break
+                    end
+                    task.wait()
+                end
+                task.wait(0.05)
+                if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+            end)
+        elseif Steal.StealMode=="auto" or Steal.StealMode=="half" or Steal.StealMode=="fastsemi" then
+            -- FAST SEMI STEAL = Logic from Auto Steal file (Steal a Brainrot) - FAST VERSION
+            -- Uses Auto Steal file's exact flow: fire hold, wait short, fire trigger instantly when in range
+            if stealProgressConn then stealProgressConn:Disconnect() end
+            stealProgressConn=RunService.Heartbeat:Connect(function()
+                if not isStealing or not stealStartTick then return end
+                local elapsed=tick()-stealStartTick
+                -- Fast fill 0.2 sec like original Auto Steal pill
+                local prog=math.clamp(elapsed / 0.4,0,1)
+                updateProgressBar(prog)
+            end)
+            task.spawn(function()
+                -- From Auto Steal file: fire all hold connections
+                for _,fn in ipairs(data.hold) do task.spawn(fn) end
+                -- Fast wait - from second file but faster (original file used 1.3 sec, we use 0.35 for fast)
+                local FAST_HOLD = 0.35
+                task.wait(FAST_HOLD)
+                local inRange = _getPromptDist(prompt) <= (Steal.HalfFireRange + 2)
+                -- Instant fire loop - no long entry delay like semi
+                while true do
+                    local el=tick()-stealStartTick
+                    if el>1.2 or not prompt.Parent then break end
+                    if _getPromptDist(prompt) <= (Steal.HalfFireRange + 2) then
+                        if not inRange then task.wait(0.05) end -- tiny delay from auto steal file
+                        for _,fn in ipairs(data.trigger) do task.spawn(fn) end
+                        break
+                    end
+                    task.wait()
+                end
+                task.wait(0.05)
+                if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+            end)
             if stealProgressConn then stealProgressConn:Disconnect() end
             stealProgressConn=RunService.Heartbeat:Connect(function()
                 if not isStealing or not stealStartTick then return end
