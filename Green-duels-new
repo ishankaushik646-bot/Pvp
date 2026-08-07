@@ -1666,6 +1666,7 @@ local function Main()
                     if normalToggle then normalToggle(false) end
                     if semiToggle then semiToggle(false) end
                     print("[Green Duels] Steal Mode: 0.2 SEC FAST (SEPARATE FUNCTION)")
+                    if _G._Fast02SetProgressBarVisible then _G._Fast02SetProgressBarVisible(true) end
                     if requestSave then requestSave() end
                 else
                     if Steal.StealMode == "fast02" then
@@ -2739,11 +2740,162 @@ local function Main()
         end)
     end
 
+
     -- Expose as global separate function as requested
     _G.ExecuteFast02Steal = executeFast02Steal
     _G.Fast02StealDuration = Steal.FastDuration
 
+    -- ============================================================
+    -- 0.2 SEC PILL GUI - SEPARATE FUNCTION (UNREADY / READY)
+    -- ============================================================
+    local fast02PillGui = nil
+    local fast02PillFrame, fast02PillFill, fast02PillLabel, fast02PillShadow, fast02PillShadowLabel
+    local fast02LastPct = 0
+
+    local function createFast02StealPill()
+        if fast02PillGui then fast02PillGui:Destroy() end
+        local TS2 = game:GetService("TweenService")
+        local RS2 = game:GetService("RunService")
+        local UIS2 = game:GetService("UserInputService")
+        local pg = LP:WaitForChild("PlayerGui")
+
+        fast02PillGui = Instance.new("ScreenGui")
+        fast02PillGui.Name = "Fast02StealPill"
+        fast02PillGui.ResetOnSpawn = false
+        fast02PillGui.Parent = pg
+
+        fast02PillShadow = Instance.new("Frame", fast02PillGui)
+        fast02PillShadow.Name = "Shadow"
+        fast02PillShadow.Size = UDim2.new(0, 130, 0, 36)
+        fast02PillShadow.Position = UDim2.new(0.5, -65, 0.7, 3)
+        fast02PillShadow.BackgroundColor3 = Color3.fromRGB(0,0,0)
+        fast02PillShadow.BackgroundTransparency = 0.5
+        fast02PillShadow.BorderSizePixel = 0
+        Instance.new("UICorner", fast02PillShadow).CornerRadius = UDim.new(1,0)
+
+        fast02PillFrame = Instance.new("Frame", fast02PillGui)
+        fast02PillFrame.Name = "Fast02Pill"
+        fast02PillFrame.Size = UDim2.new(0, 130, 0, 36)
+        fast02PillFrame.Position = UDim2.new(0.5, -65, 0.7, 0)
+        fast02PillFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+        fast02PillFrame.BorderSizePixel = 0
+        fast02PillFrame.Visible = (Steal.StealMode == "fast02")
+        fast02PillShadow.Visible = fast02PillFrame.Visible
+        Instance.new("UICorner", fast02PillFrame).CornerRadius = UDim.new(1,0)
+
+        fast02PillFill = Instance.new("Frame", fast02PillFrame)
+        fast02PillFill.Name = "Fill"
+        fast02PillFill.Size = UDim2.new(0,0,1,-6)
+        fast02PillFill.Position = UDim2.new(0,3,0,3)
+        fast02PillFill.BackgroundColor3 = Color3.fromRGB(38, 240, 125)
+        fast02PillFill.BorderSizePixel = 0
+        Instance.new("UICorner", fast02PillFill).CornerRadius = UDim.new(1,0)
+
+        fast02PillLabel = Instance.new("TextLabel", fast02PillFrame)
+        fast02PillLabel.Name = "Pct"
+        fast02PillLabel.Size = UDim2.new(1,0,1,0)
+        fast02PillLabel.BackgroundTransparency = 1
+        fast02PillLabel.Text = "UNREADY"
+        fast02PillLabel.TextColor3 = Color3.fromRGB(255,255,255)
+        fast02PillLabel.Font = Enum.Font.GothamBlack
+        fast02PillLabel.TextSize = 14
+        fast02PillLabel.ZIndex = 302
+
+        fast02PillShadowLabel = Instance.new("TextLabel", fast02PillFrame)
+        fast02PillShadowLabel.Size = UDim2.new(1,0,1,0)
+        fast02PillShadowLabel.BackgroundTransparency = 1
+        fast02PillShadowLabel.Text = "UNREADY"
+        fast02PillShadowLabel.TextColor3 = Color3.fromRGB(0,0,0)
+        fast02PillShadowLabel.Font = Enum.Font.GothamBlack
+        fast02PillShadowLabel.TextSize = 14
+        fast02PillShadowLabel.ZIndex = 301
+        fast02PillShadowLabel.Position = UDim2.new(0,1,0,1)
+
+        local toggleBtn = Instance.new("TextButton", fast02PillFrame)
+        toggleBtn.Name = "ToggleGUIBtn"
+        toggleBtn.Size = UDim2.new(1,0,1,0)
+        toggleBtn.BackgroundTransparency = 1
+        toggleBtn.Text = ""
+        toggleBtn.AutoButtonColor = false
+        toggleBtn.ZIndex = 310
+        local wasDragged = false
+        toggleBtn.Activated:Connect(function()
+            if wasDragged then return end
+            local base = fast02PillFrame.Size
+            TS2:Create(fast02PillFrame,TweenInfo.new(0.08),{Size=UDim2.new(base.X.Scale,base.X.Offset*0.95,base.Y.Scale,base.Y.Offset*0.9)}):Play()
+            task.delay(0.1,function() TS2:Create(fast02PillFrame,TweenInfo.new(0.16,Enum.EasingStyle.Back),{Size=base}):Play() end)
+        end)
+
+        local dragging,dragStart,startPos=false,nil,nil
+        toggleBtn.InputBegan:Connect(function(inp)
+            if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+                dragging=true;wasDragged=false;dragStart=inp.Position;startPos=fast02PillFrame.Position
+                inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end)
+            end
+        end)
+        UIS2.InputChanged:Connect(function(inp)
+            if not dragging then return end
+            if inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch then
+                local dx=inp.Position.X-dragStart.X
+                local dy=inp.Position.Y-dragStart.Y
+                if math.abs(dx)>5 or math.abs(dy)>5 then wasDragged=true end
+                local cam=workspace.CurrentCamera
+                local vp=cam and cam.ViewportSize or Vector2.new(1000,1000)
+                local sz=fast02PillFrame.AbsoluteSize
+                local newXScalePx=startPos.X.Scale*vp.X
+                local newX=math.clamp(newXScalePx+startPos.X.Offset+dx,sz.X/2,vp.X-sz.X/2)
+                local newY=math.clamp(startPos.Y.Scale*vp.Y+startPos.Y.Offset+dy,sz.Y,vp.Y)
+                fast02PillFrame.Position=UDim2.new(startPos.X.Scale,newX-newXScalePx,startPos.Y.Scale,newY-startPos.Y.Scale*vp.Y)
+                fast02PillShadow.Position=UDim2.new(fast02PillFrame.Position.X.Scale,fast02PillFrame.Position.X.Offset,fast02PillFrame.Position.Y.Scale,fast02PillFrame.Position.Y.Offset+3)
+            end
+        end)
+
+        RS2.RenderStepped:Connect(function()
+            if not fast02PillFrame or not fast02PillFrame.Parent then return end
+            if Steal.StealMode ~= "fast02" then
+                fast02PillFrame.Visible=false
+                fast02PillShadow.Visible=false
+                return
+            else
+                fast02PillFrame.Visible=true
+                fast02PillShadow.Visible=true
+            end
+            local pct=0
+            if isStealing and stealStartTick then
+                pct=math.clamp((tick()-stealStartTick)/0.2,0,1)
+            else
+                local hrp = getHRP()
+                if hrp then
+                    local p = findNearestPrompt()
+                    pct = (p and 1 or 0)
+                end
+            end
+            fast02LastPct = fast02LastPct + (pct - fast02LastPct)*0.2
+            local f=math.clamp(fast02LastPct,0,1)
+            if fast02PillFill then
+                fast02PillFill.Size=UDim2.new(f,-6*f,1,-6)
+            end
+            if fast02LastPct>=0.87 then
+                fast02PillLabel.Text="READY"
+                fast02PillShadowLabel.Text="READY"
+                fast02PillLabel.TextColor3=Color3.fromRGB(120,255,140)
+            else
+                fast02PillLabel.Text="UNREADY"
+                fast02PillShadowLabel.Text="UNREADY"
+                fast02PillLabel.TextColor3=Color3.fromRGB(255,255,255)
+            end
+        end)
+
+        _G._Fast02SetProgressBarVisible = function(v)
+            if fast02PillFrame then fast02PillFrame.Visible=v and (Steal.StealMode=="fast02") end
+            if fast02PillShadow then fast02PillShadow.Visible=v and (Steal.StealMode=="fast02") end
+        end
+    end
+
+    _G.CreateFast02Pill = createFast02StealPill
+
     local function executeSteal(prompt)
+
         if isStealing then return end
         -- ROUTE TO SEPARATE 0.2 SEC FUNCTION
         if Steal.StealMode=="fast02" then
@@ -3503,6 +3655,7 @@ local function Main()
     end)
 
     startAutoSteal()
+    pcall(function() createFast02StealPill() end)
     print("[Green Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
 
