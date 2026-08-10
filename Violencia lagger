@@ -1,4 +1,4 @@
---// VIOLENCIA LAGGER - PURPLE UI
+--// VIOLENCIA LAGGER - PURPLE UI + ULTRA MODE
 --// Entfernte Sterne, größere UI, lila Farben
 
 --// SERVICES
@@ -12,11 +12,12 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local ConfigFile = "ViolenciaLaggerConfig.json"
 
--- ⚙️ PODER EXACTO: 23 - 32 - 70
+-- ⚙️ PODER EXACTO: 23 - 32 - 70 - 90
 local NIVELES = {
     Low     = { poder = 23 },
     Mid     = { poder = 32 },
-    High    = { poder = 70 }
+    High    = { poder = 70 },
+    Ultra   = { poder = 90 }
 }
 
 -- 🔑 TECLA PREDETERMINADA: M
@@ -36,6 +37,7 @@ local UI_CONFIG = {
     ButtonLow    = Color3.fromRGB(100, 200, 150),
     ButtonMid    = Color3.fromRGB(200, 180, 255),
     ButtonHigh   = Color3.fromRGB(255, 100, 200),
+    ButtonUltra  = Color3.fromRGB(255, 30, 60),
     ToggleOff    = Color3.fromRGB(70, 50, 100),
     ToggleOn     = Color3.fromRGB(200, 100, 255),
     LockColor    = Color3.fromRGB(220, 200, 255),
@@ -78,7 +80,7 @@ local function bomb(poder)
 end
 
 -- 🧩 ELEMENTOS
-local toggleBall, toggleContainer, btnLow, btnMid, btnHigh, lockButton
+local toggleBall, toggleContainer, btnLow, btnMid, btnHigh, btnUltra, lockButton
 local titleLabel, textLagger, keybindButton, toggleClick, shadowLabel, shadowGradient
 
 -- Funciones de actualización
@@ -112,6 +114,16 @@ local function actualizarBotonesNivel()
         btnHigh.TextColor3 = Color3.fromRGB(220, 200, 255)
         btnHigh.BorderSizePixel = 1
         btnHigh.BorderColor3 = UI_CONFIG.BorderColor
+    end
+    if nivelActual == "Ultra" then
+        btnUltra.BackgroundColor3 = UI_CONFIG.ButtonUltra
+        btnUltra.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btnUltra.BorderSizePixel = 0
+    else
+        btnUltra.BackgroundColor3 = UI_CONFIG.ButtonInact
+        btnUltra.TextColor3 = Color3.fromRGB(220, 200, 255)
+        btnUltra.BorderSizePixel = 1
+        btnUltra.BorderColor3 = UI_CONFIG.BorderColor
     end
 end
 
@@ -177,116 +189,63 @@ local function toggleLagger()
             end
         end)
     else
-        if lagThread then task.cancel(lagThread); lagThread = nil end
+        if lagThread then task.cancel(lagThread) lagThread = nil end
+        pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(0) end)
     end
 end
 
--- 🖼️ INTERFAZ
-if CoreGui:FindFirstChild("ViolenciaUI") then CoreGui.ViolenciaUI:Destroy() end
+-- 🖥️ UI CREATION
+if CoreGui:FindFirstChild("ViolenciaLaggerUI") then
+    CoreGui.ViolenciaLaggerUI:Destroy()
+end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ViolenciaUI"
+screenGui.Name = "ViolenciaLaggerUI"
 screenGui.Parent = CoreGui
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-screenGui.ResetOnSpawn = false
 
--- Panel
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-mainFrame.BackgroundTransparency = 0
-mainFrame.BorderSizePixel = 2
-mainFrame.BorderColor3 = Color3.fromRGB(200, 100, 255)
-mainFrame.Size = UDim2.new(0, 380, 0, 200)
-mainFrame.Position = UDim2.new(0.15, 0, 0.5, -100)
-mainFrame.Parent = screenGui
-mainFrame.ClipsDescendants = true
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 360, 0, 145)
+mainFrame.Position = UDim2.new(0.5, -180, 0.5, -72)
+mainFrame.BackgroundColor3 = UI_CONFIG.MainBg
+mainFrame.BorderSizePixel = 0
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+local stroke = Instance.new("UIStroke", mainFrame)
+stroke.Color = UI_CONFIG.BorderColor
+stroke.Thickness = 2
 
--- 🌌 LILA GRADIENT
-local gradient = Instance.new("UIGradient", mainFrame)
-gradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 10, 60)),
-    ColorSequenceKeypoint.new(0.3, Color3.fromRGB(80, 20, 120)),
-    ColorSequenceKeypoint.new(0.6, Color3.fromRGB(140, 40, 180)),
-    ColorSequenceKeypoint.new(0.85, Color3.fromRGB(180, 80, 220)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 130, 255))
-})
-gradient.Rotation = 90
-
--- TÍTULO "Violencia Lagger"
+-- Title
 titleLabel = Instance.new("TextLabel", mainFrame)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Position = UDim2.new(0, 5, 0, 5)
-titleLabel.Size = UDim2.new(0, 200, 0, 40)
-titleLabel.Font = Enum.Font.GothamBlack
-titleLabel.Text = "Violencia Lagger"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 24
+titleLabel.Position = UDim2.new(0, 10, 0, 5)
+titleLabel.Size = UDim2.new(0, 200, 0, 20)
+titleLabel.Font = UI_CONFIG.Font
+titleLabel.Text = "VIOLENCIA LAGGER"
+titleLabel.TextColor3 = UI_CONFIG.TitleColor
+titleLabel.TextSize = 16
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.TextYAlignment = Enum.TextYAlignment.Center
-titleLabel.ZIndex = 3
-titleLabel.ClipsDescendants = false
+titleLabel.ZIndex = 2
 
+-- Shadow
 shadowLabel = Instance.new("TextLabel", mainFrame)
 shadowLabel.BackgroundTransparency = 1
-shadowLabel.Position = UDim2.new(0, 5, 0, 5)
-shadowLabel.Size = UDim2.new(0, 200, 0, 40)
-shadowLabel.Font = Enum.Font.GothamBlack
-shadowLabel.Text = "Violencia Lagger"
-shadowLabel.TextSize = 24
+shadowLabel.Position = UDim2.new(0, 10, 0, 25)
+shadowLabel.Size = UDim2.new(0, 200, 0, 15)
+shadowLabel.Font = Enum.Font.Gotham
+shadowLabel.Text = "Purple Edition + Ultra"
+shadowLabel.TextColor3 = Color3.fromRGB(150, 100, 180)
+shadowLabel.TextSize = 11
 shadowLabel.TextXAlignment = Enum.TextXAlignment.Left
-shadowLabel.TextYAlignment = Enum.TextYAlignment.Center
-shadowLabel.ZIndex = 4
-shadowLabel.ClipsDescendants = true
-shadowLabel.TextTransparency = 0
-shadowLabel.TextColor3 = Color3.fromRGB(220, 180, 255)
+shadowLabel.ZIndex = 2
 
-shadowGradient = Instance.new("UIGradient", shadowLabel)
-shadowGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(220, 180, 255)),
-    ColorSequenceKeypoint.new(0.2, Color3.fromRGB(240, 210, 255)),
-    ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 240, 255)),
-    ColorSequenceKeypoint.new(0.6, Color3.fromRGB(240, 210, 255)),
-    ColorSequenceKeypoint.new(0.8, Color3.fromRGB(220, 180, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 150, 240))
-})
-shadowGradient.Rotation = 0
-
-task.spawn(function()
-    while true do
-        for i = 0, 1, 0.006 do
-            shadowGradient.Offset = Vector2.new(i, 0)
-            task.wait(0.025)
-        end
-    end
-end)
-
--- BOTONES KEY Y LOCK
-keybindButton = Instance.new("TextButton", mainFrame)
-keybindButton.BackgroundColor3 = Color3.fromRGB(60, 40, 80)
-keybindButton.BackgroundTransparency = 0.1
-keybindButton.Position = UDim2.new(1, -85, 0, 5)
-keybindButton.Size = UDim2.new(0, 40, 0, 18)
-keybindButton.Font = Enum.Font.GothamBlack
-keybindButton.Text = "KEY: M"
-keybindButton.TextColor3 = Color3.fromRGB(220, 200, 255)
-keybindButton.TextSize = 8
-keybindButton.AutoButtonColor = false
-keybindButton.ZIndex = 2
-Instance.new("UICorner", keybindButton).CornerRadius = UDim.new(0, 6)
-actualizarKeybindButton()
-
+-- Lock Button
 lockButton = Instance.new("TextButton", mainFrame)
-lockButton.BackgroundTransparency = 0
-lockButton.BackgroundColor3 = Color3.fromRGB(60, 40, 80)
-lockButton.BackgroundTransparency = 0.1
-lockButton.Position = UDim2.new(1, -40, 0, 5)
-lockButton.Size = UDim2.new(0, 35, 0, 18)
-lockButton.Font = Enum.Font.GothamBlack
-lockButton.TextSize = 8
-lockButton.TextColor3 = Color3.fromRGB(220, 200, 255)
+lockButton.Size = UDim2.new(0, 55, 0, 20)
+lockButton.Position = UDim2.new(0, 200, 0, 8)
+lockButton.Font = UI_CONFIG.Font
+lockButton.TextSize = 10
 lockButton.AutoButtonColor = false
+lockButton.BackgroundColor3 = UI_CONFIG.SelectorBg
 lockButton.ZIndex = 2
 Instance.new("UICorner", lockButton).CornerRadius = UDim.new(0, 6)
 lockButton.MouseButton1Click:Connect(function()
@@ -296,7 +255,20 @@ lockButton.MouseButton1Click:Connect(function()
 end)
 actualizarCandado()
 
--- "LAGGER"
+-- Keybind Button
+keybindButton = Instance.new("TextButton", mainFrame)
+keybindButton.Size = UDim2.new(0, 70, 0, 20)
+keybindButton.Position = UDim2.new(1, -80, 0, 8)
+keybindButton.Font = UI_CONFIG.Font
+keybindButton.TextSize = 10
+keybindButton.AutoButtonColor = false
+keybindButton.BackgroundColor3 = Color3.fromRGB(60, 40, 80)
+keybindButton.TextColor3 = Color3.fromRGB(220, 200, 255)
+keybindButton.ZIndex = 2
+Instance.new("UICorner", keybindButton).CornerRadius = UDim.new(0, 6)
+actualizarKeybindButton()
+
+-- "LAGGER" label
 textLagger = Instance.new("TextLabel", mainFrame)
 textLagger.BackgroundTransparency = 1
 textLagger.Position = UDim2.new(0, 5, 0, 50)
@@ -371,11 +343,11 @@ inputConnection = UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
--- BOTONES LOW/MID/HIGH
+-- BOTONES LOW/MID/HIGH/ULTRA
 local btnY = 90
-local btnW = 80
+local btnW = 82
 local btnH = 35
-local espaciado = 8
+local espaciado = 6
 local margenIzq = 5
 
 btnLow = Instance.new("TextButton", mainFrame)
@@ -435,6 +407,25 @@ btnHigh.MouseButton1Click:Connect(function()
     SaveConfig()
 end)
 
+btnUltra = Instance.new("TextButton", mainFrame)
+btnUltra.Size = UDim2.new(0, btnW, 0, btnH)
+btnUltra.Position = UDim2.new(0, margenIzq + (btnW + espaciado) * 3, 0, btnY)
+btnUltra.Font = UI_CONFIG.Font
+btnUltra.Text = "ULTRA"
+btnUltra.TextColor3 = Color3.fromRGB(220, 200, 255)
+btnUltra.TextSize = 13
+btnUltra.AutoButtonColor = false
+btnUltra.BackgroundColor3 = UI_CONFIG.ButtonInact
+btnUltra.BorderSizePixel = 1
+btnUltra.BorderColor3 = UI_CONFIG.BorderColor
+btnUltra.ZIndex = 2
+Instance.new("UICorner", btnUltra).CornerRadius = UDim.new(0, 8)
+btnUltra.MouseButton1Click:Connect(function()
+    nivelActual = "Ultra"
+    actualizarBotonesNivel()
+    SaveConfig()
+end)
+
 actualizarBotonesNivel()
 actualizarSwitch()
 
@@ -469,4 +460,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-print("[Violencia Lagger] Loaded! Press M to toggle")
+print("[Violencia Lagger] Loaded! Press M to toggle - Ultra Mode Added")
