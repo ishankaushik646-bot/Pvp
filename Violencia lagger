@@ -1,5 +1,5 @@
 --// VIOLENCIA LAGGER - PURPLE UI
---// Entfernte Sterne, größere UI, lila Farben
+--// Entfernte Sterne, grÃ¶ÃŸere UI, lila Farben
 
 --// SERVICES
 local Players = game:GetService("Players")
@@ -12,14 +12,14 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local ConfigFile = "ViolenciaLaggerConfig.json"
 
--- ⚙️ PODER EXACTO: 23 - 32 - 70
+-- âš™ï¸ PODER EXACTO: 23 - 32 - 70
 local NIVELES = {
     Low     = { poder = 23 },
-    Mid     = { poder = 50 },
-    High    = { poder = 80 }
+    Mid     = { poder = 32 },
+    High    = { poder = 70 }
 }
 
--- 🔑 TECLA PREDETERMINADA: M
+-- ðŸ”‘ TECLA PREDETERMINADA: M
 local keybind = Enum.KeyCode.M
 local listeningForInput = false
 local laggerActive = false
@@ -27,7 +27,7 @@ local lagThread = nil
 local nivelActual = "Low"
 local ventanaBloqueada = false
 
--- 🎨 LILA/VIOLETT ESTILO
+-- ðŸŽ¨ LILA/VIOLETT ESTILO
 local UI_CONFIG = {
     MainBg       = Color3.fromRGB(0, 0, 0),
     TitleColor   = Color3.fromRGB(255, 255, 255),
@@ -47,7 +47,7 @@ local UI_CONFIG = {
     SelectorAct  = Color3.fromRGB(200, 100, 255),
 }
 
--- 💾 CONFIG
+-- ðŸ’¾ CONFIG
 local function SaveConfig()
     local data = {
         Nivel = nivelActual,
@@ -67,7 +67,7 @@ local function LoadConfig()
 end
 LoadConfig()
 
--- ⚠️ LAG ENGINE
+-- âš ï¸ LAG ENGINE
 local function bomb(poder)
     local main, spam = {}, {{}}
     local z = spam[1]
@@ -77,11 +77,11 @@ local function bomb(poder)
     pcall(function() game:GetService("RobloxReplicatedStorage").SetPlayerBlockList:FireServer(main) end)
 end
 
--- 🧩 ELEMENTOS
+-- ðŸ§© ELEMENTOS
 local toggleBall, toggleContainer, btnLow, btnMid, btnHigh, lockButton
 local titleLabel, textLagger, keybindButton, toggleClick, shadowLabel, shadowGradient
 
--- Funciones de actualización
+-- Funciones de actualizaciÃ³n
 local function actualizarBotonesNivel()
     if nivelActual == "Low" then
         btnLow.BackgroundColor3 = UI_CONFIG.ButtonLow
@@ -181,7 +181,7 @@ local function toggleLagger()
     end
 end
 
--- 🖼️ INTERFAZ
+-- ðŸ–¼ï¸ INTERFAZ
 if CoreGui:FindFirstChild("ViolenciaUI") then CoreGui.ViolenciaUI:Destroy() end
 
 local screenGui = Instance.new("ScreenGui")
@@ -203,7 +203,7 @@ mainFrame.Parent = screenGui
 mainFrame.ClipsDescendants = true
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
 
--- 🌌 LILA GRADIENT
+-- ðŸŒŒ LILA GRADIENT
 local gradient = Instance.new("UIGradient", mainFrame)
 gradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 10, 60)),
@@ -214,7 +214,7 @@ gradient.Color = ColorSequence.new({
 })
 gradient.Rotation = 90
 
--- TÍTULO "Violencia Lagger"
+-- TÃTULO "Violencia Lagger"
 titleLabel = Instance.new("TextLabel", mainFrame)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Position = UDim2.new(0, 5, 0, 5)
@@ -461,7 +461,7 @@ mainFrame.InputEnded:Connect(function(input)
     end
 end)
 
--- 🎮 ACTIVACIÓN CON LA TECLA SELECCIONADA
+-- ðŸŽ® ACTIVACIÃ“N CON LA TECLA SELECCIONADA
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == keybind or (input.UserInputType == Enum.UserInputType.Gamepad1 and input.KeyCode == keybind) then
