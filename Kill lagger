@@ -12,8 +12,8 @@ local ConfigFile = "KillHubConfig.json"
 local NIVELES = {
     Low = { poder = 25, texto = "SPEED RECOMMENDED 45-21" },
     Mid = { poder = 32, texto = "SPEED RECOMMENDED 40-20" },
-    High = { poder = 35, texto = "SPEED RECOMMENDED 40-18" },
-    Ultra = { poder = 70, texto = "ONLY TRYHARD" }
+    High = { poder = 50, texto = "SPEED RECOMMENDED 40-18" },
+    Ultra = { poder = 90, texto = "ONLY TRYHARD" }
 }
 
 local COLORES = {
