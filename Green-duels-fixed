@@ -427,11 +427,13 @@ end
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
 local function applyImpulseForVelocity(hrp, desiredVelocity)
-    if not hrp then return end
-    local mass = hrp.AssemblyMass
-    local currentVel = hrp.AssemblyLinearVelocity
-    local impulse = (desiredVelocity - currentVel) * mass
-    pcall(function() hrp:ApplyImpulse(impulse) end)
+    if not hrp or not desiredVelocity then return end
+    local current = hrp.AssemblyLinearVelocity
+    desiredVelocity = Vector3.new(desiredVelocity.X, current.Y, desiredVelocity.Z)
+    local diff = desiredVelocity - current
+    if diff.Magnitude < 1 then return end
+    if diff.Magnitude > 40 then diff = diff.Unit * 40 end
+    hrp.AssemblyLinearVelocity = current:Lerp(current + diff, 0.45)
 end
 
 -- ============================================================
@@ -2232,12 +2234,14 @@ local function Main()
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
     local function applyImpulseForVelocity(hrp, desiredVelocity)
-        if not hrp or not desiredVelocity then return end
-        local mass = hrp.AssemblyMass
-        local currentVel = hrp.AssemblyLinearVelocity
-        local impulse = (desiredVelocity - currentVel) * mass
-        pcall(function() hrp:ApplyImpulse(impulse) end)
-    end
+    if not hrp or not desiredVelocity then return end
+    local current = hrp.AssemblyLinearVelocity
+    desiredVelocity = Vector3.new(desiredVelocity.X, current.Y, desiredVelocity.Z)
+    local diff = desiredVelocity - current
+    if diff.Magnitude < 1 then return end
+    if diff.Magnitude > 40 then diff = diff.Unit * 40 end
+    hrp.AssemblyLinearVelocity = current:Lerp(current + diff, 0.45)
+end
 
     stopAutoLeft = function()
         if alConn then alConn:Disconnect(); alConn = nil end; alPhase = 1
