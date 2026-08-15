@@ -359,14 +359,14 @@ end)
 function _G.GreenSetMirrorTPDown(enabled)
     mirrorTPDownEnabled = enabled == true
     if not mirrorTPDownEnabled then table.clear(mirrorTPPreviousY) end
+    if toggleSetters and toggleSetters["mirrorTPDown"] then
+        -- avoid recursion, setter already handles UI
+    end
 end
 
 function _G.GreenToggleMirrorTPDown()
     _G.GreenSetMirrorTPDown(not mirrorTPDownEnabled)
 end
-
--- Enable by default (set to false if you want manual toggle)
-_G.GreenSetMirrorTPDown(true)
 
 
 -- ============================================================
@@ -1660,6 +1660,13 @@ local function Main()
             makeGap(2); makeSectionHeader("Bat Aimbot"); makeGap(2)
             setAutoSwing = makeToggleRow("Auto Swing", false, function(on) State.autoSwingEnabled=on end)
             toggleSetters["autoSwing"] = setAutoSwing
+            local mirrorTPDownToggle = makeToggleRow("Mirror TP Down", mirrorTPDownEnabled, function(on) 
+                mirrorTPDownEnabled = on
+                if not on then table.clear(mirrorTPPreviousY) end
+                _G.GreenSetMirrorTPDown(on)
+                requestSave()
+            end)
+            toggleSetters["mirrorTPDown"] = mirrorTPDownToggle
             setBatCounter = makeToggleRow("Bat Counter", false, function(on) State.batCounterEnabled=on; if on then startBatCounter() else stopBatCounter() end end)
             toggleSetters["batCounter"] = setBatCounter
             setMedusaCounter = makeToggleRow("Medusa Counter", false, function(on) State.medusaCounterEnabled=on; if on then setupMedusaCounter(LP.Character) else stopMedusaCounter() end end)
@@ -3207,6 +3214,7 @@ local function Main()
                 autoTPHeight = State.autoTPHeight,
                 dropType = currentDropType,
                 tpBatToggled = tpBatToggled,
+                mirrorTPDownEnabled = mirrorTPDownEnabled,
                 safeMode = State.safeModeEnabled,
                 stealMode = Steal.StealMode,
             }
@@ -3288,6 +3296,13 @@ local function Main()
                 startTPBat()
             end
             if stackBtnRefs.tpBat then stackBtnRefs.tpBat.setOn(tpBatToggled) end
+        end
+        if decErr.mirrorTPDownEnabled ~= nil then
+            mirrorTPDownEnabled = decErr.mirrorTPDownEnabled
+            _G.GreenSetMirrorTPDown(mirrorTPDownEnabled)
+            if toggleSetters and toggleSetters["mirrorTPDown"] then
+                pcall(function() toggleSetters["mirrorTPDown"](mirrorTPDownEnabled) end)
+            end
         end
 
         if decErr.dropType and (decErr.dropType == DROP_TYPES.JUMP) then
