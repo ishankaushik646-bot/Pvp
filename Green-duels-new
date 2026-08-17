@@ -685,7 +685,7 @@ local stackDefs = {
     {key="tpBat",       label="TP\nBAT"},
     {key="autoLeft",    label="AUTO\nLEFT"},
     {key="autoRight",   label="AUTO\nRIGHT"},
-    {key="aimbot",      label="TP\nBAT"},
+    {key="aimbot",      label="AIMBOT"},
     {key="tpDown",      label="TP\nDOWN"},
     {key="carrySpeed",  label="CARRY\nSPD"},
     {key="reset",       label="RESET"},
@@ -2393,32 +2393,48 @@ local function Main()
         end
         return closest
     end
-    -- OVERRIDE: Bat Mode -> TP Bat (Mwayne)
     startBatAimbot = function()
-        if not tpBatToggled then
-            tpBatToggled = true
-            local char = LP.Character
-            if char then
-                tpBatHRP = char:FindFirstChild("HumanoidRootPart")
-                tpBatH = char:FindFirstChildOfClass("Humanoid")
+        if _G.GreenSafeModeTryStart and not _G.GreenSafeModeTryStart() then return end
+        if Conns.aimbot then Conns.aimbot:Disconnect() end
+        if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
+        if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
+        local hum0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+        if hum0 then hum0.AutoRotate=false end
+        Conns.aimbot = RunService.RenderStepped:Connect(function()
+            if not State.batAimbotToggled then return end
+            local char=LP.Character; if not char then return end
+            local root=char:FindFirstChild("HumanoidRootPart"); if not root then return end
+            local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+            if not char:FindFirstChildOfClass("Tool") then local bat=findBat(); if bat then pcall(function() hum:EquipTool(bat) end) end end
+            local target=getClosestTarget(); if not target then return end
+            _aimbotTarget=target
+            local targetVel=target.AssemblyLinearVelocity
+            local myPos=root.Position; local targetPos=target.Position
+            local predictPos=targetPos+targetVel*0.14; predictPos=predictPos+target.CFrame.LookVector*0.3
+            local direction=predictPos-myPos; local flatDir=Vector3.new(direction.X,0,direction.Z).Unit
+            local chaseSpeed=58; local desiredHeight=targetPos.Y+3.7
+            local yVel=(desiredHeight-myPos.Y)*19.5+targetVel.Y*0.8
+            if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
+            yVel=math.clamp(yVel,-70,110)
+            local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
+            root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+            local speed3=targetVel.Magnitude
+            local predictTime=math.clamp(speed3/150,0.05,0.2)
+            local predictedPos=targetPos+targetVel*predictTime
+            local toPredict=predictedPos-myPos
+            if toPredict.Magnitude>0.1 then
+                local goalCF=CFrame.lookAt(myPos,predictedPos)
+                local diffCF=root.CFrame:Inverse()*goalCF
+                local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
+                rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
+                root.AssemblyAngularVelocity=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
             end
-            startTPBat()
-            if stackBtnRefs.tpBat then stackBtnRefs.tpBat.setOn(true) end
-            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(true) end
-        end
+        end)
     end
-
     stopBatAimbot = function()
-        if tpBatToggled then
-            tpBatToggled = false
-            stopTPBat()
-            if stackBtnRefs.tpBat then stackBtnRefs.tpBat.setOn(false) end
-            if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end
-        end
         if Conns.aimbot then Conns.aimbot:Disconnect(); Conns.aimbot=nil end
         _aimbotTarget=nil
-        local c=LP.Character
-        local root=c and c:FindFirstChild("HumanoidRootPart")
+        local c=LP.Character; local root=c and c:FindFirstChild("HumanoidRootPart")
         if root then root.AssemblyLinearVelocity=Vector3.zero; root.AssemblyAngularVelocity=Vector3.zero end
         local hum2=c and c:FindFirstChildOfClass("Humanoid")
         if hum2 then hum2.AutoRotate=true end
