@@ -256,8 +256,12 @@ local function stopTPBat()
     print("[Green Duels] TP Bat STOPPED (toggle OFF)")
 end
 
-local function toggleTPBat()
-    tpBatToggled = not tpBatToggled
+local function toggleTPBat(forceState)
+    if forceState ~= nil then
+        tpBatToggled = forceState and true or false
+    else
+        tpBatToggled = not tpBatToggled
+    end
     
     if tpBatToggled then
         local char = LP.Character
@@ -266,16 +270,16 @@ local function toggleTPBat()
             tpBatH = char:FindFirstChildOfClass("Humanoid")
         end
         startTPBat()
-        if stackBtnRefs and stackBtnRefs.tpBat then 
-            stackBtnRefs.tpBat.setOn(true) 
-        end
     else
         stopTPBat()
-        if stackBtnRefs and stackBtnRefs.tpBat then 
-            stackBtnRefs.tpBat.setOn(false) 
-        end
     end
-    requestSave()
+
+    -- Always update UI if refs exist
+    if stackBtnRefs and stackBtnRefs.tpBat then 
+        pcall(function() stackBtnRefs.tpBat.setOn(tpBatToggled) end)
+    end
+
+    if requestSave then requestSave() end
 end
 
 local function setupTPBatCharacter(char)
@@ -2188,8 +2192,11 @@ local function Main()
                 return
             end
             if def.key == "tpBat" then
+                -- FIXED: Make TP BAT toggle work exactly like AIMBOT/AUTO LEFT (light green)
+                local ns = not btnState
+                setOn(ns)
                 task.spawn(function()
-                    toggleTPBat()  -- Toggle ON/OFF
+                    toggleTPBat(ns)
                 end)
                 return
             end
