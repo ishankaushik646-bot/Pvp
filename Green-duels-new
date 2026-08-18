@@ -160,7 +160,7 @@ local function instaReset()
 end
 
 -- ============================================================
--- TP BAT FEATURE (REPLACED WITH MWAYNE LOGIC)
+-- TP BAT FEATURE (TOGGLE - stays ON until clicked again)
 -- ============================================================
 local tpBatToggled = false
 local tpBatHittingCooldown = false
@@ -194,60 +194,79 @@ local function tryHitBat()
             bat:Activate()
             local ev = bat:FindFirstChildWhichIsA("RemoteEvent")
             if ev then ev:FireServer() end
+            local rf = bat:FindFirstChildWhichIsA("RemoteFunction")
+            if rf then pcall(function() rf:InvokeServer() end) end
         end
     end)
     task.delay(0.08, function() tpBatHittingCooldown = false end)
 end
 
--- MWAYNE getClosestPlayer logic (kept name getClosestPlayerForTP for compatibility)
 local function getClosestPlayerForTP()
     if not tpBatHRP then return nil, math.huge end
-    local cp, cd = nil, math.huge
+    local closest, closestDist = nil, math.huge
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP and p.Character then
-            local tr = p.Character:FindFirstChild("HumanoidRootPart")
-            if tr then
-                local d = (tpBatHRP.Position - tr.Position).Magnitude
-                if d < cd then cd = d; cp = p end
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local dist = (tpBatHRP.Position - root.Position).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closest = p
+                end
             end
         end
     end
-    return cp, cd
+    return closest, closestDist
 end
-
--- Alias for old calls
-local function getClosestPlayer() return getClosestPlayerForTP() end
 
 local function startTPBat()
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
-
-    -- MWAYNE DESYNC AUTOBAT HEARTBEAT - single connection
+    
     tpBatConn = RunService.Heartbeat:Connect(function()
-        if not (tpBatToggled and tpBatH and tpBatHRP) then return end
+        if not tpBatToggled then return end
+        if not tpBatH or not tpBatHRP then
+            local char = LP.Character
+            if char then
+                tpBatH = char:FindFirstChildOfClass("Humanoid")
+                tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+            end
+            if not tpBatH or not tpBatHRP then return end
+        end
+        
         local target, dist = getClosestPlayerForTP()
         if target and target.Character then
-            local tr = target.Character:FindFirstChild("HumanoidRootPart")
-            if tr then
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
                 if sethiddenproperty then
-                    pcall(function()
-                        sethiddenproperty(tpBatHRP, "PhysicsRepRootPart", tr)
-                    end)
+                    pcall(function() sethiddenproperty(tpBatHRP, "PhysicsRepRootPart", targetRoot) end)
                 end
-                local targetPos = tr.Position + Vector3.new(0, 0.9, 0)
-                if (tpBatHRP.Position - targetPos).Magnitude > 8 then
+                local targetPos = targetRoot.Position + Vector3.new(0, 0.9, 0)
+                if (tpBatHRP.Position - targetPos).Magnitude > 5 then
                     tpBatHRP.CFrame = CFrame.new(targetPos)
                 end
                 local cam = workspace.CurrentCamera
-                if cam then
-                    cam.CFrame = CFrame.new(cam.CFrame.Position, tr.Position)
-                end
+                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
                 tryHitBat()
             end
         end
     end)
-
-    print("[Green Duels] TP Bat STARTED - Mwayne Logic (toggle ON)")
+    
+    tpBatAimbotConn = RunService.RenderStepped:Connect(function()
+        if not tpBatToggled then return end
+        if not tpBatH or not tpBatHRP then return end
+        
+        local target, dist = getClosestPlayerForTP()
+        if target and target.Character then
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                local cam = workspace.CurrentCamera
+                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
+                tryHitBat()
+            end
+        end
+    end)
+    print("[Green Duels] TP Bat STARTED (toggle ON)")
 end
 
 local function stopTPBat()
@@ -256,12 +275,8 @@ local function stopTPBat()
     print("[Green Duels] TP Bat STOPPED (toggle OFF)")
 end
 
-local function toggleTPBat(forceState)
-    if forceState ~= nil then
-        tpBatToggled = forceState and true or false
-    else
-        tpBatToggled = not tpBatToggled
-    end
+local function toggleTPBat()
+    tpBatToggled = not tpBatToggled
     
     if tpBatToggled then
         local char = LP.Character
@@ -270,16 +285,16 @@ local function toggleTPBat(forceState)
             tpBatH = char:FindFirstChildOfClass("Humanoid")
         end
         startTPBat()
+        if stackBtnRefs and stackBtnRefs.tpBat then 
+            stackBtnRefs.tpBat.setOn(true) 
+        end
     else
         stopTPBat()
+        if stackBtnRefs and stackBtnRefs.tpBat then 
+            stackBtnRefs.tpBat.setOn(false) 
+        end
     end
-
-    -- Always update UI if refs exist
-    if stackBtnRefs and stackBtnRefs.tpBat then 
-        pcall(function() stackBtnRefs.tpBat.setOn(tpBatToggled) end)
-    end
-
-    if requestSave then requestSave() end
+    requestSave()
 end
 
 local function setupTPBatCharacter(char)
@@ -686,7 +701,7 @@ local COLS = 3
 
 local stackDefs = {
     {key="drop",        label="DROP"},
-    {key="tpBat",       label="TP\nBAT"},
+    {key="tpBat",       label="BAT\nMODE"},
     {key="autoLeft",    label="AUTO\nLEFT"},
     {key="autoRight",   label="AUTO\nRIGHT"},
     {key="aimbot",      label="AIMBOT"},
@@ -2192,11 +2207,8 @@ local function Main()
                 return
             end
             if def.key == "tpBat" then
-                -- FIXED: Make TP BAT toggle work exactly like AIMBOT/AUTO LEFT (light green)
-                local ns = not btnState
-                setOn(ns)
                 task.spawn(function()
-                    toggleTPBat(ns)
+                    toggleTPBat()  -- Toggle ON/OFF
                 end)
                 return
             end
@@ -3505,7 +3517,7 @@ local function Main()
     end)
 
     startAutoSteal()
-    print("[Green Duels] Ready! Jump Drop only (safe). TP BAT - Mwayne Logic (TOGGLE) & Blossom Reset added.")
+    print("[Green Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
 
 -- ============================================================
