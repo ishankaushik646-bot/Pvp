@@ -11,8 +11,7 @@
   Controlled via web panel polling only
 ]]
 
-local BASE = "https://responsive-redo-bot.lovable.app"
-local KEY  = "Grin@1234"
+-- BASE removed for standalone
 
 local Players            = game:GetService("Players")
 local HttpService        = game:GetService("HttpService")
@@ -21,26 +20,15 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local UserInputService   = game:GetService("UserInputService")
 local TweenService       = game:GetService("TweenService")
 
-local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request)
-if not request then return end
+local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or function() return {Success=true} end
 
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
-if _G.GreenDuelsV2_Running then return end
+if _G.GreenDuelsV2_Running then pcall(function() _G.GreenDuelsV2_MainExecuted=nil end) end
 _G.GreenDuelsV2_Running = true
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local ContentProvider = game:GetService("ContentProvider")
-local Stats = game:GetService("Stats")
-local Lighting = game:GetService("Lighting")
-local Workspace = game:GetService("Workspace")
-
-local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
+-- dup removed
 
 -- ============================================================
 -- FIX: Missing variables
@@ -162,59 +150,12 @@ end
 -- ============================================================
 -- TP BAT FEATURE (TOGGLE - stays ON until clicked again)
 -- ============================================================
-
 local tpBatToggled = false
 local tpBatHittingCooldown = false
 local tpBatHRP = nil
 local tpBatH = nil
 local tpBatConn = nil
 local tpBatAimbotConn = nil
-
--- GODMODE (Vynx style) FIXED
-local _bypassGodConn = nil
-local _bypassGodHealthConn = nil
-local _bypassGodDiedConn = nil
-local _bypassGodCharConn = nil
-
-local function _bypassClearGodConns()
-    if _bypassGodConn then pcall(function() _bypassGodConn:Disconnect() end) _bypassGodConn=nil end
-    if _bypassGodHealthConn then pcall(function() _bypassGodHealthConn:Disconnect() end) _bypassGodHealthConn=nil end
-    if _bypassGodDiedConn then pcall(function() _bypassGodDiedConn:Disconnect() end) _bypassGodDiedConn=nil end
-    if _bypassGodCharConn then pcall(function() _bypassGodCharConn:Disconnect() end) _bypassGodCharConn=nil end
-end
-
-local function _bypassProtectCharacter(char)
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    if _bypassGodHealthConn then pcall(function() _bypassGodHealthConn:Disconnect() end) end
-    if _bypassGodDiedConn then pcall(function() _bypassGodDiedConn:Disconnect() end) end
-    _bypassGodHealthConn = hum:GetPropertyChangedSignal("Health"):Connect(function()
-        if not tpBatToggled then return end
-        if hum.Health < hum.MaxHealth then pcall(function() hum.Health = hum.MaxHealth end) end
-    end)
-    _bypassGodDiedConn = hum.Died:Connect(function()
-        if not tpBatToggled then return end
-        pcall(function() hum.Health = hum.MaxHealth hum:ChangeState(Enum.HumanoidStateType.Running) hum.PlatformStand=false end)
-    end)
-end
-
-local function enableBypassGodmode()
-    _bypassClearGodConns()
-    local char = LP.Character
-    if char then _bypassProtectCharacter(char) end
-    _bypassGodCharConn = LP.CharacterAdded:Connect(function(c) if not tpBatToggled then return end task.wait(0.15) _bypassProtectCharacter(c) end)
-    _bypassGodConn = RunService.Heartbeat:Connect(function()
-        if not tpBatToggled then return end
-        local char = LP.Character
-        if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum and hum.Health < hum.MaxHealth then pcall(function() hum.Health = hum.MaxHealth end) end
-    end)
-end
-
-local function disableBypassGodmode() _bypassClearGodConns() end
-
 
 local function getBat()
     local char = LP.Character
@@ -267,9 +208,9 @@ local function getClosestPlayerForTP()
 end
 
 local function startTPBat()
+    pcall(function() _G.GreenEnableGod() end)
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
-    pcall(enableBypassGodmode)
     
     tpBatConn = RunService.Heartbeat:Connect(function()
         if not tpBatToggled then return end
@@ -317,10 +258,50 @@ local function startTPBat()
     print("[Green Duels] TP Bat STARTED (toggle ON)")
 end
 
+
+-- GODMODE PATCH V2 - SAFE
+if not _G.GreenGodmodePatched then
+_G.GreenGodmodePatched=true
+local _bgC1,_bgC2,_bgC3,_bgC4=nil,nil,nil,nil
+local function bgClear()
+ if _bgC1 then pcall(function() _bgC1:Disconnect() end) _bgC1=nil end
+ if _bgC2 then pcall(function() _bgC2:Disconnect() end) _bgC2=nil end
+ if _bgC3 then pcall(function() _bgC3:Disconnect() end) _bgC3=nil end
+ if _bgC4 then pcall(function() _bgC4:Disconnect() end) _bgC4=nil end
+end
+local function bgProtect(ch)
+ local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+ if not hum then return end
+ if _bgC2 then pcall(function() _bgC2:Disconnect() end) end
+ if _bgC3 then pcall(function() _bgC3:Disconnect() end) end
+ _bgC2=hum:GetPropertyChangedSignal("Health"):Connect(function()
+  if not tpBatToggled then return end
+  if hum.Health < hum.MaxHealth then pcall(function() hum.Health=hum.MaxHealth end) end
+ end)
+ _bgC3=hum.Died:Connect(function()
+  if not tpBatToggled then return end
+  pcall(function() hum.Health=hum.MaxHealth hum:ChangeState(Enum.HumanoidStateType.Running) end)
+ end)
+end
+_G.GreenEnableGod=function()
+ bgClear()
+ local ch=LP.Character
+ if ch then bgProtect(ch) end
+ _bgC4=LP.CharacterAdded:Connect(function(c) if not tpBatToggled then return end task.wait(0.15) bgProtect(c) end)
+ _bgC1=game:GetService("RunService").Heartbeat:Connect(function()
+  if not tpBatToggled then return end
+  local ch=LP.Character
+  local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+  if hum and hum.Health < hum.MaxHealth then pcall(function() hum.Health=hum.MaxHealth end) end
+ end)
+end
+_G.GreenDisableGod=bgClear
+end
+
 local function stopTPBat()
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
-    pcall(disableBypassGodmode)
+    pcall(function() _G.GreenDisableGod() end)
     print("[Green Duels] TP Bat STOPPED (toggle OFF)")
 end
 
@@ -580,28 +561,6 @@ local State = {
     autoTPHeight=20,
     autoTPConn=nil,
 }
-
--- SPEED ANTI-KICK (Vynx style) - BodyVelocity with math.huge
-local _greenBodyVel = nil
-local function greenClearSpeedBV() if _greenBodyVel then pcall(function() _greenBodyVel:Destroy() end) _greenBodyVel=nil end end
-_G.GreenApplySpeedAntiKick = function(hrp, dir, speed)
-    if not hrp or not dir then return end
-    if not State.antiKickEnabled then
-        hrp.Velocity = Vector3.new(dir.X*speed, hrp.Velocity.Y, dir.Z*speed)
-        return
-    end
-    if not _greenBodyVel or _greenBodyVel.Parent ~= hrp then
-        if _greenBodyVel then pcall(function() _greenBodyVel:Destroy() end) end
-        _greenBodyVel = Instance.new("BodyVelocity")
-        _greenBodyVel.Name = "GreenSpeedBV"
-        _greenBodyVel.MaxForce = Vector3.new(math.huge, 0, math.huge)
-        _greenBodyVel.P = 1250
-        _greenBodyVel.Parent = hrp
-    end
-    _greenBodyVel.Velocity = Vector3.new(dir.X*speed, _greenBodyVel.Velocity.Y, dir.Z*speed)
-end
-
-
 
 if earlyConfig then
     if earlyConfig.introEnabled ~= nil then State.introEnabled = earlyConfig.introEnabled end
