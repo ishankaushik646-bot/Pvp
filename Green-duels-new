@@ -488,8 +488,6 @@ end
 
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
-local function applyImpulseForVelocity(hrp, desiredVelocity)
-    if not hrp then return end
     local mass = hrp.AssemblyMass
     local currentVel = hrp.AssemblyLinearVelocity
     local impulse = (desiredVelocity - currentVel) * mass
@@ -500,7 +498,7 @@ end
 -- STATE
 -- ============================================================
 local State = {
-    normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
+    normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=15, laggerCarrySpeed=24.5,
     speedToggled=false,
     laggerMode=0,
     infJumpEnabled=true, antiRagdollEnabled=false,
@@ -777,8 +775,88 @@ local function loadLastPresetName()
     return nil
 end
 
+
 local MOVE_KEYS={[Enum.KeyCode.W]=true,[Enum.KeyCode.A]=true,[Enum.KeyCode.S]=true,[Enum.KeyCode.D]=true,
-    [Enum.KeyCode.Up]=true,[Enum.KeyCode.Left]=true,[Enum.KeyCode.Down]=true,[Enum.KeyCode.Right]=true}
+    [Enum.KeyCode.Up]=true,[Enum.KeyCode.Down]=true,[Enum.KeyCode.Left]=true,[Enum.KeyCode.Right]=true}
+
+-- ============================================================
+-- ORVYN LINEAR VELOCITY SYSTEM (replaces impulse)
+-- ============================================================
+local _linVel = nil
+local _linVelAtt0 = nil
+local _linVelAtt1 = nil
+local _linVelChar = nil
+
+-- init for existing char
+task.spawn(function() if LP.Character then setupLinearVelocity(LP.Character) end end)
+LP.CharacterAdded:Connect(function(char) task.wait(0.5); setupLinearVelocity(char) end)
+
+local function setupLinearVelocity(char)
+    if _linVel then pcall(function() _linVel:Destroy() end); _linVel=nil end
+    if _linVelAtt0 then pcall(function() _linVelAtt0:Destroy() end); _linVelAtt0=nil end
+    if _linVelAtt1 then pcall(function() _linVelAtt1:Destroy() end); _linVelAtt1=nil end
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local att0 = Instance.new("Attachment")
+    att0.Name="OrvynLinVelAtt0"
+    att0.Parent=hrp
+    local att1 = Instance.new("Attachment")
+    att1.Name="OrvynLinVelAtt1"
+    att1.CFrame=CFrame.new(0,0,0)
+    att1.Parent=hrp
+    local lv = Instance.new("LinearVelocity")
+    lv.Name="OrvynLinVel"
+    lv.Attachment0=att0
+    lv.RelativeTo=Enum.ActuatorRelativeTo.World
+    lv.VelocityConstraintMode=Enum.VelocityConstraintMode.Plane
+    lv.ForceLimitMode=Enum.ForceLimitMode.PerAxis
+    lv.MaxAxesForce=Vector3.new(100000,0,100000)
+    lv.MaxForce=100000
+    lv.PlaneVelocity=Vector2.new(0,0)
+    lv.Parent=hrp
+    _linVel=lv
+    _linVelAtt0=att0
+    _linVelAtt1=att1
+    _linVelChar=char
+end
+
+local function setLinVelXZ(x,z)
+    if _linVel and _linVel.Parent then
+        _linVel.PlaneVelocity=Vector2.new(x,z)
+    end
+end
+
+local function clearLinVel()
+    if _linVel and _linVel.Parent then
+        _linVel.PlaneVelocity=Vector2.new(0,0)
+    end
+end
+
+local function getActiveMoveSpeed()
+    if State.laggerMode==2 then return State.laggerCarrySpeed
+    elseif State.laggerMode==1 then return State.laggerSpeed
+    elseif State.speedToggled then return State.carrySpeed
+    else return State.normalSpeed end
+end
+
+local function getAutoPathSpeed()
+    return State.normalSpeed
+end
+
+local function currentSpeedMode()
+    if State.laggerMode==2 then return "laggerCarry"
+    elseif State.laggerMode==1 then return "lagger"
+    elseif State.speedToggled then return "carry"
+    else return "normal" end
+end
+
+local function setSpeedMode(mode)
+    if mode=="carry" then State.laggerMode=0; State.speedToggled=true
+    elseif mode=="lagger" then State.laggerMode=1; State.speedToggled=false
+    elseif mode=="laggerCarry" then State.laggerMode=2; State.speedToggled=true
+    else State.laggerMode=0; State.speedToggled=false end
+end
+
 
 -- Auto Left/Right positions
 local AP_L1     = Vector3.new(-476.48, -6.28, 92.73)
@@ -875,7 +953,7 @@ local function doAutoTPDown(force)
         if hrp.Position.Y < State.autoTPHeight then return end
     end
     hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
-    applyImpulseForVelocity(hrp, Vector3.zero)
+    clearLinVel()
 end
 
 local function startAutoTP()
@@ -1057,7 +1135,7 @@ local function antiRagdollForceExit()
     end
 
     root.Anchored = false
-    applyImpulseForVelocity(root, Vector3.zero)
+    clearLinVel()
     root.AssemblyAngularVelocity = Vector3.zero
 
     root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, math.rad(root.Orientation.Y), 0)
@@ -2299,9 +2377,7 @@ local function Main()
     -- ============================================================
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
-    local function applyImpulseForVelocity(hrp, desiredVelocity)
-        if not hrp or not desiredVelocity then return end
-        local mass = hrp.AssemblyMass
+            local mass = hrp.AssemblyMass
         local currentVel = hrp.AssemblyLinearVelocity
         local impulse = (desiredVelocity - currentVel) * mass
         pcall(function() hrp:ApplyImpulse(impulse) end)
@@ -2332,14 +2408,14 @@ local function Main()
                 if (tgt - hrp2.Position).Magnitude < 1 then
                     alPhase = 2
                     local d = AP_L2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                    hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd)); return
+                    hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd); return
                 end
                 local d = AP_L1 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
+                hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd)
             elseif alPhase == 2 then
                 local tgt = Vector3.new(AP_L2.X, hrp2.Position.Y, AP_L2.Z)
                 if (tgt - hrp2.Position).Magnitude < 1 then
-                    hum2:Move(Vector3.zero, false); hrp2.AssemblyLinearVelocity = Vector3.zero
+                    hum2:Move(Vector3.zero, false); clearLinVel()
                     State.autoLeftEnabled = false; if alConn then alConn:Disconnect(); alConn = nil end
                     alPhase = 1; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end
                     if (AP_L_FACE - hrp2.Position).Magnitude > 0.01 then
@@ -2348,7 +2424,7 @@ local function Main()
                     return
                 end
                 local d = AP_L2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
+                hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd)
             end
         end)
     end
@@ -2367,14 +2443,14 @@ local function Main()
                 if (tgt - hrp2.Position).Magnitude < 1 then
                     arPhase = 2
                     local d = AP_R2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                    hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd)); return
+                    hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd); return
                 end
                 local d = AP_R1 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
+                hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd)
             elseif arPhase == 2 then
                 local tgt = Vector3.new(AP_R2.X, hrp2.Position.Y, AP_R2.Z)
                 if (tgt - hrp2.Position).Magnitude < 1 then
-                    hum2:Move(Vector3.zero, false); hrp2.AssemblyLinearVelocity = Vector3.zero
+                    hum2:Move(Vector3.zero, false); clearLinVel()
                     State.autoRightEnabled = false; if arConn then arConn:Disconnect(); arConn = nil end
                     arPhase = 1; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end
                     if (AP_R_FACE - hrp2.Position).Magnitude > 0.01 then
@@ -2383,7 +2459,7 @@ local function Main()
                     return
                 end
                 local d = AP_R2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
+                hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd)
             end
         end)
     end
@@ -3003,11 +3079,11 @@ local function Main()
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                applyImpulseForVelocity(hrp, Vector3.new(md.X*spd, hrp.AssemblyLinearVelocity.Y, md.Z*spd))
+                setLinVelXZ(md.X*spd, md.Z*spd)
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then applyImpulseForVelocity(hrp, Vector3.new(State.lastMoveDir.X*spd, hrp.AssemblyLinearVelocity.Y, State.lastMoveDir.Z*spd)) end
+                if anyHeld then setLinVelXZ(State.lastMoveDir.X*spd, State.lastMoveDir.Z*spd) end
             end
         end
         pcall(function()
