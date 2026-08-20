@@ -11,12 +11,21 @@
   Controlled via web panel polling only
 ]]
 
--- BASE/KEY REMOVED
+local BASE = "https://responsive-redo-bot.lovable.app"
+local KEY  = "Grin@1234"
+
+local Players            = game:GetService("Players")
+local HttpService        = game:GetService("HttpService")
+local RunService         = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local UserInputService   = game:GetService("UserInputService")
+local TweenService       = game:GetService("TweenService")
+
+local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or function() return {Success=true, Body="{}"} end
 
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
-if _G.GreenDuelsV2_Running then return end
 _G.GreenDuelsV2_Running = true
 
 local Players = game:GetService("Players")
@@ -208,7 +217,32 @@ local function getClosestPlayerForTP()
     return closest, closestDist
 end
 
+
+-- GODMODE SAFE INJECT
+local godC1,godC2,godC3,godC4=nil,nil,nil,nil
+local function godClear()
+ if godC1 then pcall(function() godC1:Disconnect() end) godC1=nil end
+ if godC2 then pcall(function() godC2:Disconnect() end) godC2=nil end
+ if godC3 then pcall(function() godC3:Disconnect() end) godC3=nil end
+ if godC4 then pcall(function() godC4:Disconnect() end) godC4=nil end
+end
+local function godProtect(ch)
+ local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+ if not hum then return end
+ if godC2 then pcall(function() godC2:Disconnect() end) end
+ if godC3 then pcall(function() godC3:Disconnect() end) end
+ godC2=hum:GetPropertyChangedSignal("Health"):Connect(function()
+  if not tpBatToggled then return end
+  if hum.Health < hum.MaxHealth then pcall(function() hum.Health=hum.MaxHealth end) end
+ end)
+ godC3=hum.Died:Connect(function()
+  if not tpBatToggled then return end
+  pcall(function() hum.Health=hum.MaxHealth hum:ChangeState(Enum.HumanoidStateType.Running) end)
+ end)
+end
+
 local function startTPBat()
+    godClear() local ch=LP.Character if ch then godProtect(ch) end godC4=LP.CharacterAdded:Connect(function(c) if not tpBatToggled then return end task.wait(0.15) godProtect(c) end) godC1=RunService.Heartbeat:Connect(function() if not tpBatToggled then return end local ch=LP.Character local hum=ch and ch:FindFirstChildOfClass('Humanoid') if hum and hum.Health < hum.MaxHealth then pcall(function() hum.Health=hum.MaxHealth end) end end)
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
     
@@ -261,6 +295,7 @@ end
 local function stopTPBat()
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    godClear()
     print("[Green Duels] TP Bat STOPPED (toggle OFF)")
 end
 
@@ -395,7 +430,7 @@ if introShouldPlay then
     bg.BorderSizePixel = 0
     bg.Parent = introGui
 
-    -- local blur = Instance.new("BlurEffect" -- DISABLED)
+    local blur = Instance.new("BlurEffect")
     blur.Size = 12
     blur.Parent = game:GetService("Lighting")
 
@@ -477,7 +512,7 @@ end
 
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
-local function applyImpulseForVelocity(hrp, desiredVelocity)
+local function applyImpulseForVelocity(hrp, desiredVelocity) if desiredVelocity.Magnitude<1 then if _G._vBV then pcall(function() _G._vBV:Destroy() end) _G._vBV=nil end end -- VYNX FIX 
     if not hrp then return end
     local mass = hrp.AssemblyMass
     local currentVel = hrp.AssemblyLinearVelocity
@@ -521,69 +556,6 @@ local State = {
     autoTPConn=nil,
 }
 
--- VYNX SPEED SYSTEM (anti-kick) REPLACEMENT
-local _vBodyVel=nil
-local _vBodyPos=nil
-local _vSpeedTween=nil
-local _vAnchored=nil
-local currentSpeedMethod="BodyVelocity" -- default safest, not Velocity
-
-local function destroyVynxSpeed()
-    if _vAnchored then pcall(function() _vAnchored.Anchored=false end) _vAnchored=nil end
-    if _vBodyVel then pcall(function() _vBodyVel:Destroy() end) _vBodyVel=nil end
-    if _vBodyPos then pcall(function() _vBodyPos:Destroy() end) _vBodyPos=nil end
-    if _vSpeedTween then pcall(function() _vSpeedTween:Cancel() end) _vSpeedTween=nil end
-end
-
-local function applyVynxSpeed(hrp, hum, dir, spd, targetPos)
-    if not hrp then return end
-    local m=currentSpeedMethod
-    if m=="BodyVelocity" then
-        if not _vBodyVel or _vBodyVel.Parent~=hrp then
-            if _vBodyVel then pcall(function() _vBodyVel:Destroy() end) end
-            _vBodyVel=Instance.new("BodyVelocity")
-            _vBodyVel.Name="VynxSpeedBV"
-            _vBodyVel.MaxForce=Vector3.new(math.huge,0,math.huge)
-            _vBodyVel.P=1250
-            _vBodyVel.Parent=hrp
-        end
-        _vBodyVel.Velocity=Vector3.new(dir.X*spd,_vBodyVel.Velocity.Y,dir.Z*spd)
-    elseif m=="BodyPosition" then
-        if not _vBodyPos or _vBodyPos.Parent~=hrp then
-            if _vBodyPos then pcall(function() _vBodyPos:Destroy() end) end
-            _vBodyPos=Instance.new("BodyPosition")
-            _vBodyPos.Name="VynxSpeedBP"
-            _vBodyPos.MaxForce=Vector3.new(math.huge,0,math.huge)
-            _vBodyPos.P=500
-            _vBodyPos.D=50
-            _vBodyPos.Parent=hrp
-        end
-        _vBodyPos.Position=hrp.Position + dir*spd*0.15
-    elseif m=="WalkSpeed" then
-        if hum then hum.WalkSpeed=spd end
-    elseif m=="Velocity" then
-        -- Even Velocity mode uses clamp to avoid kick
-        local cur=hrp.Velocity
-        local newV=Vector3.new(dir.X*spd,cur.Y,dir.Z*spd)
-        if newV.Magnitude < 200 then
-            hrp.Velocity=newV
-        end
-    else
-        -- CFrame safest
-        hrp.CFrame=hrp.CFrame + dir*spd*0.02
-    end
-end
-
-_G.SetVynxSpeedMethod=function(method)
-    destroyVynxSpeed()
-    currentSpeedMethod=method
-    print("[Vynx Speed] Method:",method)
-end
-
-_G.GreenClearSpeed=destroyVynxSpeed
-
-
-
 if earlyConfig then
     if earlyConfig.introEnabled ~= nil then State.introEnabled = earlyConfig.introEnabled end
     if earlyConfig.stealMode and (earlyConfig.stealMode=="normal" or earlyConfig.stealMode=="semi") then
@@ -608,14 +580,22 @@ local Keys = {
 -- ========== HOLD INFINITE JUMP ONLY ==========
 -- Simple hold to fly - from your new file
 
+local infJumpBV=nil
 UserInputService.JumpRequest:Connect(function()
     if not State.infJumpEnabled then return end
     local char = LP.Character
     if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if root then
-        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
-    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    if infJumpBV then pcall(function() infJumpBV:Destroy() end) end
+    local bv=Instance.new("BodyVelocity")
+    bv.MaxForce=Vector3.new(0,9e9,0)
+    bv.Velocity=Vector3.new(0,55,0)
+    bv.P=1250
+    bv.Parent=hrp
+    infJumpBV=bv
+    task.delay(0.15,function() if infJumpBV then pcall(function() infJumpBV:Destroy() end) infJumpBV=nil end end)
+    hrp.Velocity=Vector3.new(hrp.Velocity.X,55,hrp.Velocity.Z)
 end)
 
 RunService.Heartbeat:Connect(function()
@@ -927,7 +907,7 @@ local function doAutoTPDown(force)
         if hrp.Position.Y < State.autoTPHeight then return end
     end
     hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
-    destroyVynxSpeed() hrp.Velocity=Vector3.new(0,hrp.Velocity.Y,0)
+    applyImpulseForVelocity(hrp, Vector3.zero)
 end
 
 local function startAutoTP()
@@ -1169,7 +1149,7 @@ end
 
 LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
-    if false and State.antiRagdollEnabled then -- DISABLED AUTO START (was kicking)
+    if State.antiRagdollEnabled then
         antiRagdollCacheCharacter()
         if not antiRagdollConn then
             startAntiRagdoll()
@@ -1962,7 +1942,7 @@ local function Main()
                 pcall(function() if State.batAimbotToggled then stopBatAimbot() end end)
                 pcall(function() if State.batCounterEnabled then stopBatCounter() end end)
                 pcall(function() if State.medusaCounterEnabled then stopMedusaCounter() end end)
-                pcall(function() if false and State.antiRagdollEnabled then -- DISABLED AUTO START (was kicking) stopAntiRagdoll() end end)
+                pcall(function() if State.antiRagdollEnabled then stopAntiRagdoll() end end)
                 pcall(function() if Steal.AutoStealEnabled then stopAutoSteal() end end)
                 pcall(function() if State.autoLeftEnabled then stopAutoLeft() end end)
                 pcall(function() if State.autoRightEnabled then stopAutoRight() end end)
@@ -2335,7 +2315,7 @@ local function Main()
         local _rtLbl = getRagTimerLbl and getRagTimerLbl()
         if _rtLbl then _rtLbl.Text = "" end
         task.spawn(function() startRagTimerDetection(char) end)
-        if false and State.antiRagdollEnabled then -- DISABLED AUTO START (was kicking) task.wait(0.5); startAntiRagdoll() end
+        if State.antiRagdollEnabled then task.wait(0.5); startAntiRagdoll() end
         if State.medusaCounterEnabled then setupMedusaCounter(char) end
         if State.batAimbotToggled then stopBatAimbot(); task.wait(0.2); pcall(startBatAimbot) end
         if State.batCounterEnabled then task.wait(0.3); startBatCounter() end
@@ -2351,7 +2331,7 @@ local function Main()
     -- ============================================================
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
-    local function applyImpulseForVelocity(hrp, desiredVelocity)
+    local function applyImpulseForVelocity(hrp, desiredVelocity) if desiredVelocity.Magnitude<1 then if _G._vBV then pcall(function() _G._vBV:Destroy() end) _G._vBV=nil end end -- VYNX FIX 
         if not hrp or not desiredVelocity then return end
         local mass = hrp.AssemblyMass
         local currentVel = hrp.AssemblyLinearVelocity
@@ -3455,7 +3435,7 @@ local function Main()
         if State.batAimbotToggled then startBatAimbot() else stopBatAimbot() end
         if State.batCounterEnabled then startBatCounter() else stopBatCounter() end
         if State.medusaCounterEnabled then setupMedusaCounter(LP.Character) else stopMedusaCounter() end
-        if false and State.antiRagdollEnabled then -- DISABLED AUTO START (was kicking) startAntiRagdoll() else stopAntiRagdoll() end
+        if State.antiRagdollEnabled then startAntiRagdoll() else stopAntiRagdoll() end
         if Steal.AutoStealEnabled then startAutoSteal() else stopAutoSteal() end
         if State.autoTPEnabled then startAutoTP() else stopAutoTP() end
 
@@ -3511,8 +3491,15 @@ local function Main()
     -- AUTO SAVE SETTINGS
     -- Saves all current UI/settings changes periodically
     -- so they are restored after restarting the script.
-    -- AUTO SAVE LOOP DISABLED (was kicking on load)
-    -- task.spawn(function() while task.wait(5) do pcall(saveConfig) end end)
+    task.spawn(function()
+        while task.wait(5) do
+            pcall(function()
+                if saveConfig then
+                    saveConfig()
+                end
+            end)
+        end
+    end)
 
     -- ============================================================
     -- INIT
@@ -3551,7 +3538,7 @@ local function Main()
     -- Anti Ragdoll persistence fix: wait for character and restart the connection after config load
     task.spawn(function()
         task.wait(1)
-        if false and State.antiRagdollEnabled then -- DISABLED AUTO START (was kicking)
+        if State.antiRagdollEnabled then
             pcall(function() stopAntiRagdoll() end)
             task.wait(0.2)
             pcall(function() startAntiRagdoll() end)
