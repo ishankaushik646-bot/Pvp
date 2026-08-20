@@ -112,7 +112,13 @@ local o; o = hookfunction(Instance.new("RemoteEvent").FireServer, newcclosure(fu
     return o(self, ...)
 end))
 
-local function instaReset()
+local function instaReset() -- Vynx cursedInstaReset style
+    findResetRemote()
+    if not resetRemote then task.wait(0.5); findResetRemote() end
+    if not resetRemote then return end
+    for i=1,30 do pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end) task.wait() end
+end
+local function instaReset_ORIG_DISABLED()
     findResetRemote()
     if not resetRemote then
         task.wait(0.5)
@@ -172,47 +178,29 @@ local tpBatAimbotConn = nil
 local function getBat()
     local char = LP.Character
     if not char then return nil end
-    local tool = char:FindFirstChild("Bat")
-    if tool then return tool end
-    local bp = LP:FindFirstChild("Backpack")
-    if bp then
-        tool = bp:FindFirstChild("Bat")
-        if tool then
-            tool.Parent = char
-            return tool
-        end
+    for _,v in pairs(char:GetChildren()) do
+        if v:IsA("Tool") and v.Name:lower():find("bat") then return v end
     end
     return nil
 end
 
 local function tryHitBat()
-    if tpBatHittingCooldown then return end
-    tpBatHittingCooldown = true
-    pcall(function()
-        local bat = getBat()
-        if bat then
-            bat:Activate()
-            local ev = bat:FindFirstChildWhichIsA("RemoteEvent")
-            if ev then ev:FireServer() end
-            local rf = bat:FindFirstChildWhichIsA("RemoteFunction")
-            if rf then pcall(function() rf:InvokeServer() end) end
-        end
-    end)
-    task.delay(0.08, function() tpBatHittingCooldown = false end)
+    local bat = getBat()
+    if bat then pcall(function() bat:Activate() end) end
 end
 
 local function getClosestPlayerForTP()
-    if not tpBatHRP then return nil, math.huge end
-    local closest, closestDist = nil, math.huge
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP and p.Character then
-            local root = p.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                local dist = (tpBatHRP.Position - root.Position).Magnitude
-                if dist < closestDist then
-                    closestDist = dist
-                    closest = p
-                end
+    local closest=nil
+    local closestDist=150
+    local myRoot = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil, math.huge end
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr~=LP and plr.Character then
+            local hrp=plr.Character:FindFirstChild("HumanoidRootPart")
+            local hum=plr.Character:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health>0 then
+                local d=(myRoot.Position-hrp.Position).Magnitude
+                if d<closestDist then closest=plr; closestDist=d end
             end
         end
     end
@@ -220,59 +208,37 @@ local function getClosestPlayerForTP()
 end
 
 local function startTPBat()
-    if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
-    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
-    
+    if tpBatConn then tpBatConn:Disconnect(); tpBatConn=nil end
+    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn=nil end
     tpBatConn = RunService.Heartbeat:Connect(function()
         if not tpBatToggled then return end
-        if not tpBatH or not tpBatHRP then
-            local char = LP.Character
+        if not tpBatH or not tpBatHRP or not tpBatHRP.Parent then
+            local char=LP.Character
             if char then
-                tpBatH = char:FindFirstChildOfClass("Humanoid")
-                tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+                tpBatH=char:FindFirstChildOfClass("Humanoid")
+                tpBatHRP=char:FindFirstChild("HumanoidRootPart")
             end
             if not tpBatH or not tpBatHRP then return end
         end
-        
-        local target, dist = getClosestPlayerForTP()
+        local target,dist=getClosestPlayerForTP()
         if target and target.Character then
-            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
-            if targetRoot then
-                if sethiddenproperty then
-                    pcall(function() sethiddenproperty(tpBatHRP, "PhysicsRepRootPart", targetRoot) end)
+            local tr=target.Character:FindFirstChild("HumanoidRootPart")
+            if tr then
+                if sethiddenproperty then pcall(function() sethiddenproperty(tpBatHRP,"PhysicsRepRootPart",tr) end) end
+                if (tpBatHRP.Position-tr.Position).Magnitude>6 then
+                    tpBatHRP.CFrame=CFrame.new(tr.Position+Vector3.new(0,1,0))
                 end
-                local targetPos = targetRoot.Position + Vector3.new(0, 0.9, 0)
-                if (tpBatHRP.Position - targetPos).Magnitude > 5 then
-                    tpBatHRP.CFrame = CFrame.new(targetPos)
-                end
-                local cam = workspace.CurrentCamera
-                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
                 tryHitBat()
             end
         end
     end)
-    
-    tpBatAimbotConn = RunService.RenderStepped:Connect(function()
-        if not tpBatToggled then return end
-        if not tpBatH or not tpBatHRP then return end
-        
-        local target, dist = getClosestPlayerForTP()
-        if target and target.Character then
-            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
-            if targetRoot then
-                local cam = workspace.CurrentCamera
-                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
-                tryHitBat()
-            end
-        end
-    end)
-    print("[Green Duels] TP Bat STARTED (toggle ON)")
+    print("[Vynx] TP Bat ON")
 end
 
 local function stopTPBat()
-    if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
-    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
-    print("[Green Duels] TP Bat STOPPED (toggle OFF)")
+    if tpBatConn then tpBatConn:Disconnect(); tpBatConn=nil end
+    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn=nil end
+    print("[Vynx] TP Bat OFF")
 end
 
 local function toggleTPBat()
@@ -905,7 +871,14 @@ local DROP_ASCEND_SPEED = 160
 local _dropConn = nil
 local dropActive = false
 
-local function runJumpDrop()
+local function runJumpDrop_ORIG_DISABLED() end
+local function runJumpDrop() -- Vynx version (TP down)
+    local char=LP.Character
+    local hrp=char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    pcall(function() hrp.CFrame=CFrame.new(hrp.Position.X, -7, hrp.Position.Z) end)
+end
+--
     if dropActive then return end
     local char = LP.Character
     if not char then return end
@@ -1128,249 +1101,6 @@ end)
 -- ============================================================
 -- MAIN FUNCTION (UI and everything else)
 -- ============================================================
-
-
--- ============================================================
--- LEAN VYNX LOGIC FOR NON-PROTECTED (replaces Green)
--- Protected GREEN intact: AutoSteal, AutoTPDown, Performance, Sky, OtherVisuals, Interface
--- Everything else = Vynx
--- ============================================================
-local M = {}
-M.NS = 35
-M.CS = 22
-M.LAGGER_SPEED = 28
-M.LAGGER_CARRY_SPEED = 14
-M.laggerModeEnabled=false
-M.laggerCarryActive=false
-M.carrySpeedActive=false
-M.antiRagdollEnabled=false
-M.infJumpEnabled=true
-M.autoLeftEnabled=false
-M.autoRightEnabled=false
-M.autoBatEnabled=false
-M.antiKickEnabled=false
-M.bypassAimbotEnabled=false
-M.unwalkEnabled=false
-M.safeModeEnabled=false
-
--- Vynx services (use existing)
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local player = Players.LocalPlayer
-
-function M.isStealState()
-    return player.Character and player.Character:FindFirstChild("Humanoid") and player.Character:FindFirstChild("Humanoid").WalkSpeed < 16
-end
-
-function M.hasBrainrotInHand()
-    local ch=player.Character
-    if not ch then return false end
-    for _,t in pairs(ch:GetChildren()) do if t:IsA("Tool") and t.Name:lower():find("brainrot") then return true end end
-    return false
-end
-
-function M.getActiveMoveSpeed()
-    local isSteal = M.isStealState()
-    local inLagger = M.laggerModeEnabled or M.laggerCarryActive
-    if inLagger then return isSteal and M.LAGGER_CARRY_SPEED or M.LAGGER_SPEED end
-    if M.hasBrainrotInHand() then return M.LAGGER_CARRY_SPEED end
-    if M.laggerCarryActive then return M.LAGGER_CARRY_SPEED
-    elseif M.laggerModeEnabled then return M.LAGGER_SPEED
-    elseif M.carrySpeedActive then return M.CS else return M.NS end
-end
-
-function M.findBat()
-    local ch=player.Character
-    if not ch then return nil end
-    for _,v in pairs(ch:GetChildren()) do if v:IsA("Tool") and v.Name:lower():find("bat") then return v end end
-    return nil
-end
-function M.findMedusa()
-    local ch=player.Character
-    if not ch then return nil end
-    for _,v in pairs(ch:GetChildren()) do if v:IsA("Tool") and v.Name:lower():find("medusa") then return v end end
-    return nil
-end
-function M.useMedusaCounter()
-    local m=M.findMedusa()
-    if m then pcall(function() m:Activate() end) end
-end
-
--- Vynx Bat Aimbot / TP Bat logic (simplified from Vynx)
-M._tpBatConn=nil
-M._tpBatOn=false
-function M.startBatAimbot()
-    if M._tpBatConn then M._tpBatConn:Disconnect() end
-    M._tpBatOn=true
-    M._tpBatConn=RunService.Heartbeat:Connect(function()
-        if not M._tpBatOn then return end
-        local myRoot=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-        local closest,dist=nil,150
-        for _,plr in ipairs(Players:GetPlayers()) do
-            if plr~=player and plr.Character then
-                local hrp=plr.Character:FindFirstChild("HumanoidRootPart")
-                local hum=plr.Character:FindFirstChildOfClass("Humanoid")
-                if hrp and hum and hum.Health>0 then
-                    local d=(myRoot.Position-hrp.Position).Magnitude
-                    if d<dist then closest=plr; dist=d end
-                end
-            end
-        end
-        if closest and closest.Character then
-            local tr=closest.Character:FindFirstChild("HumanoidRootPart")
-            if tr then
-                if sethiddenproperty then pcall(function() sethiddenproperty(myRoot,"PhysicsRepRootPart",tr) end) end
-                if (myRoot.Position-tr.Position).Magnitude>6 then myRoot.CFrame=CFrame.new(tr.Position+Vector3.new(0,1,0)) end
-                local bat=M.findBat()
-                if bat then pcall(function() bat:Activate() end) end
-            end
-        end
-    end)
-end
-function M.stopBatAimbot()
-    M._tpBatOn=false
-    if M._tpBatConn then M._tpBatConn:Disconnect(); M._tpBatConn=nil end
-end
-M.startBypassAimbot=M.startBatAimbot
-M.stopBypassAimbot=M.stopBatAimbot
-function M.toggleBypassAimbot()
-    if M._tpBatOn then M.stopBatAimbot() else M.startBatAimbot() end
-end
-
--- Vynx Anti Ragdoll
-M._arConn=nil
-function M.startAntiRagdoll()
-    M.antiRagdollEnabled=true
-    if M._arConn then M._arConn:Disconnect() end
-    M._arConn=RunService.Heartbeat:Connect(function()
-        local char=player.Character; if not char then return end
-        local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-        local st=hum:GetState()
-        if st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown then
-            for _,v in ipairs(char:GetDescendants()) do
-                if v:IsA("BallSocketConstraint") or v:IsA("HingeConstraint") then pcall(function() v:Destroy() end) end
-            end
-            pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
-        end
-    end)
-end
-function M.stopAntiRagdoll()
-    M.antiRagdollEnabled=false
-    if M._arConn then M._arConn:Disconnect(); M._arConn=nil end
-end
-
--- Vynx Infinite Jump
-M._infReq=nil; M._infHold=nil
-function M.startHoldInfJump()
-    M.infJumpEnabled=true
-    if M._infReq then M._infReq:Disconnect() end
-    M._infReq=UIS.JumpRequest:Connect(function()
-        local r=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if r then r.Velocity=Vector3.new(r.Velocity.X,55,r.Velocity.Z) end
-    end)
-    if M._infHold then M._infHold:Disconnect() end
-    M._infHold=RunService.Heartbeat:Connect(function()
-        if not M.infJumpEnabled then return end
-        local char=player.Character; local r=char and char:FindFirstChild("HumanoidRootPart"); if not r then return end
-        local hum=char:FindFirstChildOfClass("Humanoid")
-        local held=UIS:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump)
-        if held and r.Velocity.Y<30 then r.Velocity=Vector3.new(r.Velocity.X,55,r.Velocity.Z) end
-    end)
-end
-function M.stopHoldInfJump()
-    M.infJumpEnabled=false
-    if M._infReq then M._infReq:Disconnect(); M._infReq=nil end
-    if M._infHold then M._infHold:Disconnect(); M._infHold=nil end
-end
-M.startManualInfJumpLoop=M.startHoldInfJump
-M.stopManualInfJumpLoop=M.stopHoldInfJump
-
--- Vynx Auto Left/Right
-M._alConn=nil; M._arConn2=nil
-function M.startAutoLeft()
-    M.autoLeftEnabled=true
-    if M._alConn then M._alConn:Disconnect() end
-    M._alConn=RunService.Heartbeat:Connect(function()
-        local hrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart"); if not hrp then return end
-        local cam=workspace.CurrentCamera; if not cam then return end
-        local dir=-cam.CFrame.RightVector; dir=Vector3.new(dir.X,0,dir.Z)
-        local spd=M.getActiveMoveSpeed(); local mass=hrp.AssemblyMass or 1; local cur=hrp.AssemblyLinearVelocity
-        local des=Vector3.new(dir.X*spd,cur.Y,dir.Z*spd)
-        pcall(function() hrp:ApplyImpulse(Vector3.new(des.X-cur.X,0,des.Z-cur.Z)*mass) end)
-    end)
-end
-function M.stopAutoLeft()
-    M.autoLeftEnabled=false
-    if M._alConn then M._alConn:Disconnect(); M._alConn=nil end
-end
-function M.startAutoRight()
-    M.autoRightEnabled=true
-    if M._arConn2 then M._arConn2:Disconnect() end
-    M._arConn2=RunService.Heartbeat:Connect(function()
-        local hrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart"); if not hrp then return end
-        local cam=workspace.CurrentCamera; if not cam then return end
-        local dir=cam.CFrame.RightVector; dir=Vector3.new(dir.X,0,dir.Z)
-        local spd=M.getActiveMoveSpeed(); local mass=hrp.AssemblyMass or 1; local cur=hrp.AssemblyLinearVelocity
-        local des=Vector3.new(dir.X*spd,cur.Y,dir.Z*spd)
-        pcall(function() hrp:ApplyImpulse(Vector3.new(des.X-cur.X,0,des.Z-cur.Z)*mass) end)
-    end)
-end
-function M.stopAutoRight()
-    M.autoRightEnabled=false
-    if M._arConn2 then M._arConn2:Disconnect(); M._arConn2=nil end
-end
-
--- Vynx Lagger/Carry
-function M.toggleLaggerMode() M.laggerModeEnabled=not M.laggerModeEnabled; if M.laggerModeEnabled then M.laggerCarryActive=false end end
-function M.toggleLaggerCarry() M.laggerCarryActive=not M.laggerCarryActive; if M.laggerCarryActive then M.laggerModeEnabled=false end end
-function M.toggleCarryMode() M.carrySpeedActive=not M.carrySpeedActive; if M.carrySpeedActive then M.laggerModeEnabled=false; M.laggerCarryActive=false end end
-
--- Vynx Drop (not Green jump drop)
-function M.runDrop()
-    local char=player.Character; local hrp=char and char:FindFirstChild("HumanoidRootPart"); if not hrp then return end
-    -- Vynx drop: TP down then up logic (simplified)
-    pcall(function()
-        hrp.CFrame=CFrame.new(hrp.Position.X, -7, hrp.Position.Z)
-    end)
-end
-
--- Vynx Reset
-function M.cursedInstaReset()
-    local remote=nil
-    for _,d in ipairs(game:GetDescendants()) do if d:IsA("RemoteEvent") and d.Name:sub(1,3)=="RE/" then remote=d; break end end
-    if not remote then return end
-    for i=1,30 do pcall(function() remote:FireServer("f888ee6e-c86d-46e1-93d7-0639d6635d42", player, "balloon") end) task.wait() end
-end
-
--- Vynx AntiKick, Unwalk, SafeMode
-M._akConn=nil
-function M.enableAntiKick()
-    M.antiKickEnabled=true
-    if M._akConn then M._akConn:Disconnect() end
-    M._akConn=RunService.Heartbeat:Connect(function()
-        local hrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if hrp and hrp.AssemblyLinearVelocity.Y<-90 then hrp.AssemblyLinearVelocity=Vector3.new(hrp.AssemblyLinearVelocity.X,-90,hrp.AssemblyLinearVelocity.Z) end
-    end)
-end
-function M.disableAntiKick()
-    M.antiKickEnabled=false
-    if M._akConn then M._akConn:Disconnect(); M._akConn=nil end
-end
-function M.startUnwalk()
-    M.unwalkEnabled=true
-    local hum=player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-    if hum then M._oldWS=hum.WalkSpeed; hum.WalkSpeed=0 end
-end
-function M.stopUnwalk()
-    M.unwalkEnabled=false
-    local hum=player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-    if hum and M._oldWS then hum.WalkSpeed=M._oldWS end
-end
-
-_G.VynxM = M
-print("[LEAN] Vynx non-protected logic loaded")
 
 local function Main()
     if _G.GreenDuelsV2_MainExecuted then return end
@@ -3762,29 +3492,6 @@ local function Main()
     startAutoSteal()
     print("[Green Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
-
-
--- Hook Green locals to VynxM (non-protected)
-task.spawn(function()
-    task.wait(1.5)
-    pcall(function() getBat = function() return VynxM.findBat() end end)
-    pcall(function() tryHitBat = function() local b=VynxM.findBat() if b then b:Activate() end end end)
-    pcall(function() startBatAimbot = function() VynxM.startBatAimbot() end end)
-    pcall(function() stopBatAimbot = function() VynxM.stopBatAimbot() end end)
-    pcall(function() startTPBat = function() VynxM.startBatAimbot() end end)
-    pcall(function() stopTPBat = function() VynxM.stopBatAimbot() end end)
-    pcall(function() toggleTPBat = function() VynxM.toggleBypassAimbot() end end)
-    pcall(function() startAntiRagdoll = function() VynxM.startAntiRagdoll() end end)
-    pcall(function() stopAntiRagdoll = function() VynxM.stopAntiRagdoll() end end)
-    pcall(function() startAutoLeft = function() VynxM.startAutoLeft() end end)
-    pcall(function() stopAutoLeft = function() VynxM.stopAutoLeft() end end)
-    pcall(function() startAutoRight = function() VynxM.startAutoRight() end end)
-    pcall(function() stopAutoRight = function() VynxM.stopAutoRight() end end)
-    pcall(function() runJumpDrop = function() VynxM.runDrop() end end)
-    pcall(function() runDrop = function() VynxM.runDrop() end end)
-    pcall(function() instaReset = function() VynxM.cursedInstaReset() end end)
-    print("[LEAN HOOK] Green protected intact, rest = Vynx")
-end)
 
 -- ============================================================
 -- SAFE MAIN EXECUTION - FIXED
