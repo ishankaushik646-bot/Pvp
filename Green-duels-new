@@ -217,7 +217,32 @@ local function getClosestPlayerForTP()
     return closest, closestDist
 end
 
+
+-- GODMODE SAFE INJECT
+local godC1,godC2,godC3,godC4=nil,nil,nil,nil
+local function godClear()
+ if godC1 then pcall(function() godC1:Disconnect() end) godC1=nil end
+ if godC2 then pcall(function() godC2:Disconnect() end) godC2=nil end
+ if godC3 then pcall(function() godC3:Disconnect() end) godC3=nil end
+ if godC4 then pcall(function() godC4:Disconnect() end) godC4=nil end
+end
+local function godProtect(ch)
+ local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+ if not hum then return end
+ if godC2 then pcall(function() godC2:Disconnect() end) end
+ if godC3 then pcall(function() godC3:Disconnect() end) end
+ godC2=hum:GetPropertyChangedSignal("Health"):Connect(function()
+  if not tpBatToggled then return end
+  if hum.Health < hum.MaxHealth then pcall(function() hum.Health=hum.MaxHealth end) end
+ end)
+ godC3=hum.Died:Connect(function()
+  if not tpBatToggled then return end
+  pcall(function() hum.Health=hum.MaxHealth hum:ChangeState(Enum.HumanoidStateType.Running) end)
+ end)
+end
+
 local function startTPBat()
+    godClear() local ch=LP.Character if ch then godProtect(ch) end godC4=LP.CharacterAdded:Connect(function(c) if not tpBatToggled then return end task.wait(0.15) godProtect(c) end) godC1=RunService.Heartbeat:Connect(function() if not tpBatToggled then return end local ch=LP.Character local hum=ch and ch:FindFirstChildOfClass('Humanoid') if hum and hum.Health < hum.MaxHealth then pcall(function() hum.Health=hum.MaxHealth end) end end)
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
     
@@ -270,6 +295,7 @@ end
 local function stopTPBat()
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    godClear()
     print("[Green Duels] TP Bat STOPPED (toggle OFF)")
 end
 
