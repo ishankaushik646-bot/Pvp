@@ -11,7 +11,8 @@
   Controlled via web panel polling only
 ]]
 
--- BASE removed for standalone
+local BASE = "https://responsive-redo-bot.lovable.app"
+local KEY  = "Grin@1234"
 
 local Players            = game:GetService("Players")
 local HttpService        = game:GetService("HttpService")
@@ -20,15 +21,24 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local UserInputService   = game:GetService("UserInputService")
 local TweenService       = game:GetService("TweenService")
 
-local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or function() return {Success=true} end
+local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or function() return {Success=true, Body="{}"} end
 
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
-if _G.GreenDuelsV2_Running then pcall(function() _G.GreenDuelsV2_MainExecuted=nil end) end
 _G.GreenDuelsV2_Running = true
 
--- dup removed
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local ContentProvider = game:GetService("ContentProvider")
+local Stats = game:GetService("Stats")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
 
 -- ============================================================
 -- FIX: Missing variables
@@ -208,7 +218,6 @@ local function getClosestPlayerForTP()
 end
 
 local function startTPBat()
-    pcall(function() _G.GreenEnableGod() end)
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
     
@@ -258,50 +267,9 @@ local function startTPBat()
     print("[Green Duels] TP Bat STARTED (toggle ON)")
 end
 
-
--- GODMODE PATCH V2 - SAFE
-if not _G.GreenGodmodePatched then
-_G.GreenGodmodePatched=true
-local _bgC1,_bgC2,_bgC3,_bgC4=nil,nil,nil,nil
-local function bgClear()
- if _bgC1 then pcall(function() _bgC1:Disconnect() end) _bgC1=nil end
- if _bgC2 then pcall(function() _bgC2:Disconnect() end) _bgC2=nil end
- if _bgC3 then pcall(function() _bgC3:Disconnect() end) _bgC3=nil end
- if _bgC4 then pcall(function() _bgC4:Disconnect() end) _bgC4=nil end
-end
-local function bgProtect(ch)
- local hum=ch and ch:FindFirstChildOfClass("Humanoid")
- if not hum then return end
- if _bgC2 then pcall(function() _bgC2:Disconnect() end) end
- if _bgC3 then pcall(function() _bgC3:Disconnect() end) end
- _bgC2=hum:GetPropertyChangedSignal("Health"):Connect(function()
-  if not tpBatToggled then return end
-  if hum.Health < hum.MaxHealth then pcall(function() hum.Health=hum.MaxHealth end) end
- end)
- _bgC3=hum.Died:Connect(function()
-  if not tpBatToggled then return end
-  pcall(function() hum.Health=hum.MaxHealth hum:ChangeState(Enum.HumanoidStateType.Running) end)
- end)
-end
-_G.GreenEnableGod=function()
- bgClear()
- local ch=LP.Character
- if ch then bgProtect(ch) end
- _bgC4=LP.CharacterAdded:Connect(function(c) if not tpBatToggled then return end task.wait(0.15) bgProtect(c) end)
- _bgC1=game:GetService("RunService").Heartbeat:Connect(function()
-  if not tpBatToggled then return end
-  local ch=LP.Character
-  local hum=ch and ch:FindFirstChildOfClass("Humanoid")
-  if hum and hum.Health < hum.MaxHealth then pcall(function() hum.Health=hum.MaxHealth end) end
- end)
-end
-_G.GreenDisableGod=bgClear
-end
-
 local function stopTPBat()
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
-    pcall(function() _G.GreenDisableGod() end)
     print("[Green Duels] TP Bat STOPPED (toggle OFF)")
 end
 
@@ -408,20 +376,12 @@ local CONFIG_BACKUP = "GreenDuelsConfig.bak"
 
 local earlyConfig = nil
 local function loadEarlyConfig()
-    local function tryLoad(file)
-        if not _isfile(file) then return nil end
-        local raw = _readfile(file)
-        if not raw or raw == "" then return nil end
-        local ok, cfg = pcall(function() return HttpService:JSONDecode(raw) end)
-        if ok and cfg then return cfg end
-        return nil
-    end
-    local cfg = tryLoad(CONFIG_FILE)
-    if cfg then return cfg end
-    cfg = tryLoad(CONFIG_FILE_V2)
-    if cfg then return cfg end
-    cfg = tryLoad(CONFIG_BACKUP)
-    return cfg
+    if not _isfile(CONFIG_FILE) then return nil end
+    local raw = _readfile(CONFIG_FILE)
+    if not raw then return nil end
+    local ok, cfg = pcall(function() return HttpService:JSONDecode(raw) end)
+    if ok and cfg and cfg.version == CONFIG_VERSION then return cfg end
+    return nil
 end
 earlyConfig = loadEarlyConfig()
 local introShouldPlay = (earlyConfig == nil or earlyConfig.introEnabled ~= false)
@@ -524,7 +484,15 @@ if introShouldPlay then
     blur:Destroy()
 end
 
--- Helper removed - now using BodyVelocity method
+-- ============================================================
+-- Helper for infinite jump (top-level, used before Main)
+local function applyImpulseForVelocity(hrp, desiredVelocity)
+    if not hrp then return end
+    local mass = hrp.AssemblyMass
+    local currentVel = hrp.AssemblyLinearVelocity
+    local impulse = (desiredVelocity - currentVel) * mass
+    pcall(function() hrp:ApplyImpulse(impulse) end)
+end
 
 -- ============================================================
 -- STATE
@@ -586,46 +554,36 @@ local Keys = {
 -- ========== HOLD INFINITE JUMP ONLY ==========
 -- Simple hold to fly - from your new file
 
--- ============================================================
--- INFINITE JUMP - VYNX STYLE BodyVelocity Anti-Kick (FIXED)
--- ============================================================
-local infJumpBV = nil
-local infJumpConn = nil
-
-local function clearInfJumpBV()
-    if infJumpBV then pcall(function() infJumpBV:Destroy() end) infJumpBV = nil end
-end
-
-local function setupInfJump()
-    if infJumpConn then infJumpConn:Disconnect() end
-    infJumpConn = UserInputService.JumpRequest:Connect(function()
-        if not State.infJumpEnabled then return end
-        local char = LP.Character
-        if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hrp or not hum then return end
-        -- Anti-kick BodyVelocity method like Vynx
-        clearInfJumpBV()
-        local bv = Instance.new("BodyVelocity")
-        bv.Name = "GreenInfJumpBV"
-        bv.MaxForce = Vector3.new(0, 9e9, 0)
-        bv.Velocity = Vector3.new(0, 55, 0)
-        bv.P = 1250
-        bv.Parent = hrp
-        infJumpBV = bv
-        task.delay(0.15, clearInfJumpBV)
-        hrp.Velocity = Vector3.new(hrp.Velocity.X, 55, hrp.Velocity.Z)
-    end)
-end
-
-setupInfJump()
-LP.CharacterAdded:Connect(function() task.wait(0.5) setupInfJump() end)
+local infJumpBV=nil
+UserInputService.JumpRequest:Connect(function()
+    if not State.infJumpEnabled then return end
+    local char = LP.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    if infJumpBV then pcall(function() infJumpBV:Destroy() end) end
+    local bv=Instance.new("BodyVelocity")
+    bv.MaxForce=Vector3.new(0,9e9,0)
+    bv.Velocity=Vector3.new(0,55,0)
+    bv.P=1250
+    bv.Parent=hrp
+    infJumpBV=bv
+    task.delay(0.15,function() if infJumpBV then pcall(function() infJumpBV:Destroy() end) infJumpBV=nil end end)
+    hrp.Velocity=Vector3.new(hrp.Velocity.X,55,hrp.Velocity.Z)
+end)
 
 RunService.Heartbeat:Connect(function()
-    if not State.infJumpEnabled then clearInfJumpBV() return end
-    -- No hold spam needed, BodyVelocity handles it
-
+    if not State.infJumpEnabled then return end
+    local char = LP.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    -- Hold jump to keep jumping
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
+    if jumpHeld and root.Velocity.Y < 30 then
+        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
     end
     
     -- Fall speed limit
@@ -3275,94 +3233,6 @@ local function Main()
             warn("[Green Duels] Config save FAILED!")
         else
             pcall(_G._VezyFlashSave, true)
-        end
-        return success
-    end
-
-
-    -- OVERRIDE: FIXED SAVE THAT WRITES TO 2 CONFIGS
-    saveConfig = function()
-        local success = false
-        pcall(function()
-            if _isfile(CONFIG_FILE) then
-                local oldRaw = _readfile(CONFIG_FILE)
-                if oldRaw and oldRaw ~= "" then
-                    pcall(function() _writefile(CONFIG_BACKUP, oldRaw) end)
-                end
-            end
-            
-            local btnPositions = {}
-            if stackWrappers then
-                for key, wrapper in pairs(stackWrappers) do
-                    if wrapper and wrapper.Position then
-                        pcall(function()
-                            btnPositions[key] = { X = wrapper.Position.X.Offset, Y = wrapper.Position.Y.Offset }
-                        end)
-                    end
-                end
-            end
-            
-            local cloverPos = nil
-            pcall(function()
-                if cloverBtn and cloverBtn.Position then
-                    cloverPos = { X = cloverBtn.Position.X.Offset, Y = cloverBtn.Position.Y.Offset }
-                end
-            end)
-            
-            local cfg = {
-                version = CONFIG_VERSION,
-                normalSpeed = State.normalSpeed,
-                carrySpeed = State.carrySpeed,
-                laggerSpeed = State.laggerSpeed,
-                laggerCarrySpeed = State.laggerCarrySpeed,
-                speedToggled = State.speedToggled,
-                laggerMode = State.laggerMode,
-                infJumpEnabled = State.infJumpEnabled,
-                antiRagdollEnabled = State.antiRagdollEnabled,
-                guiVisible = State.guiVisible,
-                uiLocked = State.uiLocked,
-                autoLeftEnabled = State.autoLeftEnabled,
-                autoRightEnabled = State.autoRightEnabled,
-                medusaCounterEnabled = State.medusaCounterEnabled,
-                batAimbotToggled = State.batAimbotToggled,
-                batCounterEnabled = State.batCounterEnabled,
-                safeModeEnabled = State.safeModeEnabled,
-                autoSwingEnabled = State.autoSwingEnabled,
-                stackButtonsHidden = State.stackButtonsHidden,
-                stackButtonsLocked = State.stackButtonsLocked,
-                nukeOpt = State.nukeOpt,
-                removeAcc = State.removeAcc,
-                antiLagEnabled = State.antiLagEnabled,
-                stretchedResEnabled = State.stretchedResEnabled,
-                stretchFOV = State.stretchFOV,
-                activeSky = State.activeSky,
-                tryardAnimEnabled = State.tryardAnimEnabled,
-                introEnabled = State.introEnabled,
-                autoTPEnabled = State.autoTPEnabled,
-                autoTPHeight = State.autoTPHeight,
-                tpBatToggled = tpBatToggled,
-                mirrorTPDownEnabled = mirrorTPDownEnabled,
-                btnPositions = btnPositions,
-                cloverPosition = cloverPos,
-                stealRadius = Steal.StealRadius,
-                stealDuration = Steal.StealDuration,
-                stealMode = Steal.StealMode,
-            }
-            local encoded = HttpService:JSONEncode(cfg)
-            -- Save to BOTH files - fixes not saving issue
-            pcall(function() _writefile(CONFIG_FILE, encoded) end)
-            pcall(function() _writefile(CONFIG_FILE_V2, encoded) end)
-            task.wait(0.05)
-            local verify1 = _isfile(CONFIG_FILE) and _readfile(CONFIG_FILE)
-            local verify2 = _isfile(CONFIG_FILE_V2) and _readfile(CONFIG_FILE_V2)
-            if (verify1 == encoded) or (verify2 == encoded) then success = true end
-        end)
-        if not success then
-            pcall(_G._VezyFlashSave, false)
-            warn("[Green Duels] Config save FAILED!")
-        else
-            pcall(_G._VezyFlashSave, true)
-            print("[Green Duels] Config saved to both files")
         end
         return success
     end
