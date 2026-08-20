@@ -112,13 +112,7 @@ local o; o = hookfunction(Instance.new("RemoteEvent").FireServer, newcclosure(fu
     return o(self, ...)
 end))
 
-local function instaReset() -- Vynx cursedInstaReset style
-    findResetRemote()
-    if not resetRemote then task.wait(0.5); findResetRemote() end
-    if not resetRemote then return end
-    for i=1,30 do pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end) task.wait() end
-end
-local function instaReset_ORIG_DISABLED()
+local function instaReset()
     findResetRemote()
     if not resetRemote then
         task.wait(0.5)
@@ -178,29 +172,47 @@ local tpBatAimbotConn = nil
 local function getBat()
     local char = LP.Character
     if not char then return nil end
-    for _,v in pairs(char:GetChildren()) do
-        if v:IsA("Tool") and v.Name:lower():find("bat") then return v end
+    local tool = char:FindFirstChild("Bat")
+    if tool then return tool end
+    local bp = LP:FindFirstChild("Backpack")
+    if bp then
+        tool = bp:FindFirstChild("Bat")
+        if tool then
+            tool.Parent = char
+            return tool
+        end
     end
     return nil
 end
 
 local function tryHitBat()
-    local bat = getBat()
-    if bat then pcall(function() bat:Activate() end) end
+    if tpBatHittingCooldown then return end
+    tpBatHittingCooldown = true
+    pcall(function()
+        local bat = getBat()
+        if bat then
+            bat:Activate()
+            local ev = bat:FindFirstChildWhichIsA("RemoteEvent")
+            if ev then ev:FireServer() end
+            local rf = bat:FindFirstChildWhichIsA("RemoteFunction")
+            if rf then pcall(function() rf:InvokeServer() end) end
+        end
+    end)
+    task.delay(0.08, function() tpBatHittingCooldown = false end)
 end
 
 local function getClosestPlayerForTP()
-    local closest=nil
-    local closestDist=150
-    local myRoot = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil, math.huge end
-    for _,plr in ipairs(Players:GetPlayers()) do
-        if plr~=LP and plr.Character then
-            local hrp=plr.Character:FindFirstChild("HumanoidRootPart")
-            local hum=plr.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum and hum.Health>0 then
-                local d=(myRoot.Position-hrp.Position).Magnitude
-                if d<closestDist then closest=plr; closestDist=d end
+    if not tpBatHRP then return nil, math.huge end
+    local closest, closestDist = nil, math.huge
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character then
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local dist = (tpBatHRP.Position - root.Position).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closest = p
+                end
             end
         end
     end
@@ -208,37 +220,59 @@ local function getClosestPlayerForTP()
 end
 
 local function startTPBat()
-    if tpBatConn then tpBatConn:Disconnect(); tpBatConn=nil end
-    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn=nil end
+    if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
+    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    
     tpBatConn = RunService.Heartbeat:Connect(function()
         if not tpBatToggled then return end
-        if not tpBatH or not tpBatHRP or not tpBatHRP.Parent then
-            local char=LP.Character
+        if not tpBatH or not tpBatHRP then
+            local char = LP.Character
             if char then
-                tpBatH=char:FindFirstChildOfClass("Humanoid")
-                tpBatHRP=char:FindFirstChild("HumanoidRootPart")
+                tpBatH = char:FindFirstChildOfClass("Humanoid")
+                tpBatHRP = char:FindFirstChild("HumanoidRootPart")
             end
             if not tpBatH or not tpBatHRP then return end
         end
-        local target,dist=getClosestPlayerForTP()
+        
+        local target, dist = getClosestPlayerForTP()
         if target and target.Character then
-            local tr=target.Character:FindFirstChild("HumanoidRootPart")
-            if tr then
-                if sethiddenproperty then pcall(function() sethiddenproperty(tpBatHRP,"PhysicsRepRootPart",tr) end) end
-                if (tpBatHRP.Position-tr.Position).Magnitude>6 then
-                    tpBatHRP.CFrame=CFrame.new(tr.Position+Vector3.new(0,1,0))
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                if sethiddenproperty then
+                    pcall(function() sethiddenproperty(tpBatHRP, "PhysicsRepRootPart", targetRoot) end)
                 end
+                local targetPos = targetRoot.Position + Vector3.new(0, 0.9, 0)
+                if (tpBatHRP.Position - targetPos).Magnitude > 5 then
+                    tpBatHRP.CFrame = CFrame.new(targetPos)
+                end
+                local cam = workspace.CurrentCamera
+                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
                 tryHitBat()
             end
         end
     end)
-    print("[Vynx] TP Bat ON")
+    
+    tpBatAimbotConn = RunService.RenderStepped:Connect(function()
+        if not tpBatToggled then return end
+        if not tpBatH or not tpBatHRP then return end
+        
+        local target, dist = getClosestPlayerForTP()
+        if target and target.Character then
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                local cam = workspace.CurrentCamera
+                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
+                tryHitBat()
+            end
+        end
+    end)
+    print("[Green Duels] TP Bat STARTED (toggle ON)")
 end
 
 local function stopTPBat()
-    if tpBatConn then tpBatConn:Disconnect(); tpBatConn=nil end
-    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn=nil end
-    print("[Vynx] TP Bat OFF")
+    if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
+    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    print("[Green Duels] TP Bat STOPPED (toggle OFF)")
 end
 
 local function toggleTPBat()
@@ -871,14 +905,7 @@ local DROP_ASCEND_SPEED = 160
 local _dropConn = nil
 local dropActive = false
 
-local function runJumpDrop_ORIG_DISABLED() end
-local function runJumpDrop() -- Vynx version (TP down)
-    local char=LP.Character
-    local hrp=char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    pcall(function() hrp.CFrame=CFrame.new(hrp.Position.X, -7, hrp.Position.Z) end)
-end
---
+local function runJumpDrop()
     if dropActive then return end
     local char = LP.Character
     if not char then return end
@@ -3562,3 +3589,118 @@ Players.PlayerAdded:Connect(function(player)
     task.spawn(function() setupOtherPlayerSpeed(player) end)
 end)
 end)()
+
+
+-- ============================================================
+-- SAFE VYNX PATCH - Runs on top of Green, no duplicate locals
+-- Protected Green intact: AutoSteal, AutoTPDown, Performance, Sky, Visuals, Interface
+-- Non-protected replaced with Vynx logic via override
+-- ============================================================
+task.spawn(function()
+    task.wait(2)
+    local PlayersService = game:GetService("Players")
+    local RunServiceService = game:GetService("RunService")
+    local UIService = game:GetService("UserInputService")
+    local LocalPlayer = PlayersService.LocalPlayer
+
+    -- Vynx M table (lean)
+    local Vynx = {}
+    Vynx.NS=35; Vynx.CS=22; Vynx.LAGGER_SPEED=28; Vynx.LAGGER_CARRY_SPEED=14
+    Vynx.laggerModeEnabled=false; Vynx.laggerCarryActive=false; Vynx.carrySpeedActive=false
+
+    function Vynx.findBat()
+        local ch=LocalPlayer.Character
+        if not ch then return nil end
+        for _,v in pairs(ch:GetChildren()) do
+            if v:IsA("Tool") and v.Name:lower():find("bat") then return v end
+        end
+        return nil
+    end
+
+    -- Vynx TP Bat Aimbot (replaces Green's TP Bat)
+    local VynxTPConn=nil
+    local VynxTPOn=false
+    local function Vynx_getClosest()
+        local closest=nil; local dist=150
+        local myRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return nil end
+        for _,plr in ipairs(PlayersService:GetPlayers()) do
+            if plr~=LocalPlayer and plr.Character then
+                local hrp=plr.Character:FindFirstChild("HumanoidRootPart")
+                local hum=plr.Character:FindFirstChildOfClass("Humanoid")
+                if hrp and hum and hum.Health>0 then
+                    local d=(myRoot.Position-hrp.Position).Magnitude
+                    if d<dist then closest=plr; dist=d end
+                end
+            end
+        end
+        return closest
+    end
+
+    function Vynx.startBatAimbot()
+        if VynxTPConn then VynxTPConn:Disconnect() end
+        VynxTPOn=true
+        VynxTPConn=RunServiceService.Heartbeat:Connect(function()
+            if not VynxTPOn then return end
+            local myRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not myRoot then return end
+            local target=Vynx_getClosest()
+            if target and target.Character then
+                local tr=target.Character:FindFirstChild("HumanoidRootPart")
+                if tr then
+                    pcall(function()
+                        local sh=setrawmetatable and nil or sethiddenproperty
+                        if sethiddenproperty then sethiddenproperty(myRoot,"PhysicsRepRootPart",tr) end
+                    end)
+                    if (myRoot.Position-tr.Position).Magnitude>6 then
+                        myRoot.CFrame=CFrame.new(tr.Position+Vector3.new(0,1,0))
+                    end
+                    local bat=Vynx.findBat()
+                    if bat then pcall(function() bat:Activate() end) end
+                end
+            end
+        end)
+        print("[Vynx] TP Bat ON (over Green)")
+    end
+
+    function Vynx.stopBatAimbot()
+        VynxTPOn=false
+        if VynxTPConn then VynxTPConn:Disconnect(); VynxTPConn=nil end
+        print("[Vynx] TP Bat OFF")
+    end
+
+    -- Hook Green's toggleTPBat if exists globally, else hook UI button
+    _G.Vynx=Vynx
+    -- Try to override global functions that Green may have exposed
+    if _G.toggleTPBat then _G.toggleTPBat=function() if VynxTPOn then Vynx.stopBatAimbot() else Vynx.startBatAimbot() end end end
+    if _G.startTPBat then _G.startTPBat=Vynx.startBatAimbot end
+    if _G.stopTPBat then _G.stopTPBat=Vynx.stopBatAimbot end
+
+    -- Also try to find Green's stackBtnRefs and rewire TP Bat button to Vynx
+    pcall(function()
+        if stackBtnRefs and stackBtnRefs.tpBat then
+            local btn=stackBtnRefs.tpBat
+            -- stackBtnRefs.tpBat is a custom object with setOn, we wrap its callback
+            -- We can't easily replace internal callback, but we can add our own connection to the button instance
+            -- For now, just make our Vynx toggle also trigger when Green toggles
+            local origToggle = toggleTPBat
+            if origToggle then
+                toggleTPBat = function()
+                    -- call original Green toggle to keep UI sync, then override with Vynx
+                    pcall(origToggle)
+                    if VynxTPOn then Vynx.stopBatAimbot() else Vynx.startBatAimbot() end
+                end
+            end
+        end
+    end)
+
+    -- Vynx Drop replaces Green Jump Drop
+    local function Vynx_Drop()
+        local hrp=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then pcall(function() hrp.CFrame=CFrame.new(hrp.Position.X, -7, hrp.Position.Z) end) end
+    end
+    if _G.runJumpDrop then _G.runJumpDrop=Vynx_Drop end
+    if _G.runDrop then _G.runDrop=Vynx_Drop end
+
+    print("[SAFE PATCH] Green UI + Protected Green intact, Non-protected now Vynx logic - loaded")
+end)
