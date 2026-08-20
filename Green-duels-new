@@ -23,6 +23,24 @@ local TweenService       = game:GetService("TweenService")
 
 local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or function() return {Success=true, Body="{}"} end
 
+
+local _vynxBV=nil
+local function vynxApplySpeed(hrp, dir, speed)
+    if not hrp or not dir then return end
+    if not _vynxBV or _vynxBV.Parent~=hrp then
+        if _vynxBV then pcall(function() _vynxBV:Destroy() end) end
+        _vynxBV=Instance.new("BodyVelocity")
+        _vynxBV.Name="VynxBV"
+        _vynxBV.MaxForce=Vector3.new(math.huge,0,math.huge)
+        _vynxBV.P=1250
+        _vynxBV.Parent=hrp
+    end
+    _vynxBV.Velocity=Vector3.new(dir.X*speed,_vynxBV.Velocity.Y,dir.Z*speed)
+end
+local function vynxClearSpeed()
+    if _vynxBV then pcall(function() _vynxBV:Destroy() end) _vynxBV=nil end
+end
+
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
@@ -512,7 +530,7 @@ end
 
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
-local function applyImpulseForVelocity(hrp, desiredVelocity) if desiredVelocity.Magnitude<1 then if _G._vBV then pcall(function() _G._vBV:Destroy() end) _G._vBV=nil end end -- VYNX FIX 
+local function applyImpulseForVelocity(hrp, desiredVelocity)
     if not hrp then return end
     local mass = hrp.AssemblyMass
     local currentVel = hrp.AssemblyLinearVelocity
@@ -2331,7 +2349,7 @@ local function Main()
     -- ============================================================
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
-    local function applyImpulseForVelocity(hrp, desiredVelocity) if desiredVelocity.Magnitude<1 then if _G._vBV then pcall(function() _G._vBV:Destroy() end) _G._vBV=nil end end -- VYNX FIX 
+    local function applyImpulseForVelocity(hrp, desiredVelocity)
         if not hrp or not desiredVelocity then return end
         local mass = hrp.AssemblyMass
         local currentVel = hrp.AssemblyLinearVelocity
