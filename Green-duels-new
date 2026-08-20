@@ -3592,9 +3592,8 @@ end)()
 
 
 -- ============================================================
--- SAFE VYNX PATCH - Runs on top of Green, no duplicate locals
--- Protected Green intact: AutoSteal, AutoTPDown, Performance, Sky, Visuals, Interface
--- Non-protected replaced with Vynx logic via override
+-- FULL SAFE VYNX OVERLAY - All non-protected = Vynx
+-- Protected Green intact: AutoSteal, AutoTPDown, Performance, Sky, OtherVisuals, Interface
 -- ============================================================
 task.spawn(function()
     task.wait(2)
@@ -3603,24 +3602,47 @@ task.spawn(function()
     local UIService = game:GetService("UserInputService")
     local LocalPlayer = PlayersService.LocalPlayer
 
-    -- Vynx M table (lean)
     local Vynx = {}
     Vynx.NS=35; Vynx.CS=22; Vynx.LAGGER_SPEED=28; Vynx.LAGGER_CARRY_SPEED=14
     Vynx.laggerModeEnabled=false; Vynx.laggerCarryActive=false; Vynx.carrySpeedActive=false
+    Vynx.antiRagdollEnabled=false; Vynx.infJumpEnabled=true; Vynx.autoLeftEnabled=false; Vynx.autoRightEnabled=false
+    Vynx.antiKickEnabled=false; Vynx.unwalkEnabled=false
 
     function Vynx.findBat()
         local ch=LocalPlayer.Character
         if not ch then return nil end
-        for _,v in pairs(ch:GetChildren()) do
-            if v:IsA("Tool") and v.Name:lower():find("bat") then return v end
-        end
+        for _,v in pairs(ch:GetChildren()) do if v:IsA("Tool") and v.Name:lower():find("bat") then return v end end
         return nil
     end
+    function Vynx.findMedusa()
+        local ch=LocalPlayer.Character
+        if not ch then return nil end
+        for _,v in pairs(ch:GetChildren()) do if v:IsA("Tool") and v.Name:lower():find("medusa") then return v end end
+        return nil
+    end
+    function Vynx.isStealState()
+        local hum=LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        return hum and hum.WalkSpeed < 16
+    end
+    function Vynx.hasBrainrot()
+        local ch=LocalPlayer.Character
+        if not ch then return false end
+        for _,t in pairs(ch:GetChildren()) do if t:IsA("Tool") and t.Name:lower():find("brainrot") then return true end end
+        return false
+    end
+    function Vynx.getActiveSpeed()
+        local isSteal=Vynx.isStealState()
+        local inLagger=Vynx.laggerModeEnabled or Vynx.laggerCarryActive
+        if inLagger then return isSteal and Vynx.LAGGER_CARRY_SPEED or Vynx.LAGGER_SPEED end
+        if Vynx.hasBrainrot() then return Vynx.LAGGER_CARRY_SPEED end
+        if Vynx.laggerCarryActive then return Vynx.LAGGER_CARRY_SPEED
+        elseif Vynx.laggerModeEnabled then return Vynx.LAGGER_SPEED
+        elseif Vynx.carrySpeedActive then return Vynx.CS else return Vynx.NS end
+    end
 
-    -- Vynx TP Bat Aimbot (replaces Green's TP Bat)
-    local VynxTPConn=nil
-    local VynxTPOn=false
-    local function Vynx_getClosest()
+    -- TP Bat Vynx
+    local TPConn=nil; local TPOn=false
+    local function getClosest()
         local closest=nil; local dist=150
         local myRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not myRoot then return nil end
@@ -3636,71 +3658,264 @@ task.spawn(function()
         end
         return closest
     end
-
-    function Vynx.startBatAimbot()
-        if VynxTPConn then VynxTPConn:Disconnect() end
-        VynxTPOn=true
-        VynxTPConn=RunServiceService.Heartbeat:Connect(function()
-            if not VynxTPOn then return end
+    function Vynx.startBat()
+        if TPConn then TPConn:Disconnect() end
+        TPOn=true
+        TPConn=RunServiceService.Heartbeat:Connect(function()
+            if not TPOn then return end
             local myRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if not myRoot then return end
-            local target=Vynx_getClosest()
+            local target=getClosest()
             if target and target.Character then
                 local tr=target.Character:FindFirstChild("HumanoidRootPart")
                 if tr then
-                    pcall(function()
-                        local sh=setrawmetatable and nil or sethiddenproperty
-                        if sethiddenproperty then sethiddenproperty(myRoot,"PhysicsRepRootPart",tr) end
-                    end)
-                    if (myRoot.Position-tr.Position).Magnitude>6 then
-                        myRoot.CFrame=CFrame.new(tr.Position+Vector3.new(0,1,0))
-                    end
+                    if sethiddenproperty then pcall(function() sethiddenproperty(myRoot,"PhysicsRepRootPart",tr) end) end
+                    if (myRoot.Position-tr.Position).Magnitude>6 then myRoot.CFrame=CFrame.new(tr.Position+Vector3.new(0,1,0)) end
                     local bat=Vynx.findBat()
                     if bat then pcall(function() bat:Activate() end) end
                 end
             end
         end)
-        print("[Vynx] TP Bat ON (over Green)")
+    end
+    function Vynx.stopBat()
+        TPOn=false
+        if TPConn then TPConn:Disconnect(); TPConn=nil end
     end
 
-    function Vynx.stopBatAimbot()
-        VynxTPOn=false
-        if VynxTPConn then VynxTPConn:Disconnect(); VynxTPConn=nil end
-        print("[Vynx] TP Bat OFF")
-    end
-
-    -- Hook Green's toggleTPBat if exists globally, else hook UI button
-    _G.Vynx=Vynx
-    -- Try to override global functions that Green may have exposed
-    if _G.toggleTPBat then _G.toggleTPBat=function() if VynxTPOn then Vynx.stopBatAimbot() else Vynx.startBatAimbot() end end end
-    if _G.startTPBat then _G.startTPBat=Vynx.startBatAimbot end
-    if _G.stopTPBat then _G.stopTPBat=Vynx.stopBatAimbot end
-
-    -- Also try to find Green's stackBtnRefs and rewire TP Bat button to Vynx
-    pcall(function()
-        if stackBtnRefs and stackBtnRefs.tpBat then
-            local btn=stackBtnRefs.tpBat
-            -- stackBtnRefs.tpBat is a custom object with setOn, we wrap its callback
-            -- We can't easily replace internal callback, but we can add our own connection to the button instance
-            -- For now, just make our Vynx toggle also trigger when Green toggles
-            local origToggle = toggleTPBat
-            if origToggle then
-                toggleTPBat = function()
-                    -- call original Green toggle to keep UI sync, then override with Vynx
-                    pcall(origToggle)
-                    if VynxTPOn then Vynx.stopBatAimbot() else Vynx.startBatAimbot() end
+    -- Anti Ragdoll Vynx
+    local ARConn=nil
+    function Vynx.startAR()
+        Vynx.antiRagdollEnabled=true
+        if ARConn then ARConn:Disconnect() end
+        ARConn=RunServiceService.Heartbeat:Connect(function()
+            local char=LocalPlayer.Character; if not char then return end
+            local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+            local st=hum:GetState()
+            if st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown then
+                for _,v in ipairs(char:GetDescendants()) do
+                    if v:IsA("BallSocketConstraint") or v:IsA("HingeConstraint") then pcall(function() v:Destroy() end) end
                 end
+                pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
             end
-        end
-    end)
+        end)
+    end
+    function Vynx.stopAR()
+        Vynx.antiRagdollEnabled=false
+        if ARConn then ARConn:Disconnect(); ARConn=nil end
+    end
 
-    -- Vynx Drop replaces Green Jump Drop
-    local function Vynx_Drop()
+    -- Infinite Jump Vynx
+    local InfReq=nil; local InfHold=nil
+    function Vynx.startInf()
+        Vynx.infJumpEnabled=true
+        if InfReq then InfReq:Disconnect() end
+        InfReq=UIService.JumpRequest:Connect(function()
+            local r=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if r then r.Velocity=Vector3.new(r.Velocity.X,55,r.Velocity.Z) end
+        end)
+        if InfHold then InfHold:Disconnect() end
+        InfHold=RunServiceService.Heartbeat:Connect(function()
+            if not Vynx.infJumpEnabled then return end
+            local char=LocalPlayer.Character; local r=char and char:FindFirstChild("HumanoidRootPart"); if not r then return end
+            local hum=char:FindFirstChildOfClass("Humanoid")
+            local held=UIService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump)
+            if held and r.Velocity.Y<30 then r.Velocity=Vector3.new(r.Velocity.X,55,r.Velocity.Z) end
+        end)
+    end
+    function Vynx.stopInf()
+        Vynx.infJumpEnabled=false
+        if InfReq then InfReq:Disconnect(); InfReq=nil end
+        if InfHold then InfHold:Disconnect(); InfHold=nil end
+    end
+
+    -- Auto Left/Right Vynx
+    local ALConn=nil; local ARConn2=nil
+    function Vynx.startLeft()
+        Vynx.autoLeftEnabled=true
+        if ALConn then ALConn:Disconnect() end
+        ALConn=RunServiceService.Heartbeat:Connect(function()
+            local hrp=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+            local cam=workspace.CurrentCamera; if not cam then return end
+            local dir=-cam.CFrame.RightVector; dir=Vector3.new(dir.X,0,dir.Z)
+            local spd=Vynx.getActiveSpeed(); local mass=hrp.AssemblyMass or 1; local cur=hrp.AssemblyLinearVelocity
+            local des=Vector3.new(dir.X*spd,cur.Y,dir.Z*spd)
+            pcall(function() hrp:ApplyImpulse(Vector3.new(des.X-cur.X,0,des.Z-cur.Z)*mass) end)
+        end)
+    end
+    function Vynx.stopLeft()
+        Vynx.autoLeftEnabled=false
+        if ALConn then ALConn:Disconnect(); ALConn=nil end
+    end
+    function Vynx.startRight()
+        Vynx.autoRightEnabled=true
+        if ARConn2 then ARConn2:Disconnect() end
+        ARConn2=RunServiceService.Heartbeat:Connect(function()
+            local hrp=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+            local cam=workspace.CurrentCamera; if not cam then return end
+            local dir=cam.CFrame.RightVector; dir=Vector3.new(dir.X,0,dir.Z)
+            local spd=Vynx.getActiveSpeed(); local mass=hrp.AssemblyMass or 1; local cur=hrp.AssemblyLinearVelocity
+            local des=Vector3.new(dir.X*spd,cur.Y,dir.Z*spd)
+            pcall(function() hrp:ApplyImpulse(Vector3.new(des.X-cur.X,0,des.Z-cur.Z)*mass) end)
+        end)
+    end
+    function Vynx.stopRight()
+        Vynx.autoRightEnabled=false
+        if ARConn2 then ARConn2:Disconnect(); ARConn2=nil end
+    end
+
+    -- Anti Kick Vynx
+    local AKConn=nil
+    function Vynx.enableAK()
+        Vynx.antiKickEnabled=true
+        if AKConn then AKConn:Disconnect() end
+        AKConn=RunServiceService.Heartbeat:Connect(function()
+            local hrp=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp and hrp.AssemblyLinearVelocity.Y<-90 then hrp.AssemblyLinearVelocity=Vector3.new(hrp.AssemblyLinearVelocity.X,-90,hrp.AssemblyLinearVelocity.Z) end
+        end)
+    end
+    function Vynx.disableAK()
+        Vynx.antiKickEnabled=false
+        if AKConn then AKConn:Disconnect(); AKConn=nil end
+    end
+
+    -- Drop Vynx (TP down)
+    function Vynx.drop()
         local hrp=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if hrp then pcall(function() hrp.CFrame=CFrame.new(hrp.Position.X, -7, hrp.Position.Z) end) end
     end
-    if _G.runJumpDrop then _G.runJumpDrop=Vynx_Drop end
-    if _G.runDrop then _G.runDrop=Vynx_Drop end
 
-    print("[SAFE PATCH] Green UI + Protected Green intact, Non-protected now Vynx logic - loaded")
+    -- Insta Reset Vynx
+    function Vynx.reset()
+        local remote=nil
+        for _,d in ipairs(game:GetDescendants()) do if d:IsA("RemoteEvent") and d.Name:sub(1,3)=="RE/" then remote=d; break end end
+        if not remote then return end
+        for i=1,30 do pcall(function() remote:FireServer("f888ee6e-c86d-46e1-93d7-0639d6635d42", LocalPlayer, "balloon") end) task.wait() end
+    end
+
+    -- Lagger/Carry
+    function Vynx.toggleLagger() Vynx.laggerModeEnabled=not Vynx.laggerModeEnabled; if Vynx.laggerModeEnabled then Vynx.laggerCarryActive=false end end
+    function Vynx.toggleLaggerCarry() Vynx.laggerCarryActive=not Vynx.laggerCarryActive; if Vynx.laggerCarryActive then Vynx.laggerModeEnabled=false end end
+    function Vynx.toggleCarry() Vynx.carrySpeedActive=not Vynx.carrySpeedActive; if Vynx.carrySpeedActive then Vynx.laggerModeEnabled=false; Vynx.laggerCarryActive=false end end
+
+    _G.Vynx=Vynx
+
+    -- Hook Green's globals to Vynx (non-protected only)
+    pcall(function() _G.runJumpDrop=Vynx.drop end)
+    pcall(function() _G.runDrop=Vynx.drop end)
+    pcall(function() _G.instaReset=Vynx.reset end)
+    pcall(function() _G.startTPBat=Vynx.startBat end)
+    pcall(function() _G.stopTPBat=Vynx.stopBat end)
+    pcall(function() _G.toggleTPBat=function() if TPOn then Vynx.stopBat() else Vynx.startBat() end end end)
+    pcall(function() _G.startBatAimbot=Vynx.startBat end)
+    pcall(function() _G.stopBatAimbot=Vynx.stopBat end)
+    pcall(function() _G.startAntiRagdoll=Vynx.startAR end)
+    pcall(function() _G.stopAntiRagdoll=Vynx.stopAR end)
+    pcall(function() _G.startAutoLeft=Vynx.startLeft end)
+    pcall(function() _G.stopAutoLeft=Vynx.stopLeft end)
+    pcall(function() _G.startAutoRight=Vynx.startRight end)
+    pcall(function() _G.stopAutoRight=Vynx.stopRight end)
+    pcall(function() _G.findBat=Vynx.findBat end)
+    pcall(function() _G.findMedusa=Vynx.findMedusa end)
+
+    -- Override Green's local functions via upvalue hack if possible - try to find and replace button callbacks
+    pcall(function()
+        -- Auto-start Vynx features that were enabled in Green
+        if State and State.antiRagdollEnabled then Vynx.startAR() end
+        if State and State.infJumpEnabled then Vynx.startInf() else Vynx.startInf() end
+    end)
+
+    print("[FULL VYNX OVERLAY] Green UI + Protected Green intact, Rest = Vynx - Loaded and Running")
+end)
+
+
+-- FULL OVERLAY WITH VYNX SPEED
+task.spawn(function()
+    task.wait(2.5)
+    local PlayersService = game:GetService("Players")
+    local RunServiceService = game:GetService("RunService")
+    local LocalPlayer = PlayersService.LocalPlayer
+
+    local Vynx = {}
+    Vynx.NS=38
+    Vynx.CS=24
+    Vynx.LAGGER_SPEED=30
+    Vynx.LAGGER_CARRY_SPEED=16
+    Vynx.laggerModeEnabled=false
+    Vynx.laggerCarryActive=false
+    Vynx.carrySpeedActive=false
+
+    function Vynx.isStealState()
+        local hum=LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        return hum and hum.WalkSpeed < 16
+    end
+    function Vynx.hasBrainrot()
+        local ch=LocalPlayer.Character
+        if not ch then return false end
+        for _,t in pairs(ch:GetChildren()) do if t:IsA("Tool") and t.Name:lower():find("brainrot") then return true end end
+        return false
+    end
+    function Vynx.getActiveSpeed()
+        local isSteal=Vynx.isStealState()
+        local inLagger=Vynx.laggerModeEnabled or Vynx.laggerCarryActive
+        if inLagger then return isSteal and Vynx.LAGGER_CARRY_SPEED or Vynx.LAGGER_SPEED end
+        if Vynx.hasBrainrot() then return Vynx.LAGGER_CARRY_SPEED end
+        if Vynx.laggerCarryActive then return Vynx.LAGGER_CARRY_SPEED
+        elseif Vynx.laggerModeEnabled then return Vynx.LAGGER_SPEED
+        elseif Vynx.carrySpeedActive then return Vynx.CS else return Vynx.NS end
+    end
+
+    _G.Vynx=Vynx
+
+    -- OVERRIDE GREEN SPEED VALUES WITH VYNX VALUES
+    pcall(function()
+        if State then
+            State.normalSpeed = Vynx.NS
+            State.carrySpeed = Vynx.CS
+            State.laggerSpeed = Vynx.LAGGER_SPEED
+            State.laggerCarrySpeed = Vynx.LAGGER_CARRY_SPEED
+            -- Also override any M-style values if State uses them
+            State.NS = Vynx.NS
+            State.CS = Vynx.CS
+        end
+    end)
+
+    -- OVERRIDE Green's getActiveMoveSpeed equivalent by replacing the speed applier
+    -- Green applies speed via ApplyImpulse in a Heartbeat - we replace that Heartbeat
+    pcall(function()
+        -- Try to find and override Green's move speed function if exposed
+        if _G.getActiveMoveSpeed then _G.getActiveMoveSpeed = Vynx.getActiveSpeed end
+        if _G.getActiveSpeed then _G.getActiveSpeed = Vynx.getActiveSpeed end
+    end)
+
+    -- Force Vynx speed applier (replaces Green's)
+    local SpeedConn=nil
+    local function startVynxSpeed()
+        if SpeedConn then SpeedConn:Disconnect() end
+        SpeedConn=RunServiceService.Heartbeat:Connect(function()
+            local char=LocalPlayer.Character
+            local hrp=char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            local hum=char and char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+            -- Only apply if moving
+            local moveDir=hum.MoveDirection
+            if moveDir.Magnitude < 0.1 then return end
+            local spd=Vynx.getActiveSpeed()
+            local cam=workspace.CurrentCamera
+            if not cam then return end
+            -- Use MoveDirection for more accurate Vynx-style movement
+            local dir=Vector3.new(moveDir.X,0,moveDir.Z)
+            if dir.Magnitude < 0.1 then
+                dir=Vector3.new(cam.CFrame.LookVector.X,0,cam.CFrame.LookVector.Z)
+            end
+            dir=dir.Unit
+            local mass=hrp.AssemblyMass or 1
+            local cur=hrp.AssemblyLinearVelocity
+            local des=Vector3.new(dir.X*spd,cur.Y,dir.Z*spd)
+            pcall(function() hrp:ApplyImpulse(Vector3.new(des.X-cur.X,0,des.Z-cur.Z)*mass) end)
+        end)
+    end
+    startVynxSpeed()
+
+    print("[VYNX SPEED] Green speed replaced with Vynx logic - NS:"..Vynx.NS.." CS:"..Vynx.CS.." LAGGER:"..Vynx.LAGGER_SPEED)
 end)
