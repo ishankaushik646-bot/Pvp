@@ -490,19 +490,12 @@ end
 -- Helper for infinite jump (top-level, used before Main)
 
 -- ============================================================
--- VYNX SPEED ENGINE PORTED INTO GREEN DUELS V2
--- Original: Vynx Duels (file8695423184623425571.txt)
--- Ported to Green Duels State
+-- VYNX SPEED ENGINE INJECTED INTO GREEN DUELS
+-- Source: Vynx Duels file8695423184623425571.txt
 -- ============================================================
-State.speedMethod = State.speedMethod or "Velocity"
-State.speedMethodList = {
-    "Velocity","AssemblyLinearVelocity","Velocity Lerp","AssemblyLinearVelocity Lerp",
-    "CFrame","CFrame Lerp","Hyper CFrame","Anchored CFrame","PivotTo","Model PivotTo","Tween CFrame",
-    "WalkSpeed","Humanoid Move","Humanoid MoveTo",
-    "BodyVelocity","BodyPosition","BodyForce","BodyThrust",
-    "LinearVelocity","VectorForce","AlignPosition","ApplyImpulse","RocketPropulsion"
-}
-State._lastSpeedMethod = State._lastSpeedMethod or nil
+State.speedMethod = "Velocity"
+State.speedMethodList = {"Velocity","AssemblyLinearVelocity","Velocity Lerp","AssemblyLinearVelocity Lerp","CFrame","CFrame Lerp","Hyper CFrame","Anchored CFrame","PivotTo","Model PivotTo","Tween CFrame","WalkSpeed","Humanoid Move","Humanoid MoveTo","BodyVelocity","BodyPosition","BodyForce","BodyThrust","LinearVelocity","VectorForce","AlignPosition","ApplyImpulse","RocketPropulsion"}
+State._lastSpeedMethod = nil
 State._anchoredBySpeed = nil
 State._bodyVel = nil
 State._bodyPosition = nil
@@ -517,7 +510,7 @@ State._attLinVel = nil
 State._attVecForce = nil
 State._attAlign = nil
 State._speedTween = nil
-State.hyperMult = State.hyperMult or 4
+State.hyperMult = 4
 
 local function getActiveMoveSpeed_Vynx()
     if State.laggerMode==1 then return State.laggerSpeed
@@ -549,7 +542,7 @@ local function ensureSpeedAttachment(hrp, key, name)
         att = Instance.new("Attachment")
         att.Name = name or "MoveeSpeedAtt"
         att.Parent = hrp
-        M[key] = att
+        State[key] = att
     end
     return att
 end
@@ -721,7 +714,6 @@ end
 
 
 
--- Wrapper for old Green Duels calls
 local function applyImpulseForVelocity(hrp, desiredVelocity)
     if not hrp or not desiredVelocity then return end
     local flat = Vector3.new(desiredVelocity.X,0,desiredVelocity.Z)
@@ -732,6 +724,14 @@ local function applyImpulseForVelocity(hrp, desiredVelocity)
     if hum then applySpeedMethod(hrp,hum,dir,spd,1/60) end
 end
 
+-- OLD_FUNC_REMOVED
+local function OLD_applyImpulseForVelocity_REMOVED(hrp, desiredVelocity)
+    if not hrp then return end
+    local mass = hrp.AssemblyMass
+    local currentVel = hrp.AssemblyLinearVelocity
+    local impulse = (desiredVelocity - currentVel) * mass
+    pcall(function() hrp:ApplyImpulse(impulse) end)
+end
 
 -- ============================================================
 -- STATE
@@ -3240,11 +3240,11 @@ local function Main()
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                applySpeedMethod(hrp, hum, md, spd, dt)
+                applySpeedMethod(hrp, hum, md, spd, 1/60)
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then applySpeedMethod(hrp, hum, State.lastMoveDir, spd, dt) end
+                if anyHeld then applySpeedMethod(hrp, hum, State.lastMoveDir, spd, 1/60) end
             end
         end
         pcall(function()
