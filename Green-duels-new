@@ -488,250 +488,7 @@ end
 
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
-
--- ============================================================
--- VYNX SPEED ENGINE INJECTED INTO GREEN DUELS
--- Source: Vynx Duels file8695423184623425571.txt
--- ============================================================
-State.speedMethod = "Velocity"
-State.speedMethodList = {"Velocity","AssemblyLinearVelocity","Velocity Lerp","AssemblyLinearVelocity Lerp","CFrame","CFrame Lerp","Hyper CFrame","Anchored CFrame","PivotTo","Model PivotTo","Tween CFrame","WalkSpeed","Humanoid Move","Humanoid MoveTo","BodyVelocity","BodyPosition","BodyForce","BodyThrust","LinearVelocity","VectorForce","AlignPosition","ApplyImpulse","RocketPropulsion"}
-State._lastSpeedMethod = nil
-State._anchoredBySpeed = nil
-State._bodyVel = nil
-State._bodyPosition = nil
-State._bodyForce = nil
-State._bodyThrust = nil
-State._linearVel = nil
-State._vectorForce = nil
-State._alignPos = nil
-State._rocket = nil
-State._rocketTarget = nil
-State._attLinVel = nil
-State._attVecForce = nil
-State._attAlign = nil
-State._speedTween = nil
-State.hyperMult = 4
-
-local function getActiveMoveSpeed_Vynx()
-    if State.laggerMode==1 then return State.laggerSpeed
-    elseif State.laggerMode==2 then return State.laggerCarrySpeed
-    else return State.speedToggled and State.carrySpeed or State.normalSpeed end
-end
-
-local function destroySpeedObjects()
-    if State._anchoredBySpeed then pcall(function() State._anchoredBySpeed.Anchored = false end); State._anchoredBySpeed = nil end
-    if State._bodyVel then pcall(function() State._bodyVel:Destroy() end); State._bodyVel = nil end
-    if State._bodyPosition then pcall(function() State._bodyPosition:Destroy() end); State._bodyPosition = nil end
-    if State._bodyForce then pcall(function() State._bodyForce:Destroy() end); State._bodyForce = nil end
-    if State._bodyThrust then pcall(function() State._bodyThrust:Destroy() end); State._bodyThrust = nil end
-    if State._linearVel then pcall(function() State._linearVel:Destroy() end); State._linearVel = nil end
-    if State._vectorForce then pcall(function() State._vectorForce:Destroy() end); State._vectorForce = nil end
-    if State._alignPos then pcall(function() State._alignPos:Destroy() end); State._alignPos = nil end
-    if State._rocket then pcall(function() State._rocket:Destroy() end); State._rocket = nil end
-    if State._rocketTarget then pcall(function() State._rocketTarget:Destroy() end); State._rocketTarget = nil end
-    if State._attLinVel then pcall(function() State._attLinVel:Destroy() end); State._attLinVel = nil end
-    if State._attVecForce then pcall(function() State._attVecForce:Destroy() end); State._attVecForce = nil end
-    if State._attAlign then pcall(function() State._attAlign:Destroy() end); State._attAlign = nil end
-    if State._speedTween then pcall(function() State._speedTween:Cancel() end); State._speedTween = nil end
-end
-
-local function ensureSpeedAttachment(hrp, key, name)
-    local att = M[key]
-    if not att or att.Parent ~= hrp then
-        if att then pcall(function() att:Destroy() end) end
-        att = Instance.new("Attachment")
-        att.Name = name or "MoveeSpeedAtt"
-        att.Parent = hrp
-        State[key] = att
-    end
-    return att
-end
-
-local function applySpeedMethod(hrp, hum, dir, spd, dt)
-    local step = dt or 1/60
-    local m = State.speedMethod
-    if State._lastSpeedMethod ~= m then
-        destroySpeedObjects()
-        if m ~= "WalkSpeed" and hum.WalkSpeed ~= 16 then hum.WalkSpeed = 16 end
-        State._lastSpeedMethod = m
-    end
-    local char = hrp.Parent
-    local targetPos = hrp.Position + (dir * spd * step)
-
-    local function massImpulse(direction, targetSpeed)
-        local mass = hrp.AssemblyMass or 1
-        local current = hrp.AssemblyLinearVelocity
-        local desired = Vector3.new(direction.X * targetSpeed, current.Y, direction.Z * targetSpeed)
-        local delta = desired - current
-        pcall(function() hrp:ApplyImpulse(Vector3.new(delta.X, 0, delta.Z) * mass) end)
-    end
-
-    if m == "Velocity" then
-        massImpulse(dir, spd)
-    elseif m == "AssemblyLinearVelocity" then
-        massImpulse(dir, spd)
-    elseif m == "Velocity Lerp" then
-        local current = hrp.AssemblyLinearVelocity
-        local desired = Vector3.new(dir.X*spd, current.Y, dir.Z*spd)
-        local blended = current:Lerp(desired, 0.6)
-        local mass = hrp.AssemblyMass or 1
-        pcall(function() hrp:ApplyImpulse(Vector3.new(blended.X - current.X, 0, blended.Z - current.Z) * mass) end)
-    elseif m == "AssemblyLinearVelocity Lerp" then
-        local current = hrp.AssemblyLinearVelocity
-        local desired = Vector3.new(dir.X*spd, current.Y, dir.Z*spd)
-        local blended = current:Lerp(desired, 0.6)
-        local mass = hrp.AssemblyMass or 1
-        pcall(function() hrp:ApplyImpulse(Vector3.new(blended.X - current.X, 0, blended.Z - current.Z) * mass) end)
-    elseif m == "CFrame" then
-        hrp.CFrame = hrp.CFrame + (dir * spd * step)
-    elseif m == "CFrame Lerp" then
-        hrp.CFrame = hrp.CFrame:Lerp(hrp.CFrame + (dir * spd * step), 0.5)
-    elseif m == "Hyper CFrame" then
-        hrp.CFrame = hrp.CFrame + (dir * spd * (State.hyperMult or 4) * step)
-    elseif m == "Anchored CFrame" then
-        if not hrp.Anchored then
-            hrp.Anchored = true
-            State._anchoredBySpeed = hrp
-        end
-        hrp.CFrame = hrp.CFrame + (dir * spd * step)
-    elseif m == "PivotTo" then
-        hrp:PivotTo(hrp.CFrame + (dir * spd * step))
-    elseif m == "Model PivotTo" then
-        if char and char:IsA("Model") then
-            char:PivotTo(char:GetPivot() + (dir * spd * step))
-        else
-            hrp:PivotTo(hrp.CFrame + (dir * spd * step))
-        end
-    elseif m == "Tween CFrame" then
-        if State._speedTween then pcall(function() State._speedTween:Cancel() end) end
-        State._speedTween = TweenService:Create(hrp, TweenInfo.new(step, Enum.EasingStyle.Linear), {CFrame = hrp.CFrame + (dir * spd * step)})
-        State._speedTween:Play()
-    elseif m == "WalkSpeed" then
-        hum.WalkSpeed = spd
-    elseif m == "Humanoid Move" then
-        hum.WalkSpeed = spd
-        hum:Move(dir)
-    elseif m == "Humanoid MoveTo" then
-        hum:MoveTo(targetPos, hrp)
-    elseif m == "BodyVelocity" then
-        if not State._bodyVel or State._bodyVel.Parent ~= hrp then
-            if State._bodyVel then pcall(function() State._bodyVel:Destroy() end) end
-            State._bodyVel = Instance.new("BodyVelocity")
-            State._bodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-            State._bodyVel.Parent = hrp
-        end
-        State._bodyVel.Velocity = Vector3.new(dir.X*spd, State._bodyVel.Velocity.Y, dir.Z*spd)
-    elseif m == "BodyPosition" then
-        if not State._bodyPosition or State._bodyPosition.Parent ~= hrp then
-            if State._bodyPosition then pcall(function() State._bodyPosition:Destroy() end) end
-            State._bodyPosition = Instance.new("BodyPosition")
-            State._bodyPosition.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-            State._bodyPosition.P = 500
-            State._bodyPosition.D = 50
-            State._bodyPosition.Parent = hrp
-        end
-        State._bodyPosition.Position = targetPos
-    elseif m == "BodyForce" then
-        if not State._bodyForce or State._bodyForce.Parent ~= hrp then
-            if State._bodyForce then pcall(function() State._bodyForce:Destroy() end) end
-            State._bodyForce = Instance.new("BodyForce")
-            State._bodyForce.Parent = hrp
-        end
-        State._bodyForce.Force = Vector3.new(dir.X*spd, 0, dir.Z*spd) * 100
-    elseif m == "BodyThrust" then
-        if not State._bodyThrust or State._bodyThrust.Parent ~= hrp then
-            if State._bodyThrust then pcall(function() State._bodyThrust:Destroy() end) end
-            State._bodyThrust = Instance.new("BodyThrust")
-            State._bodyThrust.Force = Vector3.new(math.huge, math.huge, math.huge)
-            State._bodyThrust.Parent = hrp
-        end
-        State._bodyThrust.Force = Vector3.new(dir.X*spd, 0, dir.Z*spd) * 100
-    elseif m == "LinearVelocity" then
-        if not State._linearVel or State._linearVel.Parent ~= hrp then
-            if State._linearVel then pcall(function() State._linearVel:Destroy() end) end
-            local att = ensureSpeedAttachment(hrp, "_attLinVel", "MoveeLinVelAtt")
-            State._linearVel = Instance.new("LinearVelocity")
-            State._linearVel.Attachment0 = att
-            State._linearVel.MaxForce = 1e8
-            State._linearVel.RelativeTo = Enum.ActuatorRelativeTo.World
-            State._linearVel.Parent = hrp
-        end
-        State._linearVel.VectorVelocity = Vector3.new(dir.X*spd, State._linearVel.VectorVelocity.Y, dir.Z*spd)
-    elseif m == "VectorForce" then
-        if not State._vectorForce or State._vectorForce.Parent ~= hrp then
-            if State._vectorForce then pcall(function() State._vectorForce:Destroy() end) end
-            local att = ensureSpeedAttachment(hrp, "_attVecForce", "MoveeVecForceAtt")
-            State._vectorForce = Instance.new("VectorForce")
-            State._vectorForce.Attachment0 = att
-            State._vectorForce.RelativeTo = Enum.ActuatorRelativeTo.World
-            State._vectorForce.Parent = hrp
-        end
-        State._vectorForce.Force = Vector3.new(dir.X*spd, 0, dir.Z*spd) * 100
-    elseif m == "AlignPosition" then
-        if not State._alignPos or State._alignPos.Parent ~= hrp then
-            if State._alignPos then pcall(function() State._alignPos:Destroy() end) end
-            local att = ensureSpeedAttachment(hrp, "_attAlign", "MoveeAlignAtt")
-            State._alignPos = Instance.new("AlignPosition")
-            State._alignPos.Attachment0 = att
-            State._alignPos.Mode = Enum.PositionAlignmentMode.OneAttachment
-            State._alignPos.MaxForce = math.huge
-            State._alignPos.Responsiveness = 15
-            State._alignPos.RigidityEnabled = false
-            State._alignPos.Parent = hrp
-        end
-        State._alignPos.Position = targetPos
-    elseif m == "ApplyImpulse" then
-        local mass = hrp.AssemblyMass or 1
-        local current = hrp.AssemblyLinearVelocity
-        local desired = Vector3.new(dir.X * spd, current.Y, dir.Z * spd)
-        local delta = desired - current
-        pcall(function() hrp:ApplyImpulse(Vector3.new(delta.X, 0, delta.Z) * mass) end)
-    elseif m == "RocketPropulsion" then
-        if not State._rocket or State._rocket.Parent ~= hrp or not State._rocketTarget then
-            if State._rocket then pcall(function() State._rocket:Destroy() end) end
-            if State._rocketTarget then pcall(function() State._rocketTarget:Destroy() end) end
-            State._rocketTarget = Instance.new("Part")
-            State._rocketTarget.Name = "MoveeRocketTarget"
-            State._rocketTarget.Anchored = true
-            State._rocketTarget.CanCollide = false
-            State._rocketTarget.Transparency = 1
-            State._rocketTarget.Size = Vector3.new(1,1,1)
-            State._rocketTarget.Parent = workspace
-            State._rocket = Instance.new("RocketPropulsion")
-            State._rocket.MaxThrust = 3000
-            State._rocket.MaxTorque = 1000
-            State._rocket.ThrustP = 100
-            State._rocket.ThrustD = 20
-            State._rocket.TurnP = 100
-            State._rocket.TurnD = 10
-            State._rocket.Target = State._rocketTarget
-            State._rocket.Parent = hrp
-        end
-        State._rocketTarget.Position = targetPos
-        pcall(function() State._rocket:Fire() end)
-    end
-end
-
-
-
-local function applyImpulseForVelocity(hrp, desiredVelocity)
-    if not hrp or not desiredVelocity then return end
-    local flat = Vector3.new(desiredVelocity.X,0,desiredVelocity.Z)
-    if flat.Magnitude==0 then destroySpeedObjects() return end
-    local dir = flat.Unit
-    local spd = flat.Magnitude
-    local hum = hrp.Parent and hrp.Parent:FindFirstChildOfClass("Humanoid")
-    if hum then applySpeedMethod(hrp,hum,dir,spd,1/60) end
-end
-
--- OLD_FUNC_REMOVED
-local function OLD_applyImpulseForVelocity_REMOVED(hrp, desiredVelocity)
-    if not hrp then return end
-    local mass = hrp.AssemblyMass
-    local currentVel = hrp.AssemblyLinearVelocity
-    local impulse = (desiredVelocity - currentVel) * mass
-    pcall(function() hrp:ApplyImpulse(impulse) end)
-end
+-- OLD SPEED REMOVED
 
 -- ============================================================
 -- STATE
@@ -768,6 +525,24 @@ local State = {
     autoTPHeight=20,
     autoTPConn=nil,
 }
+
+
+-- VYNX SPEED CODE - Minimal stable version (Velocity method from Vynx Duels)
+-- This is the exact logic Vynx uses for its default "Velocity" method
+local function applyImpulseForVelocity(hrp, desiredVelocity)
+    if not hrp or not desiredVelocity then return end
+    local mass = hrp.AssemblyMass or 1
+    local current = hrp.AssemblyLinearVelocity
+    -- Vynx preserves Y (does not touch vertical velocity)
+    local desired = Vector3.new(desiredVelocity.X, current.Y, desiredVelocity.Z)
+    local delta = Vector3.new(desired.X - current.X, 0, desired.Z - current.Z)
+    pcall(function()
+        hrp:ApplyImpulse(delta * mass)
+    end)
+end
+
+
+
 
 if earlyConfig then
     if earlyConfig.introEnabled ~= nil then State.introEnabled = earlyConfig.introEnabled end
@@ -2536,13 +2311,8 @@ local function Main()
     -- ============================================================
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
-    local function applyImpulseForVelocity(hrp, desiredVelocity)
-        if not hrp or not desiredVelocity then return end
-        local mass = hrp.AssemblyMass
-        local currentVel = hrp.AssemblyLinearVelocity
-        local impulse = (desiredVelocity - currentVel) * mass
-        pcall(function() hrp:ApplyImpulse(impulse) end)
-    end
+    -- OLD SPEED REMOVED (replaced by Vynx)
+
 
     stopAutoLeft = function()
         if alConn then alConn:Disconnect(); alConn = nil end; alPhase = 1
@@ -3240,11 +3010,11 @@ local function Main()
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                applySpeedMethod(hrp, hum, md, spd, 1/60)
+                applyImpulseForVelocity(hrp, Vector3.new(md.X*spd, hrp.AssemblyLinearVelocity.Y, md.Z*spd))
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then applySpeedMethod(hrp, hum, State.lastMoveDir, spd, 1/60) end
+                if anyHeld then applyImpulseForVelocity(hrp, Vector3.new(State.lastMoveDir.X*spd, hrp.AssemblyLinearVelocity.Y, State.lastMoveDir.Z*spd)) end
             end
         end
         pcall(function()
