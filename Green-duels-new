@@ -162,12 +162,59 @@ end
 -- ============================================================
 -- TP BAT FEATURE (TOGGLE - stays ON until clicked again)
 -- ============================================================
+
 local tpBatToggled = false
 local tpBatHittingCooldown = false
 local tpBatHRP = nil
 local tpBatH = nil
 local tpBatConn = nil
 local tpBatAimbotConn = nil
+
+-- GODMODE (Vynx style) FIXED
+local _bypassGodConn = nil
+local _bypassGodHealthConn = nil
+local _bypassGodDiedConn = nil
+local _bypassGodCharConn = nil
+
+local function _bypassClearGodConns()
+    if _bypassGodConn then pcall(function() _bypassGodConn:Disconnect() end) _bypassGodConn=nil end
+    if _bypassGodHealthConn then pcall(function() _bypassGodHealthConn:Disconnect() end) _bypassGodHealthConn=nil end
+    if _bypassGodDiedConn then pcall(function() _bypassGodDiedConn:Disconnect() end) _bypassGodDiedConn=nil end
+    if _bypassGodCharConn then pcall(function() _bypassGodCharConn:Disconnect() end) _bypassGodCharConn=nil end
+end
+
+local function _bypassProtectCharacter(char)
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    if _bypassGodHealthConn then pcall(function() _bypassGodHealthConn:Disconnect() end) end
+    if _bypassGodDiedConn then pcall(function() _bypassGodDiedConn:Disconnect() end) end
+    _bypassGodHealthConn = hum:GetPropertyChangedSignal("Health"):Connect(function()
+        if not tpBatToggled then return end
+        if hum.Health < hum.MaxHealth then pcall(function() hum.Health = hum.MaxHealth end) end
+    end)
+    _bypassGodDiedConn = hum.Died:Connect(function()
+        if not tpBatToggled then return end
+        pcall(function() hum.Health = hum.MaxHealth hum:ChangeState(Enum.HumanoidStateType.Running) hum.PlatformStand=false end)
+    end)
+end
+
+local function enableBypassGodmode()
+    _bypassClearGodConns()
+    local char = LP.Character
+    if char then _bypassProtectCharacter(char) end
+    _bypassGodCharConn = LP.CharacterAdded:Connect(function(c) if not tpBatToggled then return end task.wait(0.15) _bypassProtectCharacter(c) end)
+    _bypassGodConn = RunService.Heartbeat:Connect(function()
+        if not tpBatToggled then return end
+        local char = LP.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health < hum.MaxHealth then pcall(function() hum.Health = hum.MaxHealth end) end
+    end)
+end
+
+local function disableBypassGodmode() _bypassClearGodConns() end
+
 
 local function getBat()
     local char = LP.Character
@@ -222,6 +269,7 @@ end
 local function startTPBat()
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    pcall(enableBypassGodmode)
     
     tpBatConn = RunService.Heartbeat:Connect(function()
         if not tpBatToggled then return end
@@ -272,6 +320,7 @@ end
 local function stopTPBat()
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    pcall(disableBypassGodmode)
     print("[Green Duels] TP Bat STOPPED (toggle OFF)")
 end
 
@@ -531,6 +580,28 @@ local State = {
     autoTPHeight=20,
     autoTPConn=nil,
 }
+
+-- SPEED ANTI-KICK (Vynx style) - BodyVelocity with math.huge
+local _greenBodyVel = nil
+local function greenClearSpeedBV() if _greenBodyVel then pcall(function() _greenBodyVel:Destroy() end) _greenBodyVel=nil end end
+_G.GreenApplySpeedAntiKick = function(hrp, dir, speed)
+    if not hrp or not dir then return end
+    if not State.antiKickEnabled then
+        hrp.Velocity = Vector3.new(dir.X*speed, hrp.Velocity.Y, dir.Z*speed)
+        return
+    end
+    if not _greenBodyVel or _greenBodyVel.Parent ~= hrp then
+        if _greenBodyVel then pcall(function() _greenBodyVel:Destroy() end) end
+        _greenBodyVel = Instance.new("BodyVelocity")
+        _greenBodyVel.Name = "GreenSpeedBV"
+        _greenBodyVel.MaxForce = Vector3.new(math.huge, 0, math.huge)
+        _greenBodyVel.P = 1250
+        _greenBodyVel.Parent = hrp
+    end
+    _greenBodyVel.Velocity = Vector3.new(dir.X*speed, _greenBodyVel.Velocity.Y, dir.Z*speed)
+end
+
+
 
 if earlyConfig then
     if earlyConfig.introEnabled ~= nil then State.introEnabled = earlyConfig.introEnabled end
