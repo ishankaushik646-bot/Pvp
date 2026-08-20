@@ -488,17 +488,256 @@ end
 
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
-    local mass = hrp.AssemblyMass
-    local currentVel = hrp.AssemblyLinearVelocity
-    local impulse = (desiredVelocity - currentVel) * mass
-    pcall(function() hrp:ApplyImpulse(impulse) end)
+
+-- ============================================================
+-- VYNX SPEED ENGINE PORTED INTO GREEN DUELS V2
+-- Original: Vynx Duels (file8695423184623425571.txt)
+-- Ported to Green Duels State
+-- ============================================================
+State.speedMethod = State.speedMethod or "Velocity"
+State.speedMethodList = {
+    "Velocity","AssemblyLinearVelocity","Velocity Lerp","AssemblyLinearVelocity Lerp",
+    "CFrame","CFrame Lerp","Hyper CFrame","Anchored CFrame","PivotTo","Model PivotTo","Tween CFrame",
+    "WalkSpeed","Humanoid Move","Humanoid MoveTo",
+    "BodyVelocity","BodyPosition","BodyForce","BodyThrust",
+    "LinearVelocity","VectorForce","AlignPosition","ApplyImpulse","RocketPropulsion"
+}
+State._lastSpeedMethod = State._lastSpeedMethod or nil
+State._anchoredBySpeed = nil
+State._bodyVel = nil
+State._bodyPosition = nil
+State._bodyForce = nil
+State._bodyThrust = nil
+State._linearVel = nil
+State._vectorForce = nil
+State._alignPos = nil
+State._rocket = nil
+State._rocketTarget = nil
+State._attLinVel = nil
+State._attVecForce = nil
+State._attAlign = nil
+State._speedTween = nil
+State.hyperMult = State.hyperMult or 4
+
+local function getActiveMoveSpeed_Vynx()
+    if State.laggerMode==1 then return State.laggerSpeed
+    elseif State.laggerMode==2 then return State.laggerCarrySpeed
+    else return State.speedToggled and State.carrySpeed or State.normalSpeed end
 end
+
+local function destroySpeedObjects()
+    if State._anchoredBySpeed then pcall(function() State._anchoredBySpeed.Anchored = false end); State._anchoredBySpeed = nil end
+    if State._bodyVel then pcall(function() State._bodyVel:Destroy() end); State._bodyVel = nil end
+    if State._bodyPosition then pcall(function() State._bodyPosition:Destroy() end); State._bodyPosition = nil end
+    if State._bodyForce then pcall(function() State._bodyForce:Destroy() end); State._bodyForce = nil end
+    if State._bodyThrust then pcall(function() State._bodyThrust:Destroy() end); State._bodyThrust = nil end
+    if State._linearVel then pcall(function() State._linearVel:Destroy() end); State._linearVel = nil end
+    if State._vectorForce then pcall(function() State._vectorForce:Destroy() end); State._vectorForce = nil end
+    if State._alignPos then pcall(function() State._alignPos:Destroy() end); State._alignPos = nil end
+    if State._rocket then pcall(function() State._rocket:Destroy() end); State._rocket = nil end
+    if State._rocketTarget then pcall(function() State._rocketTarget:Destroy() end); State._rocketTarget = nil end
+    if State._attLinVel then pcall(function() State._attLinVel:Destroy() end); State._attLinVel = nil end
+    if State._attVecForce then pcall(function() State._attVecForce:Destroy() end); State._attVecForce = nil end
+    if State._attAlign then pcall(function() State._attAlign:Destroy() end); State._attAlign = nil end
+    if State._speedTween then pcall(function() State._speedTween:Cancel() end); State._speedTween = nil end
+end
+
+local function ensureSpeedAttachment(hrp, key, name)
+    local att = M[key]
+    if not att or att.Parent ~= hrp then
+        if att then pcall(function() att:Destroy() end) end
+        att = Instance.new("Attachment")
+        att.Name = name or "MoveeSpeedAtt"
+        att.Parent = hrp
+        M[key] = att
+    end
+    return att
+end
+
+local function applySpeedMethod(hrp, hum, dir, spd, dt)
+    local step = dt or 1/60
+    local m = State.speedMethod
+    if State._lastSpeedMethod ~= m then
+        destroySpeedObjects()
+        if m ~= "WalkSpeed" and hum.WalkSpeed ~= 16 then hum.WalkSpeed = 16 end
+        State._lastSpeedMethod = m
+    end
+    local char = hrp.Parent
+    local targetPos = hrp.Position + (dir * spd * step)
+
+    local function massImpulse(direction, targetSpeed)
+        local mass = hrp.AssemblyMass or 1
+        local current = hrp.AssemblyLinearVelocity
+        local desired = Vector3.new(direction.X * targetSpeed, current.Y, direction.Z * targetSpeed)
+        local delta = desired - current
+        pcall(function() hrp:ApplyImpulse(Vector3.new(delta.X, 0, delta.Z) * mass) end)
+    end
+
+    if m == "Velocity" then
+        massImpulse(dir, spd)
+    elseif m == "AssemblyLinearVelocity" then
+        massImpulse(dir, spd)
+    elseif m == "Velocity Lerp" then
+        local current = hrp.AssemblyLinearVelocity
+        local desired = Vector3.new(dir.X*spd, current.Y, dir.Z*spd)
+        local blended = current:Lerp(desired, 0.6)
+        local mass = hrp.AssemblyMass or 1
+        pcall(function() hrp:ApplyImpulse(Vector3.new(blended.X - current.X, 0, blended.Z - current.Z) * mass) end)
+    elseif m == "AssemblyLinearVelocity Lerp" then
+        local current = hrp.AssemblyLinearVelocity
+        local desired = Vector3.new(dir.X*spd, current.Y, dir.Z*spd)
+        local blended = current:Lerp(desired, 0.6)
+        local mass = hrp.AssemblyMass or 1
+        pcall(function() hrp:ApplyImpulse(Vector3.new(blended.X - current.X, 0, blended.Z - current.Z) * mass) end)
+    elseif m == "CFrame" then
+        hrp.CFrame = hrp.CFrame + (dir * spd * step)
+    elseif m == "CFrame Lerp" then
+        hrp.CFrame = hrp.CFrame:Lerp(hrp.CFrame + (dir * spd * step), 0.5)
+    elseif m == "Hyper CFrame" then
+        hrp.CFrame = hrp.CFrame + (dir * spd * (State.hyperMult or 4) * step)
+    elseif m == "Anchored CFrame" then
+        if not hrp.Anchored then
+            hrp.Anchored = true
+            State._anchoredBySpeed = hrp
+        end
+        hrp.CFrame = hrp.CFrame + (dir * spd * step)
+    elseif m == "PivotTo" then
+        hrp:PivotTo(hrp.CFrame + (dir * spd * step))
+    elseif m == "Model PivotTo" then
+        if char and char:IsA("Model") then
+            char:PivotTo(char:GetPivot() + (dir * spd * step))
+        else
+            hrp:PivotTo(hrp.CFrame + (dir * spd * step))
+        end
+    elseif m == "Tween CFrame" then
+        if State._speedTween then pcall(function() State._speedTween:Cancel() end) end
+        State._speedTween = TweenService:Create(hrp, TweenInfo.new(step, Enum.EasingStyle.Linear), {CFrame = hrp.CFrame + (dir * spd * step)})
+        State._speedTween:Play()
+    elseif m == "WalkSpeed" then
+        hum.WalkSpeed = spd
+    elseif m == "Humanoid Move" then
+        hum.WalkSpeed = spd
+        hum:Move(dir)
+    elseif m == "Humanoid MoveTo" then
+        hum:MoveTo(targetPos, hrp)
+    elseif m == "BodyVelocity" then
+        if not State._bodyVel or State._bodyVel.Parent ~= hrp then
+            if State._bodyVel then pcall(function() State._bodyVel:Destroy() end) end
+            State._bodyVel = Instance.new("BodyVelocity")
+            State._bodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            State._bodyVel.Parent = hrp
+        end
+        State._bodyVel.Velocity = Vector3.new(dir.X*spd, State._bodyVel.Velocity.Y, dir.Z*spd)
+    elseif m == "BodyPosition" then
+        if not State._bodyPosition or State._bodyPosition.Parent ~= hrp then
+            if State._bodyPosition then pcall(function() State._bodyPosition:Destroy() end) end
+            State._bodyPosition = Instance.new("BodyPosition")
+            State._bodyPosition.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            State._bodyPosition.P = 500
+            State._bodyPosition.D = 50
+            State._bodyPosition.Parent = hrp
+        end
+        State._bodyPosition.Position = targetPos
+    elseif m == "BodyForce" then
+        if not State._bodyForce or State._bodyForce.Parent ~= hrp then
+            if State._bodyForce then pcall(function() State._bodyForce:Destroy() end) end
+            State._bodyForce = Instance.new("BodyForce")
+            State._bodyForce.Parent = hrp
+        end
+        State._bodyForce.Force = Vector3.new(dir.X*spd, 0, dir.Z*spd) * 100
+    elseif m == "BodyThrust" then
+        if not State._bodyThrust or State._bodyThrust.Parent ~= hrp then
+            if State._bodyThrust then pcall(function() State._bodyThrust:Destroy() end) end
+            State._bodyThrust = Instance.new("BodyThrust")
+            State._bodyThrust.Force = Vector3.new(math.huge, math.huge, math.huge)
+            State._bodyThrust.Parent = hrp
+        end
+        State._bodyThrust.Force = Vector3.new(dir.X*spd, 0, dir.Z*spd) * 100
+    elseif m == "LinearVelocity" then
+        if not State._linearVel or State._linearVel.Parent ~= hrp then
+            if State._linearVel then pcall(function() State._linearVel:Destroy() end) end
+            local att = ensureSpeedAttachment(hrp, "_attLinVel", "MoveeLinVelAtt")
+            State._linearVel = Instance.new("LinearVelocity")
+            State._linearVel.Attachment0 = att
+            State._linearVel.MaxForce = 1e8
+            State._linearVel.RelativeTo = Enum.ActuatorRelativeTo.World
+            State._linearVel.Parent = hrp
+        end
+        State._linearVel.VectorVelocity = Vector3.new(dir.X*spd, State._linearVel.VectorVelocity.Y, dir.Z*spd)
+    elseif m == "VectorForce" then
+        if not State._vectorForce or State._vectorForce.Parent ~= hrp then
+            if State._vectorForce then pcall(function() State._vectorForce:Destroy() end) end
+            local att = ensureSpeedAttachment(hrp, "_attVecForce", "MoveeVecForceAtt")
+            State._vectorForce = Instance.new("VectorForce")
+            State._vectorForce.Attachment0 = att
+            State._vectorForce.RelativeTo = Enum.ActuatorRelativeTo.World
+            State._vectorForce.Parent = hrp
+        end
+        State._vectorForce.Force = Vector3.new(dir.X*spd, 0, dir.Z*spd) * 100
+    elseif m == "AlignPosition" then
+        if not State._alignPos or State._alignPos.Parent ~= hrp then
+            if State._alignPos then pcall(function() State._alignPos:Destroy() end) end
+            local att = ensureSpeedAttachment(hrp, "_attAlign", "MoveeAlignAtt")
+            State._alignPos = Instance.new("AlignPosition")
+            State._alignPos.Attachment0 = att
+            State._alignPos.Mode = Enum.PositionAlignmentMode.OneAttachment
+            State._alignPos.MaxForce = math.huge
+            State._alignPos.Responsiveness = 15
+            State._alignPos.RigidityEnabled = false
+            State._alignPos.Parent = hrp
+        end
+        State._alignPos.Position = targetPos
+    elseif m == "ApplyImpulse" then
+        local mass = hrp.AssemblyMass or 1
+        local current = hrp.AssemblyLinearVelocity
+        local desired = Vector3.new(dir.X * spd, current.Y, dir.Z * spd)
+        local delta = desired - current
+        pcall(function() hrp:ApplyImpulse(Vector3.new(delta.X, 0, delta.Z) * mass) end)
+    elseif m == "RocketPropulsion" then
+        if not State._rocket or State._rocket.Parent ~= hrp or not State._rocketTarget then
+            if State._rocket then pcall(function() State._rocket:Destroy() end) end
+            if State._rocketTarget then pcall(function() State._rocketTarget:Destroy() end) end
+            State._rocketTarget = Instance.new("Part")
+            State._rocketTarget.Name = "MoveeRocketTarget"
+            State._rocketTarget.Anchored = true
+            State._rocketTarget.CanCollide = false
+            State._rocketTarget.Transparency = 1
+            State._rocketTarget.Size = Vector3.new(1,1,1)
+            State._rocketTarget.Parent = workspace
+            State._rocket = Instance.new("RocketPropulsion")
+            State._rocket.MaxThrust = 3000
+            State._rocket.MaxTorque = 1000
+            State._rocket.ThrustP = 100
+            State._rocket.ThrustD = 20
+            State._rocket.TurnP = 100
+            State._rocket.TurnD = 10
+            State._rocket.Target = State._rocketTarget
+            State._rocket.Parent = hrp
+        end
+        State._rocketTarget.Position = targetPos
+        pcall(function() State._rocket:Fire() end)
+    end
+end
+
+
+
+-- Wrapper for old Green Duels calls
+local function applyImpulseForVelocity(hrp, desiredVelocity)
+    if not hrp or not desiredVelocity then return end
+    local flat = Vector3.new(desiredVelocity.X,0,desiredVelocity.Z)
+    if flat.Magnitude==0 then destroySpeedObjects() return end
+    local dir = flat.Unit
+    local spd = flat.Magnitude
+    local hum = hrp.Parent and hrp.Parent:FindFirstChildOfClass("Humanoid")
+    if hum then applySpeedMethod(hrp,hum,dir,spd,1/60) end
+end
+
 
 -- ============================================================
 -- STATE
 -- ============================================================
 local State = {
-    normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=15, laggerCarrySpeed=24.5,
+    normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
     speedToggled=false,
     laggerMode=0,
     infJumpEnabled=true, antiRagdollEnabled=false,
@@ -775,88 +1014,8 @@ local function loadLastPresetName()
     return nil
 end
 
-
 local MOVE_KEYS={[Enum.KeyCode.W]=true,[Enum.KeyCode.A]=true,[Enum.KeyCode.S]=true,[Enum.KeyCode.D]=true,
-    [Enum.KeyCode.Up]=true,[Enum.KeyCode.Down]=true,[Enum.KeyCode.Left]=true,[Enum.KeyCode.Right]=true}
-
--- ============================================================
--- ORVYN LINEAR VELOCITY SYSTEM (replaces impulse)
--- ============================================================
-local _linVel = nil
-local _linVelAtt0 = nil
-local _linVelAtt1 = nil
-local _linVelChar = nil
-
--- init for existing char
-task.spawn(function() if LP.Character then setupLinearVelocity(LP.Character) end end)
-LP.CharacterAdded:Connect(function(char) task.wait(0.5); setupLinearVelocity(char) end)
-
-local function setupLinearVelocity(char)
-    if _linVel then pcall(function() _linVel:Destroy() end); _linVel=nil end
-    if _linVelAtt0 then pcall(function() _linVelAtt0:Destroy() end); _linVelAtt0=nil end
-    if _linVelAtt1 then pcall(function() _linVelAtt1:Destroy() end); _linVelAtt1=nil end
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    local att0 = Instance.new("Attachment")
-    att0.Name="OrvynLinVelAtt0"
-    att0.Parent=hrp
-    local att1 = Instance.new("Attachment")
-    att1.Name="OrvynLinVelAtt1"
-    att1.CFrame=CFrame.new(0,0,0)
-    att1.Parent=hrp
-    local lv = Instance.new("LinearVelocity")
-    lv.Name="OrvynLinVel"
-    lv.Attachment0=att0
-    lv.RelativeTo=Enum.ActuatorRelativeTo.World
-    lv.VelocityConstraintMode=Enum.VelocityConstraintMode.Plane
-    lv.ForceLimitMode=Enum.ForceLimitMode.PerAxis
-    lv.MaxAxesForce=Vector3.new(100000,0,100000)
-    lv.MaxForce=100000
-    lv.PlaneVelocity=Vector2.new(0,0)
-    lv.Parent=hrp
-    _linVel=lv
-    _linVelAtt0=att0
-    _linVelAtt1=att1
-    _linVelChar=char
-end
-
-local function setLinVelXZ(x,z)
-    if _linVel and _linVel.Parent then
-        _linVel.PlaneVelocity=Vector2.new(x,z)
-    end
-end
-
-local function clearLinVel()
-    if _linVel and _linVel.Parent then
-        _linVel.PlaneVelocity=Vector2.new(0,0)
-    end
-end
-
-local function getActiveMoveSpeed()
-    if State.laggerMode==2 then return State.laggerCarrySpeed
-    elseif State.laggerMode==1 then return State.laggerSpeed
-    elseif State.speedToggled then return State.carrySpeed
-    else return State.normalSpeed end
-end
-
-local function getAutoPathSpeed()
-    return State.normalSpeed
-end
-
-local function currentSpeedMode()
-    if State.laggerMode==2 then return "laggerCarry"
-    elseif State.laggerMode==1 then return "lagger"
-    elseif State.speedToggled then return "carry"
-    else return "normal" end
-end
-
-local function setSpeedMode(mode)
-    if mode=="carry" then State.laggerMode=0; State.speedToggled=true
-    elseif mode=="lagger" then State.laggerMode=1; State.speedToggled=false
-    elseif mode=="laggerCarry" then State.laggerMode=2; State.speedToggled=true
-    else State.laggerMode=0; State.speedToggled=false end
-end
-
+    [Enum.KeyCode.Up]=true,[Enum.KeyCode.Left]=true,[Enum.KeyCode.Down]=true,[Enum.KeyCode.Right]=true}
 
 -- Auto Left/Right positions
 local AP_L1     = Vector3.new(-476.48, -6.28, 92.73)
@@ -953,7 +1112,7 @@ local function doAutoTPDown(force)
         if hrp.Position.Y < State.autoTPHeight then return end
     end
     hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
-    clearLinVel()
+    applyImpulseForVelocity(hrp, Vector3.zero)
 end
 
 local function startAutoTP()
@@ -1135,7 +1294,7 @@ local function antiRagdollForceExit()
     end
 
     root.Anchored = false
-    clearLinVel()
+    applyImpulseForVelocity(root, Vector3.zero)
     root.AssemblyAngularVelocity = Vector3.zero
 
     root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, math.rad(root.Orientation.Y), 0)
@@ -2377,7 +2536,9 @@ local function Main()
     -- ============================================================
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
-            local mass = hrp.AssemblyMass
+    local function applyImpulseForVelocity(hrp, desiredVelocity)
+        if not hrp or not desiredVelocity then return end
+        local mass = hrp.AssemblyMass
         local currentVel = hrp.AssemblyLinearVelocity
         local impulse = (desiredVelocity - currentVel) * mass
         pcall(function() hrp:ApplyImpulse(impulse) end)
@@ -2408,14 +2569,14 @@ local function Main()
                 if (tgt - hrp2.Position).Magnitude < 1 then
                     alPhase = 2
                     local d = AP_L2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                    hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd); return
+                    hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd)); return
                 end
                 local d = AP_L1 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd)
+                hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
             elseif alPhase == 2 then
                 local tgt = Vector3.new(AP_L2.X, hrp2.Position.Y, AP_L2.Z)
                 if (tgt - hrp2.Position).Magnitude < 1 then
-                    hum2:Move(Vector3.zero, false); clearLinVel()
+                    hum2:Move(Vector3.zero, false); hrp2.AssemblyLinearVelocity = Vector3.zero
                     State.autoLeftEnabled = false; if alConn then alConn:Disconnect(); alConn = nil end
                     alPhase = 1; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end
                     if (AP_L_FACE - hrp2.Position).Magnitude > 0.01 then
@@ -2424,7 +2585,7 @@ local function Main()
                     return
                 end
                 local d = AP_L2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd)
+                hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
             end
         end)
     end
@@ -2443,14 +2604,14 @@ local function Main()
                 if (tgt - hrp2.Position).Magnitude < 1 then
                     arPhase = 2
                     local d = AP_R2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                    hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd); return
+                    hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd)); return
                 end
                 local d = AP_R1 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd)
+                hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
             elseif arPhase == 2 then
                 local tgt = Vector3.new(AP_R2.X, hrp2.Position.Y, AP_R2.Z)
                 if (tgt - hrp2.Position).Magnitude < 1 then
-                    hum2:Move(Vector3.zero, false); clearLinVel()
+                    hum2:Move(Vector3.zero, false); hrp2.AssemblyLinearVelocity = Vector3.zero
                     State.autoRightEnabled = false; if arConn then arConn:Disconnect(); arConn = nil end
                     arPhase = 1; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end
                     if (AP_R_FACE - hrp2.Position).Magnitude > 0.01 then
@@ -2459,7 +2620,7 @@ local function Main()
                     return
                 end
                 local d = AP_R2 - hrp2.Position; local flat = Vector3.new(d.X, 0, d.Z); local mv = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
-                hum2:Move(mv, false); setLinVelXZ(mv.X*spd, mv.Z*spd)
+                hum2:Move(mv, false); applyImpulseForVelocity(hrp2, Vector3.new(mv.X*spd, hrp2.AssemblyLinearVelocity.Y, mv.Z*spd))
             end
         end)
     end
@@ -3079,11 +3240,11 @@ local function Main()
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                setLinVelXZ(md.X*spd, md.Z*spd)
+                applySpeedMethod(hrp, hum, md, spd, dt)
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then setLinVelXZ(State.lastMoveDir.X*spd, State.lastMoveDir.Z*spd) end
+                if anyHeld then applySpeedMethod(hrp, hum, State.lastMoveDir, spd, dt) end
             end
         end
         pcall(function()
