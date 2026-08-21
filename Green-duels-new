@@ -2279,10 +2279,11 @@ local function Main()
         end
         stopAntiRagdoll()
         Steal.Data={}
-        _rtTimerActive = false
+        isRagdollActive = false
+        if ragdollTimerThread then task.cancel(ragdollTimerThread) ragdollTimerThread=nil end
         local _rtLbl = getRagTimerLbl and getRagTimerLbl()
         if _rtLbl then _rtLbl.Text = "" end
-        task.spawn(function() startRagTimerDetection(char) end)
+        task.spawn(function() setupRagdollTriggers(char) end)
         if State.antiRagdollEnabled then task.wait(0.5); startAntiRagdoll() end
         if State.medusaCounterEnabled then setupMedusaCounter(char) end
         if State.batAimbotToggled then stopBatAimbot(); task.wait(0.2); pcall(startBatAimbot) end
@@ -2526,50 +2527,101 @@ local function Main()
     end
     stopMedusaCounter = function() for _,c2 in pairs(Conns.anchor) do pcall(function() c2:Disconnect() end) end; Conns.anchor={} end
 
-    local _rtTimerActive = false
+    -- ============================================================
+    -- RAGDOLL TIMER (FROM VYNX DUELS) - Improved precise timer
+    -- ============================================================
+    local ragdollTimerThread = nil
+    local ragdollTimerRemaining = 0
+    local isRagdollActive = false
+
     local function getRagTimerLbl()
         local char = LP.Character; if not char then return nil end
         local head = char:FindFirstChild("Head"); if not head then return nil end
         local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
         return bb:FindFirstChild("RagdollTimerLbl")
     end
-    local function startRagTimerGui()
-        if _rtTimerActive then return end
-        _rtTimerActive = true
-        task.spawn(function()
-            local t = 3.0
-            while t >= 0.0 do
+
+    local function updateRagdollTimer(duration)
+        if ragdollTimerThread then
+            task.cancel(ragdollTimerThread)
+            ragdollTimerThread = nil
+        end
+        if duration <= 0 then
+            isRagdollActive = false
+            local lbl = getRagTimerLbl()
+            if lbl then lbl.Text = "" end
+            return
+        end
+        isRagdollActive = true
+        local startTime = tick()
+        ragdollTimerRemaining = duration
+        ragdollTimerThread = task.spawn(function()
+            while isRagdollActive and ragdollTimerRemaining > 0 do
+                local elapsed = tick() - startTime
+                local remaining = math.max(0, duration - elapsed)
+                ragdollTimerRemaining = remaining
                 local lbl = getRagTimerLbl()
                 if lbl then
-                    lbl.Text = string.format("%.1f", t)
-                    lbl.TextColor3 = Color3.fromRGB(80, 220, 80)
+                    lbl.Text = string.format("%.1fs", remaining)
+                    lbl.TextColor3 = Color3.fromRGB(255, 60, 60)
                 end
-                task.wait(0.1)
-                t = math.round((t - 0.1) * 10) / 10
+                if remaining <= 0 then
+                    isRagdollActive = false
+                    local lbl2 = getRagTimerLbl()
+                    if lbl2 then lbl2.Text = "" end
+                    break
+                end
+                task.wait(0.05)
             end
-            local lbl = getRagTimerLbl()
-            if lbl then lbl.Text = "STEAL!"; lbl.TextColor3 = Color3.fromRGB(80, 255, 120) end
-            repeat task.wait(0.1) until (function()
-                local c = LP.Character
-                local hum = c and c:FindFirstChildOfClass("Humanoid")
-                if not hum then return true end
-                local st = hum:GetState()
-                return st ~= Enum.HumanoidStateType.Physics and st ~= Enum.HumanoidStateType.Ragdoll and st ~= Enum.HumanoidStateType.FallingDown
-            end)()
-            local lbl2 = getRagTimerLbl()
-            if lbl2 then lbl2.Text = "" end
-            _rtTimerActive = false
+            ragdollTimerThread = nil
         end)
     end
-    local function startRagTimerDetection(char)
-        RunService.Heartbeat:Connect(function()
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+    local function onHumanoidStateChanged(old, new)
+        local char = LP.Character; if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+        local isRag = (new == Enum.HumanoidStateType.Physics or new == Enum.HumanoidStateType.Ragdoll or new == Enum.HumanoidStateType.FallingDown)
+        if isRag and not hum.PlatformStand then
+            updateRagdollTimer(2.6)
+        end
+    end
+
+    local function onMedusaStateChanged()
+        local char = LP.Character; if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.PlatformStand then
+            updateRagdollTimer(4.5)
+        end
+    end
+
+    local function setupRagdollTriggers(char)
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if not hum then
+            char = LP.Character
+            hum = char and char:FindFirstChildOfClass("Humanoid")
             if not hum then return end
-            local st = hum:GetState()
-            if st == Enum.HumanoidStateType.Physics or st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
-                startRagTimerGui()
+        end
+        hum.StateChanged:Connect(onHumanoidStateChanged)
+        hum:GetPropertyChangedSignal("PlatformStand"):Connect(onMedusaStateChanged)
+        local st = hum:GetState()
+        if st == Enum.HumanoidStateType.Physics or st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
+            if not hum.PlatformStand then
+                updateRagdollTimer(2.6)
+            else
+                updateRagdollTimer(4.5)
             end
-        end)
+        elseif hum.PlatformStand then
+            updateRagdollTimer(4.5)
+        end
+    end
+
+    -- legacy wrappers for compatibility
+    local _rtTimerActive = false
+    local function startRagTimerGui()
+        updateRagdollTimer(3.0)
+    end
+    local function startRagTimerDetection(char)
+        setupRagdollTriggers(char)
     end
 
     
