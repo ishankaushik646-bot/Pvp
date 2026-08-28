@@ -1658,34 +1658,6 @@ local function Main()
     do
         local page = buildPage("Combat", function()
             makeGap(2); makeSectionHeader("Bat Aimbot"); makeGap(2)
-            -- SELECTOR LIKE ACE DUELS
-            makeSectionHeader("Aimbot Mode Selector")
-            local modeSetters = {}
-            local function setMode(mode)
-                selectedAimbotMode = mode
-                if modeSetters["Normal"] then modeSetters["Normal"](mode=="Normal") end
-                if modeSetters["Anti Bypass"] then modeSetters["Anti Bypass"](mode=="Anti Bypass") end
-                if State.batAimbotToggled then
-                    pcall(function() stopBatAimbot() end)
-                    task.wait(0.1)
-                    pcall(function() startBatAimbot() end)
-                end
-                requestSave()
-            end
-            local normalToggle = makeToggleRow("Normal (Original)", selectedAimbotMode=="Normal", function(on)
-                if on then setMode("Normal") end
-            end)
-            modeSetters["Normal"] = normalToggle
-            local bypassToggle = makeToggleRow("Anti Bypass (Ace)", selectedAimbotMode=="Anti Bypass", function(on)
-                if on then setMode("Anti Bypass") end
-            end)
-            modeSetters["Anti Bypass"] = bypassToggle
-            _G.GreenGetAimbotMode = function() return selectedAimbotMode end
-            _G.GreenSetAimbotMode = setMode
-            _G.GreenStopAntiBypass = function() if State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot(); if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end end end
-            makeGap(6)
-            makeSectionHeader("Aimbot Settings")
-            makeGap(2)
             setAutoSwing = makeToggleRow("Auto Swing", false, function(on) State.autoSwingEnabled=on end)
             toggleSetters["autoSwing"] = setAutoSwing
             local setMirrorTPDown = makeToggleRow("Mirror TP Down", mirrorTPDownEnabled, function(on) 
@@ -2420,47 +2392,6 @@ local function Main()
     -- ============================================================
     local function resetProgressBar() stealPctLbl.Text="0%"; progressFill.Size=UDim2.new(0,0,1,0) end
 
-
--- ============================================================
--- ACE DUALS AIMBOT MODE SELECTOR - ADDED
--- ============================================================
-local selectedAimbotMode = "Normal"
-_G.AceAntiBypassSlapList = _G.AceAntiBypassSlapList or {"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap"}
-_G.AceAntiBypassAimbotSpeed = _G.AceAntiBypassAimbotSpeed or 58
-_G.AceAntiBypassLaggerAimbotSpeed = _G.AceAntiBypassLaggerAimbotSpeed or 40
-_G.AceAntiBypassAimbot = _G.AceAntiBypassAimbot or {swingCooldown = false, prevAutoRotate = nil}
-
-local function AceAntiBypassFindBat()
-    local char = LP.Character
-    if not char then return nil end
-    for _, name in ipairs(_G.AceAntiBypassSlapList) do
-        local t = char:FindFirstChild(name)
-        if t and t:IsA("Tool") then return t end
-    end
-    local bp = LP:FindFirstChildOfClass("Backpack")
-    if bp then
-        for _, name in ipairs(_G.AceAntiBypassSlapList) do
-            local t = bp:FindFirstChild(name)
-            if t and t:IsA("Tool") then
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                if hum then pcall(function() hum:EquipTool(t) end) end
-                return t
-            end
-        end
-    end
-    for _, ch in ipairs(char:GetChildren()) do
-        if ch:IsA("Tool") and (ch.Name:lower():find("bat") or ch.Name:lower():find("slap")) then return ch end
-    end
-    return nil
-end
-
-local function AceGetAntiBypassSpeed()
-    if State and (State.laggerMode == 1 or State.laggerMode == 2) then
-        return _G.AceAntiBypassLaggerAimbotSpeed
-    end
-    return _G.AceAntiBypassAimbotSpeed
-end
-
     local _aimbotTarget=nil
     local function findBat()
         local char=LP.Character; if not char then return nil end
@@ -2487,74 +2418,43 @@ end
         if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
         if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
         local hum0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-        if hum0 and _G.AceAntiBypassAimbot.prevAutoRotate == nil then _G.AceAntiBypassAimbot.prevAutoRotate = hum0.AutoRotate end
         if hum0 then hum0.AutoRotate=false end
         Conns.aimbot = RunService.RenderStepped:Connect(function()
             if not State.batAimbotToggled then return end
             local char=LP.Character; if not char then return end
             local root=char:FindFirstChild("HumanoidRootPart"); if not root then return end
             local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-            local bat
-            if selectedAimbotMode == "Anti Bypass" then bat = AceAntiBypassFindBat() else bat = findBat() end
-            if not char:FindFirstChildOfClass("Tool") and bat then pcall(function() hum:EquipTool(bat) end) end
+            if not char:FindFirstChildOfClass("Tool") then local bat=findBat(); if bat then pcall(function() hum:EquipTool(bat) end) end end
             local target=getClosestTarget(); if not target then return end
             _aimbotTarget=target
             local targetVel=target.AssemblyLinearVelocity
             local myPos=root.Position; local targetPos=target.Position
-            if selectedAimbotMode == "Anti Bypass" then
-                local direction = targetPos - myPos
-                local flatDir = Vector3.new(direction.X,0,direction.Z)
-                if flatDir.Magnitude > 0 then flatDir = flatDir.Unit else flatDir = Vector3.zero end
-                local chaseSpeed = AceGetAntiBypassSpeed()
-                local desiredHeight = targetPos.Y + 3.7
-                local yVel = (desiredHeight - myPos.Y) * 19.5
-                if hum.FloorMaterial ~= Enum.Material.Air then yVel = math.max(yVel, 13) end
-                yVel = math.clamp(yVel, -70, 110)
-                local desiredVel = Vector3.new(flatDir.X*chaseSpeed, yVel, flatDir.Z*chaseSpeed)
-                root.AssemblyLinearVelocity = root.AssemblyLinearVelocity:Lerp(desiredVel, 0.8)
-                local toTarget = targetPos - myPos
-                if toTarget.Magnitude > 0.1 then
-                    local goalCF = CFrame.lookAt(myPos, targetPos)
-                    local diffCF = root.CFrame:Inverse()*goalCF
-                    local rx,ry,rz = diffCF:ToEulerAnglesXYZ()
-                    rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
-                    root.AssemblyAngularVelocity = root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
-                end
-            else
-                local predictPos=targetPos+targetVel*0.14; predictPos=predictPos+target.CFrame.LookVector*0.3
-                local direction=predictPos-myPos; local flatDir=Vector3.new(direction.X,0,direction.Z).Unit
-                local chaseSpeed=58; local desiredHeight=targetPos.Y+3.7
-                local yVel=(desiredHeight-myPos.Y)*19.5+targetVel.Y*0.8
-                if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
-                yVel=math.clamp(yVel,-70,110)
-                local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
-                root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
-                local speed3=targetVel.Magnitude
-                local predictTime=math.clamp(speed3/150,0.05,0.2)
-                local predictedPos=targetPos+targetVel*predictTime
-                local toPredict=predictedPos-myPos
-                if toPredict.Magnitude>0.1 then
-                    local goalCF=CFrame.lookAt(myPos,predictedPos)
-                    local diffCF=root.CFrame:Inverse()*goalCF
-                    local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
-                    rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
-                    root.AssemblyAngularVelocity=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
-                end
+            local predictPos=targetPos+targetVel*0.14; predictPos=predictPos+target.CFrame.LookVector*0.3
+            local direction=predictPos-myPos; local flatDir=Vector3.new(direction.X,0,direction.Z).Unit
+            local chaseSpeed=58; local desiredHeight=targetPos.Y+3.7
+            local yVel=(desiredHeight-myPos.Y)*19.5+targetVel.Y*0.8
+            if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
+            yVel=math.clamp(yVel,-70,110)
+            local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
+            root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+            local speed3=targetVel.Magnitude
+            local predictTime=math.clamp(speed3/150,0.05,0.2)
+            local predictedPos=targetPos+targetVel*predictTime
+            local toPredict=predictedPos-myPos
+            if toPredict.Magnitude>0.1 then
+                local goalCF=CFrame.lookAt(myPos,predictedPos)
+                local diffCF=root.CFrame:Inverse()*goalCF
+                local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
+                rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
+                root.AssemblyAngularVelocity=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
             end
         end)
-        print("[Duels V2] Aimbot STARTED - Mode: "..selectedAimbotMode)
     end
     stopBatAimbot = function()
         if Conns.aimbot then Conns.aimbot:Disconnect(); Conns.aimbot=nil end
         _aimbotTarget=nil
         local c=LP.Character; local root=c and c:FindFirstChild("HumanoidRootPart")
         if root then root.AssemblyLinearVelocity=Vector3.zero; root.AssemblyAngularVelocity=Vector3.zero end
-        local hum2=c and c:FindFirstChildOfClass("Humanoid")
-        if hum2 and _G.AceAntiBypassAimbot and _G.AceAntiBypassAimbot.prevAutoRotate ~= nil then
-            hum2.AutoRotate = _G.AceAntiBypassAimbot.prevAutoRotate
-            pcall(function() hum2:ChangeState(Enum.HumanoidStateType.GettingUp) end)
-        end
-        if _G.AceAntiBypassAimbot then _G.AceAntiBypassAimbot.prevAutoRotate=nil end
         local hum2=c and c:FindFirstChildOfClass("Humanoid")
         if hum2 then hum2.AutoRotate=true end
         State.hittingCooldown=false
