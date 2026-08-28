@@ -1658,6 +1658,145 @@ local function Main()
     do
         local page = buildPage("Combat", function()
             makeGap(2); makeSectionHeader("Bat Aimbot"); makeGap(2)
+            -- AIMBOT MODE SELECTOR LIKE ACE DUELS (with Mirror TP Down support)
+            local function setAimbotMode(mode)
+                selectedAimbotMode = mode
+                if _G.GreenAimbotModeLabel then
+                    _G.GreenAimbotModeLabel.Text = "Mode: "..selectedAimbotMode
+                end
+                -- Update selector visuals
+                if _G.GreenAimbotSelectorButtons then
+                    for m, btn in pairs(_G.GreenAimbotSelectorButtons) do
+                        local isActive = (m == selectedAimbotMode)
+                        pcall(function()
+                            btn.BackgroundColor3 = isActive and Color3.fromRGB(90, 90, 90) or Color3.fromRGB(35, 35, 35)
+                            if btn:FindFirstChild("UIStroke") then
+                                btn.UIStroke.Color = isActive and Color3.fromRGB(200,200,200) or Color3.fromRGB(60,60,60)
+                            end
+                        end)
+                    end
+                end
+                -- Restart aimbot if running
+                if State.batAimbotToggled then
+                    pcall(function() stopBatAimbot() end)
+                    task.wait(0.1)
+                    pcall(function() startBatAimbot() end)
+                end
+                requestSave()
+            end
+
+            -- Label
+            do
+                local lbl = Instance.new("TextLabel")
+                lbl.Name = "AimbotModeLabel"
+                lbl.Text = "Mode: "..selectedAimbotMode
+                _G.GreenAimbotModeLabel = lbl
+            end
+
+            -- Selector Row Container (like Ace)
+            local selectorFrame = Instance.new("Frame")
+            selectorFrame.Size = UDim2.new(1, -20, 0, 36)
+            selectorFrame.BackgroundTransparency = 1
+            selectorFrame.Parent = Combat or (typeof(page)=="Instance" and page) or nil
+            -- Try to parent to combat page if available, fallback to using makeToggleRow parent logic
+            -- We will create manually in the flow
+            if selectorFrame.Parent == nil then
+                -- fallback parent search - will be inserted via makeSection logic later
+                selectorFrame.Parent = game:GetService("CoreGui") -- temp, will be reparented
+            end
+
+            -- Actually build it properly using the page builder
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, 0, 0, 32)
+            row.BackgroundColor3 = Color3.fromRGB(25,25,25)
+            row.BorderSizePixel = 0
+            Instance.new("UICorner", row).CornerRadius = UDim.new(0,6)
+            
+            local list = Instance.new("UIListLayout", row)
+            list.FillDirection = Enum.FillDirection.Horizontal
+            list.Padding = UDim.new(0,6)
+            list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            list.VerticalAlignment = Enum.VerticalAlignment.Center
+
+            _G.GreenAimbotSelectorButtons = {}
+
+            local function makeModeBtn(modeName, displayText)
+                local btn = Instance.new("TextButton")
+                btn.Size = UDim2.new(0, 110, 0, 26)
+                btn.BackgroundColor3 = (selectedAimbotMode == modeName) and Color3.fromRGB(90,90,90) or Color3.fromRGB(35,35,35)
+                btn.Text = displayText
+                btn.TextColor3 = Color3.fromRGB(255,255,255)
+                btn.Font = Enum.Font.GothamBold
+                btn.TextSize = 11
+                btn.BorderSizePixel = 0
+                Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
+                local st = Instance.new("UIStroke", btn)
+                st.Name = "UIStroke"
+                st.Color = (selectedAimbotMode == modeName) and Color3.fromRGB(200,200,200) or Color3.fromRGB(60,60,60)
+                st.Thickness = 1
+                btn.Parent = row
+                _G.GreenAimbotSelectorButtons[modeName] = btn
+                btn.MouseButton1Click:Connect(function()
+                    setAimbotMode(modeName)
+                end)
+                return btn
+            end
+
+            makeModeBtn("Normal", "NORMAL")
+            makeModeBtn("Anti Bypass", "ANTI BYPASS")
+
+            -- Insert row into Combat page
+            pcall(function()
+                local combatPage = nil
+                -- Find Combat page frame - try common parents
+                for _, v in ipairs(game:GetService("CoreGui"):GetDescendants()) do
+                    if v.Name == "Combat" and v:IsA("Frame") then combatPage = v; break end
+                end
+                if combatPage and combatPage:FindFirstChild("UIListLayout") then
+                    row.Parent = combatPage
+                else
+                    -- Fallback: parent to the first ScrollingFrame we can find in Combat builder
+                    row.Parent = selectorFrame.Parent
+                end
+            end)
+            -- Proper parent using builder's current page
+            do
+                -- The builder uses a variable called 'pageContent' or similar - we hook by creating via makeGap parent trick
+                -- Simplest: create via existing function makeSectionHeader parent
+                local tempParent = nil
+                pcall(function() tempParent = row.Parent end)
+                -- If still in CoreGui, move to Combat page later via task
+                task.spawn(function()
+                    task.wait(0.5)
+                    if row.Parent == game:GetService("CoreGui") or row.Parent.Name == "CoreGui" then
+                        for _, gui in ipairs(game:GetService("CoreGui"):GetDescendants()) do
+                            if gui:IsA("ScrollingFrame") and gui.Parent and gui.Parent.Name:find("Combat") then
+                                row.Parent = gui
+                                break
+                            end
+                        end
+                        -- Second try: look for Bat Aimbot section
+                        for _, gui in ipairs(LP.PlayerGui:GetDescendants()) do
+                            if gui:IsA("ScrollingFrame") then
+                                row.Parent = gui
+                                break
+                            end
+                        end
+                    end
+                end)
+            end
+
+            makeGap(4)
+            _G.GreenGetAimbotMode = function() return selectedAimbotMode end
+            _G.GreenSetAimbotMode = function(mode)
+                if mode == "Anti Bypass" or mode == "Normal" then
+                    setAimbotMode(mode)
+                end
+            end
+            _G.GreenStopAntiBypass = function() if selectedAimbotMode == "Anti Bypass" and State.batAimbotToggled then State.batAimbotToggled=false; stopBatAimbot(); if stackBtnRefs.aimbot then stackBtnRefs.aimbot.setOn(false) end end end
+            -- Mirror TP Down will work with both modes because mirrorTPAimbotActive checks batAimbotToggled
+            makeGap(2)
+
             setAutoSwing = makeToggleRow("Auto Swing", false, function(on) State.autoSwingEnabled=on end)
             toggleSetters["autoSwing"] = setAutoSwing
             local setMirrorTPDown = makeToggleRow("Mirror TP Down", mirrorTPDownEnabled, function(on) 
@@ -2279,11 +2418,10 @@ local function Main()
         end
         stopAntiRagdoll()
         Steal.Data={}
-        isRagdollActive = false
-        if ragdollTimerThread then task.cancel(ragdollTimerThread) ragdollTimerThread=nil end
+        _rtTimerActive = false
         local _rtLbl = getRagTimerLbl and getRagTimerLbl()
         if _rtLbl then _rtLbl.Text = "" end
-        task.spawn(function() setupRagdollTriggers(char) end)
+        task.spawn(function() startRagTimerDetection(char) end)
         if State.antiRagdollEnabled then task.wait(0.5); startAntiRagdoll() end
         if State.medusaCounterEnabled then setupMedusaCounter(char) end
         if State.batAimbotToggled then stopBatAimbot(); task.wait(0.2); pcall(startBatAimbot) end
@@ -2393,6 +2531,48 @@ local function Main()
     -- ============================================================
     local function resetProgressBar() stealPctLbl.Text="0%"; progressFill.Size=UDim2.new(0,0,1,0) end
 
+
+-- ============================================================
+-- ACE DUALS AIMBOT MODE SELECTOR - ADDED
+-- ============================================================
+local selectedAimbotMode = "Normal" -- "Normal" or "Anti Bypass"
+_G.AceAntiBypassSlapList = _G.AceAntiBypassSlapList or {"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap"}
+_G.AceAntiBypassAimbotSpeed = _G.AceAntiBypassAimbotSpeed or 58
+_G.AceAntiBypassLaggerAimbotSpeed = _G.AceAntiBypassLaggerAimbotSpeed or 40
+_G.AceAntiBypassAimbot = _G.AceAntiBypassAimbot or {swingCooldown = false, prevAutoRotate = nil}
+
+local function AceAntiBypassFindBat()
+    local char = LP.Character
+    if not char then return nil end
+    for _, name in ipairs(_G.AceAntiBypassSlapList) do
+        local t = char:FindFirstChild(name)
+        if t and t:IsA("Tool") then return t end
+    end
+    local bp = LP:FindFirstChildOfClass("Backpack")
+    if bp then
+        for _, name in ipairs(_G.AceAntiBypassSlapList) do
+            local t = bp:FindFirstChild(name)
+            if t and t:IsA("Tool") then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then pcall(function() hum:EquipTool(t) end) end
+                return t
+            end
+        end
+    end
+    for _, ch in ipairs(char:GetChildren()) do
+        if ch:IsA("Tool") and (ch.Name:lower():find("bat") or ch.Name:lower():find("slap")) then return ch end
+    end
+    return nil
+end
+
+local function AceGetAntiBypassSpeed()
+    -- Use Lagger speed if Lagger mode active
+    if State and (State.laggerMode == 1 or State.laggerMode == 2) then
+        return _G.AceAntiBypassLaggerAimbotSpeed
+    end
+    return _G.AceAntiBypassAimbotSpeed
+end
+
     local _aimbotTarget=nil
     local function findBat()
         local char=LP.Character; if not char then return nil end
@@ -2413,49 +2593,113 @@ local function Main()
         end
         return closest
     end
+    -- Original findBat kept for Normal mode
+    local function findBat_Normal()
+        local char=LP.Character; if not char then return nil end
+        for _,tool in ipairs(char:GetChildren()) do if tool:IsA("Tool") and (tool.Name:lower():find("bat") or tool.Name:lower():find("slap")) then return tool end end
+        local bp=LP:FindFirstChildOfClass("Backpack")
+        if bp then for _,tool in ipairs(bp:GetChildren()) do if tool:IsA("Tool") and (tool.Name:lower():find("bat") or tool.Name:lower():find("slap")) then return tool end end end
+        return nil
+    end
+
     startBatAimbot = function()
         if _G.GreenSafeModeTryStart and not _G.GreenSafeModeTryStart() then return end
         if Conns.aimbot then Conns.aimbot:Disconnect() end
         if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
         if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
+        
+        -- Save AutoRotate for restore (Ace logic)
         local hum0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+        if hum0 and _G.AceAntiBypassAimbot.prevAutoRotate == nil then
+            _G.AceAntiBypassAimbot.prevAutoRotate = hum0.AutoRotate
+        end
         if hum0 then hum0.AutoRotate=false end
+
         Conns.aimbot = RunService.RenderStepped:Connect(function()
             if not State.batAimbotToggled then return end
             local char=LP.Character; if not char then return end
             local root=char:FindFirstChild("HumanoidRootPart"); if not root then return end
             local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-            if not char:FindFirstChildOfClass("Tool") then local bat=findBat(); if bat then pcall(function() hum:EquipTool(bat) end) end end
+            
+            -- BAT FINDER depends on mode
+            local bat
+            if selectedAimbotMode == "Anti Bypass" then
+                bat = AceAntiBypassFindBat()
+            else
+                bat = findBat_Normal()
+            end
+            if not char:FindFirstChildOfClass("Tool") and bat then pcall(function() hum:EquipTool(bat) end) end
+            
             local target=getClosestTarget(); if not target then return end
             _aimbotTarget=target
             local targetVel=target.AssemblyLinearVelocity
             local myPos=root.Position; local targetPos=target.Position
-            local predictPos=targetPos+targetVel*0.14; predictPos=predictPos+target.CFrame.LookVector*0.3
-            local direction=predictPos-myPos; local flatDir=Vector3.new(direction.X,0,direction.Z).Unit
-            local chaseSpeed=58; local desiredHeight=targetPos.Y+3.7
-            local yVel=(desiredHeight-myPos.Y)*19.5+targetVel.Y*0.8
-            if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
-            yVel=math.clamp(yVel,-70,110)
-            local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
-            root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
-            local speed3=targetVel.Magnitude
-            local predictTime=math.clamp(speed3/150,0.05,0.2)
-            local predictedPos=targetPos+targetVel*predictTime
-            local toPredict=predictedPos-myPos
-            if toPredict.Magnitude>0.1 then
-                local goalCF=CFrame.lookAt(myPos,predictedPos)
-                local diffCF=root.CFrame:Inverse()*goalCF
-                local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
-                rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
-                root.AssemblyAngularVelocity=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
+            
+            local chaseSpeed, yVelCalc, predictEnabled
+            if selectedAimbotMode == "Anti Bypass" then
+                -- ACE ANTI BYPASS LOGIC
+                chaseSpeed = AceGetAntiBypassSpeed() -- 58 normal, 40 lagger like Ace
+                local direction = targetPos - myPos
+                local flatDir = Vector3.new(direction.X,0,direction.Z)
+                if flatDir.Magnitude > 0 then flatDir = flatDir.Unit else flatDir = Vector3.zero end
+                local desiredHeight = targetPos.Y + 3.7
+                local yVel = (desiredHeight - myPos.Y) * 19.5
+                if hum.FloorMaterial ~= Enum.Material.Air then yVel = math.max(yVel, 13) end
+                yVel = math.clamp(yVel, -70, 110)
+                local desiredVel = Vector3.new(flatDir.X*chaseSpeed, yVel, flatDir.Z*chaseSpeed)
+                root.AssemblyLinearVelocity = root.AssemblyLinearVelocity:Lerp(desiredVel, 0.8)
+                
+                -- Rotation
+                local toTarget = targetPos - myPos
+                if toTarget.Magnitude > 0.1 then
+                    local goalCF = CFrame.lookAt(myPos, targetPos)
+                    local diffCF = root.CFrame:Inverse()*goalCF
+                    local rx,ry,rz = diffCF:ToEulerAnglesXYZ()
+                    rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
+                    root.AssemblyAngularVelocity = root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
+                end
+            else
+                -- ORIGINAL DUELS V2 LOGIC
+                local predictPos=targetPos+targetVel*0.14; predictPos=predictPos+target.CFrame.LookVector*0.3
+                local direction=predictPos-myPos; local flatDir=Vector3.new(direction.X,0,direction.Z).Unit
+                chaseSpeed=58; local desiredHeight=targetPos.Y+3.7
+                yVelCalc=(desiredHeight-myPos.Y)*19.5+targetVel.Y*0.8
+                if hum.FloorMaterial~=Enum.Material.Air then yVelCalc=math.max(yVelCalc,13) end
+                yVelCalc=math.clamp(yVelCalc,-70,110)
+                local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVelCalc,flatDir.Z*chaseSpeed)
+                root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+                local speed3=targetVel.Magnitude
+                local predictTime=math.clamp(speed3/150,0.05,0.2)
+                local predictedPos=targetPos+targetVel*predictTime
+                local toPredict=predictedPos-myPos
+                if toPredict.Magnitude>0.1 then
+                    local goalCF=CFrame.lookAt(myPos,predictedPos)
+                    local diffCF=root.CFrame:Inverse()*goalCF
+                    local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
+                    rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
+                    root.AssemblyAngularVelocity=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
+                end
             end
         end)
+        
+        -- Update UI label
+        if _G.GreenAimbotModeLabel then
+            _G.GreenAimbotModeLabel.Text = "Mode: "..selectedAimbotMode
+        end
+        print("[Duels V2] Aimbot STARTED - Mode: "..selectedAimbotMode)
     end
     stopBatAimbot = function()
         if Conns.aimbot then Conns.aimbot:Disconnect(); Conns.aimbot=nil end
         _aimbotTarget=nil
         local c=LP.Character; local root=c and c:FindFirstChild("HumanoidRootPart")
         if root then root.AssemblyLinearVelocity=Vector3.zero; root.AssemblyAngularVelocity=Vector3.zero end
+        local hum2=c and c:FindFirstChildOfClass("Humanoid")
+        if hum2 and _G.AceAntiBypassAimbot and _G.AceAntiBypassAimbot.prevAutoRotate ~= nil then
+            hum2.AutoRotate = _G.AceAntiBypassAimbot.prevAutoRotate
+            hum2.PlatformStand = false
+            pcall(function() hum2:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+        end
+        if _G.AceAntiBypassAimbot then _G.AceAntiBypassAimbot.prevAutoRotate = nil; _G.AceAntiBypassAimbot.swingCooldown = false end
         local hum2=c and c:FindFirstChildOfClass("Humanoid")
         if hum2 then hum2.AutoRotate=true end
         State.hittingCooldown=false
@@ -2527,101 +2771,50 @@ local function Main()
     end
     stopMedusaCounter = function() for _,c2 in pairs(Conns.anchor) do pcall(function() c2:Disconnect() end) end; Conns.anchor={} end
 
-    -- ============================================================
-    -- RAGDOLL TIMER (FROM VYNX DUELS) - Improved precise timer
-    -- ============================================================
-    local ragdollTimerThread = nil
-    local ragdollTimerRemaining = 0
-    local isRagdollActive = false
-
+    local _rtTimerActive = false
     local function getRagTimerLbl()
         local char = LP.Character; if not char then return nil end
         local head = char:FindFirstChild("Head"); if not head then return nil end
         local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
         return bb:FindFirstChild("RagdollTimerLbl")
     end
-
-    local function updateRagdollTimer(duration)
-        if ragdollTimerThread then
-            task.cancel(ragdollTimerThread)
-            ragdollTimerThread = nil
-        end
-        if duration <= 0 then
-            isRagdollActive = false
-            local lbl = getRagTimerLbl()
-            if lbl then lbl.Text = "" end
-            return
-        end
-        isRagdollActive = true
-        local startTime = tick()
-        ragdollTimerRemaining = duration
-        ragdollTimerThread = task.spawn(function()
-            while isRagdollActive and ragdollTimerRemaining > 0 do
-                local elapsed = tick() - startTime
-                local remaining = math.max(0, duration - elapsed)
-                ragdollTimerRemaining = remaining
+    local function startRagTimerGui()
+        if _rtTimerActive then return end
+        _rtTimerActive = true
+        task.spawn(function()
+            local t = 3.0
+            while t >= 0.0 do
                 local lbl = getRagTimerLbl()
                 if lbl then
-                    lbl.Text = string.format("%.1fs", remaining)
-                    lbl.TextColor3 = Color3.fromRGB(255, 60, 60)
+                    lbl.Text = string.format("%.1f", t)
+                    lbl.TextColor3 = Color3.fromRGB(80, 220, 80)
                 end
-                if remaining <= 0 then
-                    isRagdollActive = false
-                    local lbl2 = getRagTimerLbl()
-                    if lbl2 then lbl2.Text = "" end
-                    break
-                end
-                task.wait(0.05)
+                task.wait(0.1)
+                t = math.round((t - 0.1) * 10) / 10
             end
-            ragdollTimerThread = nil
+            local lbl = getRagTimerLbl()
+            if lbl then lbl.Text = "STEAL!"; lbl.TextColor3 = Color3.fromRGB(80, 255, 120) end
+            repeat task.wait(0.1) until (function()
+                local c = LP.Character
+                local hum = c and c:FindFirstChildOfClass("Humanoid")
+                if not hum then return true end
+                local st = hum:GetState()
+                return st ~= Enum.HumanoidStateType.Physics and st ~= Enum.HumanoidStateType.Ragdoll and st ~= Enum.HumanoidStateType.FallingDown
+            end)()
+            local lbl2 = getRagTimerLbl()
+            if lbl2 then lbl2.Text = "" end
+            _rtTimerActive = false
         end)
     end
-
-    local function onHumanoidStateChanged(old, new)
-        local char = LP.Character; if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-        local isRag = (new == Enum.HumanoidStateType.Physics or new == Enum.HumanoidStateType.Ragdoll or new == Enum.HumanoidStateType.FallingDown)
-        if isRag and not hum.PlatformStand then
-            updateRagdollTimer(2.6)
-        end
-    end
-
-    local function onMedusaStateChanged()
-        local char = LP.Character; if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum and hum.PlatformStand then
-            updateRagdollTimer(4.5)
-        end
-    end
-
-    local function setupRagdollTriggers(char)
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if not hum then
-            char = LP.Character
-            hum = char and char:FindFirstChildOfClass("Humanoid")
-            if not hum then return end
-        end
-        hum.StateChanged:Connect(onHumanoidStateChanged)
-        hum:GetPropertyChangedSignal("PlatformStand"):Connect(onMedusaStateChanged)
-        local st = hum:GetState()
-        if st == Enum.HumanoidStateType.Physics or st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
-            if not hum.PlatformStand then
-                updateRagdollTimer(2.6)
-            else
-                updateRagdollTimer(4.5)
-            end
-        elseif hum.PlatformStand then
-            updateRagdollTimer(4.5)
-        end
-    end
-
-    -- legacy wrappers for compatibility
-    local _rtTimerActive = false
-    local function startRagTimerGui()
-        updateRagdollTimer(3.0)
-    end
     local function startRagTimerDetection(char)
-        setupRagdollTriggers(char)
+        RunService.Heartbeat:Connect(function()
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+            local st = hum:GetState()
+            if st == Enum.HumanoidStateType.Physics or st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
+                startRagTimerGui()
+            end
+        end)
     end
 
     
