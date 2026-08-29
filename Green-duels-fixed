@@ -3777,3 +3777,108 @@ Players.PlayerAdded:Connect(function(player)
     task.spawn(function() setupOtherPlayerSpeed(player) end)
 end)
 end)()
+
+-- ============ STANDALONE AIMBOT MODE SELECTOR (ALWAYS VISIBLE) ============
+task.spawn(function()
+    task.wait(2)
+    local gui = game:GetService("CoreGui"):FindFirstChild("SakuraModeSelectorGUI")
+    if gui then gui:Destroy() end
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "SakuraModeSelectorGUI"
+    sg.ResetOnSpawn = false
+    sg.Parent = game:GetService("CoreGui")
+
+    local frame = Instance.new("Frame", sg)
+    frame.Size = UDim2.new(0, 260, 0, 50)
+    frame.Position = UDim2.new(0.5, -130, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(14,22,16)
+    frame.BorderSizePixel = 0
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,10)
+    local st = Instance.new("UIStroke", frame)
+    st.Color = Color3.fromRGB(30,132,73)
+    st.Thickness = 1.5
+
+    local title = Instance.new("TextLabel", frame)
+    title.Size = UDim2.new(1,0,0,16)
+    title.Position = UDim2.new(0,0,0,2)
+    title.BackgroundTransparency=1
+    title.Text = "AIMBOT: "..(State.aimbotMode or "original"):upper()
+    title.TextColor3 = Color3.fromRGB(120,255,140)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 11
+
+    local holder = Instance.new("Frame", frame)
+    holder.Size = UDim2.new(1,-10,0,28)
+    holder.Position = UDim2.new(0,5,0,18)
+    holder.BackgroundTransparency=1
+    local l = Instance.new("UIListLayout", holder)
+    l.FillDirection = Enum.FillDirection.Horizontal
+    l.Padding = UDim.new(0,6)
+
+    local function mkBtn(txt, mode)
+        local b = Instance.new("TextButton", holder)
+        b.Size = UDim2.new(0.5,-4,1,0)
+        local active = State.aimbotMode==mode
+        b.BackgroundColor3 = active and Color3.fromRGB(30,132,73) or Color3.fromRGB(25,35,28)
+        b.Text = txt
+        b.TextColor3 = Color3.new(1,1,1)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 11
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0,6)
+        b.MouseButton1Click:Connect(function()
+            State.aimbotMode = mode
+            title.Text = "AIMBOT: "..mode:upper()
+            for _, ch in ipairs(holder:GetChildren()) do
+                if ch:IsA("TextButton") then
+                    local sel = (ch.Text==txt)
+                    ch.BackgroundColor3 = sel and Color3.fromRGB(30,132,73) or Color3.fromRGB(25,35,28)
+                end
+            end
+            if State.batAimbotToggled then
+                if stopBatAimbot then stopBatAimbot() end
+                task.wait(0.1)
+                if startBatAimbot then pcall(startBatAimbot) end
+            end
+            print("[Duels] Mode -> "..mode)
+        end)
+        return b
+    end
+    mkBtn("ORIGINAL","original")
+    mkBtn("SAKURA","sakura")
+    
+    -- Make draggable
+    local UIS = game:GetService("UserInputService")
+    local dragging, dragStart, startPos
+    frame.InputBegan:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 then
+            dragging=true
+            dragStart=inp.Position
+            startPos=frame.Position
+        end
+    end)
+    UIS.InputChanged:Connect(function(inp)
+        if dragging and inp.UserInputType==Enum.UserInputType.MouseMovement then
+            local delta = inp.Position-dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+delta.X, startPos.Y.Scale, startPos.Y.Offset+delta.Y)
+        end
+    end)
+    frame.InputEnded:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
+    end)
+end)
+
+-- Chat command to switch: !mode original / !mode sakura
+if Players.LocalPlayer then
+    Players.LocalPlayer.Chatted:Connect(function(msg)
+        local m = msg:lower()
+        if m:find("!mode original") then
+            State.aimbotMode="original"
+            print("[Duels] Switched to ORIGINAL")
+            if State.batAimbotToggled then stopBatAimbot(); task.wait(0.1); pcall(startBatAimbot) end
+        elseif m:find("!mode sakura") then
+            State.aimbotMode="sakura"
+            print("[Duels] Switched to SAKURA")
+            if State.batAimbotToggled then stopBatAimbot(); task.wait(0.1); pcall(startBatAimbot) end
+        end
+    end)
+end
