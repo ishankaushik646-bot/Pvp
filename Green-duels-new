@@ -1685,49 +1685,6 @@ local function Main()
         page.LayoutOrder = 2
     end
 
-    -- ACE MODE SELECTOR PAGE - NEW (like Ace Duels)
-    do
-        local page = buildPage("Aimbot Mode", function()
-            makeGap(2); makeSectionHeader("Aimbot Mode Selector"); makeGap(2)
-            makeLabel("Select like Ace Duels - Mirror TP Down works with both")
-            makeGap(4)
-            _G._aceModeToggles = _G._aceModeToggles or {}
-            local function applyMode(m)
-                selectedAimbotMode = m
-                print("[Duels] Mode set to: "..m)
-                if State.batAimbotToggled then
-                    pcall(function() stopBatAimbot() end)
-                    task.wait(0.1)
-                    pcall(function() startBatAimbot() end)
-                end
-            end
-            local normalToggle = makeToggleRow("Normal (Original)", selectedAimbotMode=="Normal", function(on)
-                if on then
-                    selectedAimbotMode="Normal"
-                    if _G._aceModeToggles["Anti"] then _G._aceModeToggles["Anti"](false) end
-                    applyMode("Normal")
-                end
-            end)
-            _G._aceModeToggles["Normal"]=normalToggle
-            local antiToggle = makeToggleRow("Anti Bypass (Ace)", selectedAimbotMode=="Anti Bypass", function(on)
-                if on then
-                    selectedAimbotMode="Anti Bypass"
-                    if _G._aceModeToggles["Normal"] then _G._aceModeToggles["Normal"](false) end
-                    applyMode("Anti Bypass")
-                end
-            end)
-            _G._aceModeToggles["Anti"]=antiToggle
-            _G.GreenGetAimbotMode = function() return selectedAimbotMode end
-            _G.GreenSetAimbotMode = applyMode
-            makeGap(8)
-            makeSectionHeader("Info")
-            makeLabel("Normal: Duels V2 prediction 0.14 + LookVector")
-            makeLabel("Anti Bypass: Ace velocity 58/40 lagger")
-            makeLabel("AIMBOT button uses selected mode")
-        end)
-        page.LayoutOrder = 2.5
-    end
-
     -- Auto Steal Page - WITH SEMI STEAL SELECTOR (Native UI)
     do
         local page = buildPage("Auto Steal", function()
@@ -3605,6 +3562,66 @@ end
         end
     end)
 
+
+    -- SAFE SELECTOR - WRAPPED IN PCALL, CANNOT BREAK MAIN UI
+    pcall(function()
+        task.spawn(function()
+            task.wait(2)
+            local success, err = pcall(function()
+                local pg = LP:WaitForChild("PlayerGui")
+                local old = pg:FindFirstChild("AceSelectorSafe")
+                if old then old:Destroy() end
+                local gui = Instance.new("ScreenGui")
+                gui.Name = "AceSelectorSafe"
+                gui.ResetOnSpawn = false
+                gui.Parent = pg
+                local frame = Instance.new("Frame", gui)
+                frame.Size = UDim2.new(0, 210, 0, 75)
+                frame.Position = UDim2.new(0, 10, 0, 350)
+                frame.BackgroundColor3 = Color3.fromRGB(10,20,12)
+                frame.BorderSizePixel=0
+                Instance.new("UICorner", frame).CornerRadius=UDim.new(0,8)
+                Instance.new("UIStroke", frame).Color=Color3.fromRGB(34,76,46)
+                local title = Instance.new("TextLabel", frame)
+                title.Size=UDim2.new(1,0,0,18); title.Position=UDim2.new(0,0,0,4)
+                title.BackgroundTransparency=1; title.Text="AIMBOT: "..selectedAimbotMode; title.TextColor3=Color3.fromRGB(100,255,130); title.Font=Enum.Font.GothamBold; title.TextSize=11
+                local function mkBtn(txt,x)
+                    local b=Instance.new("TextButton", frame)
+                    b.Size=UDim2.new(0,96,0,28); b.Position=UDim2.new(0,x,0,26)
+                    b.BackgroundColor3=Color3.fromRGB(30,36,32); b.Text=txt; b.TextColor3=Color3.new(1,1,1); b.Font=Enum.Font.GothamBold; b.TextSize=10; b.BorderSizePixel=0
+                    Instance.new("UICorner", b).CornerRadius=UDim.new(0,6)
+                    return b
+                end
+                local nBtn=mkBtn("NORMAL",6)
+                local aBtn=mkBtn("ANTI BYPASS",108)
+                local function upd()
+                    title.Text="AIMBOT: "..selectedAimbotMode
+                    nBtn.BackgroundColor3=(selectedAimbotMode=="Normal") and Color3.fromRGB(30,132,73) or Color3.fromRGB(30,36,32)
+                    aBtn.BackgroundColor3=(selectedAimbotMode=="Anti Bypass") and Color3.fromRGB(30,132,73) or Color3.fromRGB(30,36,32)
+                end
+                nBtn.MouseButton1Click:Connect(function()
+                    selectedAimbotMode="Normal"
+                    upd()
+                    if State.batAimbotToggled then pcall(function() stopBatAimbot() end); task.wait(0.1); pcall(function() startBatAimbot() end) end
+                end)
+                aBtn.MouseButton1Click:Connect(function()
+                    selectedAimbotMode="Anti Bypass"
+                    upd()
+                    if State.batAimbotToggled then pcall(function() stopBatAimbot() end); task.wait(0.1); pcall(function() startBatAimbot() end) end
+                end)
+                upd()
+                _G.GreenGetAimbotMode=function() return selectedAimbotMode end
+                _G.GreenSetAimbotMode=function(m) selectedAimbotMode=m; upd() end
+                -- draggable
+                local dragging,ds,sp
+                frame.InputBegan:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then dragging=true; ds=inp.Position; sp=frame.Position; inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end) end end)
+                UIS.InputChanged:Connect(function(inp) if dragging and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then local d=inp.Position-ds; frame.Position=UDim2.new(sp.X.Scale, sp.X.Offset+d.X, sp.Y.Scale, sp.Y.Offset+d.Y) end end)
+            end)
+            if not success then warn("[Selector] "..tostring(err)) end
+        end)
+    end)
+
+    
     startAutoSteal()
     print("[Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
