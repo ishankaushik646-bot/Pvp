@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local RS      = game:GetService("ReplicatedStorage")
 local Net     = RS:WaitForChild("Packages"):WaitForChild("Net")
 local PG      = Players.LocalPlayer:WaitForChild("PlayerGui")
+local UIS     = game:GetService("UserInputService")
 
 if typeof(firesignal) ~= "function" then
     warn("[TestSender] executor has no 'firesignal' - cannot fake announcements.")
@@ -70,20 +71,23 @@ W.Position = UDim2.new(0.5, -140, 0.5, -69)
 W.BackgroundColor3 = Color3.fromRGB(12, 12, 15)
 W.BackgroundTransparency = 0.06
 W.BorderSizePixel = 0
+W.Active = true
 corner(12, W)
 stroke(W)
 
 local head = Instance.new("Frame", W)
+head.Name = "DragBar"
 head.Size = UDim2.new(1, 0, 0, 30)
 head.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 head.BorderSizePixel = 0
+head.Active = true
 corner(12, head)
 
 local title = Instance.new("TextLabel", head)
 title.BackgroundTransparency = 1
 title.Size = UDim2.new(1, -40, 1, 0)
 title.Position = UDim2.new(0, 12, 0, 0)
-title.Text = "TEST SENDER"
+title.Text = "TEST SENDER - DRAG ME"
 title.TextColor3 = Color3.fromRGB(238, 239, 244)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 12
@@ -101,11 +105,10 @@ close.BorderSizePixel = 0
 corner(8, close)
 close.MouseButton1Click:Connect(function() SG:Destroy() end)
 
--- floatable / draggable mechanics - works on PC + Mobile + Touch
+-- FIXED FLOATABLE DRAG - PC + MOBILE, no interference
 do
-    local UIS = game:GetService("UserInputService")
     local dragging = false
-    local dragStart, startPos
+    local dragInput, dragStart, startPos
 
     local function update(input)
         local delta = input.Position - dragStart
@@ -117,36 +120,26 @@ do
             dragging = true
             dragStart = input.Position
             startPos = W.Position
+            dragInput = input
 
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
+                    dragInput = nil
                 end
             end)
         end
     end)
 
-    -- also allow dragging by holding the main window background
-    W.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            -- only drag if not interacting with buttons/textbox
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = true
-                dragStart = input.Position
-                startPos = W.Position
-            end
+    head.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
         end
     end)
 
     UIS.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        if input == dragInput and dragging then
             update(input)
-        end
-    end)
-    
-    UIS.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
         end
     end)
 end
@@ -200,4 +193,4 @@ send.MouseButton1Click:Connect(function() fire(box.Text); box.Text = ""; box:Cap
 box.FocusLost:Connect(function(enter) if enter then fire(box.Text); box.Text = ""; box:CaptureFocus() end end)
 tc.MouseButton1Click:Connect(function() fire("TESTCODE" .. tostring(math.random(1000, 9999))) end)
 
-print("[TestSender] ready - load Phi to catch what you send.")
+print("[TestSender] ready - floatable version loaded")
