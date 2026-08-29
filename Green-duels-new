@@ -1658,36 +1658,6 @@ local function Main()
     do
         local page = buildPage("Combat", function()
             makeGap(2); makeSectionHeader("Bat Aimbot"); makeGap(2)
-            -- === ACE MODE SELECTOR (FIXED) ===
-            makeSectionHeader("Aimbot Mode Selector")
-            local function applyMode(m)
-                selectedAimbotMode = m
-                if State.batAimbotToggled then
-                    pcall(function() stopBatAimbot() end)
-                    task.wait(0.1)
-                    pcall(function() startBatAimbot() end)
-                end
-            end
-            _G._aceModeToggles = _G._aceModeToggles or {}
-            local normalToggle = makeToggleRow("Normal (Original)", selectedAimbotMode=="Normal", function(on)
-                if on then
-                    selectedAimbotMode="Normal"
-                    if _G._aceModeToggles["Anti"] then _G._aceModeToggles["Anti"](false) end
-                    applyMode("Normal")
-                end
-            end)
-            _G._aceModeToggles["Normal"]=normalToggle
-            local antiToggle = makeToggleRow("Anti Bypass (Ace)", selectedAimbotMode=="Anti Bypass", function(on)
-                if on then
-                    selectedAimbotMode="Anti Bypass"
-                    if _G._aceModeToggles["Normal"] then _G._aceModeToggles["Normal"](false) end
-                    applyMode("Anti Bypass")
-                end
-            end)
-            _G._aceModeToggles["Anti"]=antiToggle
-            _G.GreenGetAimbotMode = function() return selectedAimbotMode end
-            _G.GreenSetAimbotMode = applyMode
-            makeGap(4)
             setAutoSwing = makeToggleRow("Auto Swing", false, function(on) State.autoSwingEnabled=on end)
             toggleSetters["autoSwing"] = setAutoSwing
             local setMirrorTPDown = makeToggleRow("Mirror TP Down", mirrorTPDownEnabled, function(on) 
@@ -1713,6 +1683,49 @@ local function Main()
             toggleSetters["safeMode"] = safeModeToggle
         end)
         page.LayoutOrder = 2
+    end
+
+    -- ACE MODE SELECTOR PAGE - NEW (like Ace Duels)
+    do
+        local page = buildPage("Aimbot Mode", function()
+            makeGap(2); makeSectionHeader("Aimbot Mode Selector"); makeGap(2)
+            makeLabel("Select like Ace Duels - Mirror TP Down works with both")
+            makeGap(4)
+            _G._aceModeToggles = _G._aceModeToggles or {}
+            local function applyMode(m)
+                selectedAimbotMode = m
+                print("[Duels] Mode set to: "..m)
+                if State.batAimbotToggled then
+                    pcall(function() stopBatAimbot() end)
+                    task.wait(0.1)
+                    pcall(function() startBatAimbot() end)
+                end
+            end
+            local normalToggle = makeToggleRow("Normal (Original)", selectedAimbotMode=="Normal", function(on)
+                if on then
+                    selectedAimbotMode="Normal"
+                    if _G._aceModeToggles["Anti"] then _G._aceModeToggles["Anti"](false) end
+                    applyMode("Normal")
+                end
+            end)
+            _G._aceModeToggles["Normal"]=normalToggle
+            local antiToggle = makeToggleRow("Anti Bypass (Ace)", selectedAimbotMode=="Anti Bypass", function(on)
+                if on then
+                    selectedAimbotMode="Anti Bypass"
+                    if _G._aceModeToggles["Normal"] then _G._aceModeToggles["Normal"](false) end
+                    applyMode("Anti Bypass")
+                end
+            end)
+            _G._aceModeToggles["Anti"]=antiToggle
+            _G.GreenGetAimbotMode = function() return selectedAimbotMode end
+            _G.GreenSetAimbotMode = applyMode
+            makeGap(8)
+            makeSectionHeader("Info")
+            makeLabel("Normal: Duels V2 prediction 0.14 + LookVector")
+            makeLabel("Anti Bypass: Ace velocity 58/40 lagger")
+            makeLabel("AIMBOT button uses selected mode")
+        end)
+        page.LayoutOrder = 2.5
     end
 
     -- Auto Steal Page - WITH SEMI STEAL SELECTOR (Native UI)
