@@ -510,6 +510,10 @@ local State = {
     autoLeftPhase=1, autoRightPhase=1,
     medusaLastUsed=0, medusaDebounce=false, medusaCounterEnabled=false,
     batAimbotToggled=false,
+    aimbotMode="original",
+    sakuraSwingCooldown=false,
+    sakuraPrevAutoRotate=nil,
+
     safeModeEnabled=false, autoSwingEnabled=false,
     hittingCooldown=false,
     batCounterEnabled=false, batCounterDebounce=false,
@@ -1658,6 +1662,72 @@ local function Main()
     do
         local page = buildPage("Combat", function()
             makeGap(2); makeSectionHeader("Bat Aimbot"); makeGap(2)
+            -- AIMBOT MODE SELECTOR - ORIGINAL vs SAKURA
+            do
+                local row = Instance.new("Frame", currentPage)
+                row.Size = UDim2.new(1,-16,0,64)
+                row.BackgroundColor3 = Color3.fromRGB(14,22,16)
+                row.BorderSizePixel=0; row.LayoutOrder=LO()
+                local cr = Instance.new("UICorner", row); cr.CornerRadius = UDim.new(0,12)
+                local st = Instance.new("UIStroke", row); st.Color = Color3.fromRGB(34,76,46); st.Thickness=1; st.Transparency=0.5
+
+                local title = Instance.new("TextLabel", row)
+                title.Size = UDim2.new(1,-16,0,16)
+                title.Position = UDim2.new(0,12,0,6)
+                title.BackgroundTransparency=1
+                title.Text = "AIMBOT TYPE"
+                title.TextColor3 = Color3.fromRGB(120,200,140)
+                title.Font = Enum.Font.GothamBold
+                title.TextSize = 10
+                title.TextXAlignment = Enum.TextXAlignment.Left
+
+                local holder = Instance.new("Frame", row)
+                holder.Size = UDim2.new(1,-16,0,32)
+                holder.Position = UDim2.new(0,8,0,26)
+                holder.BackgroundTransparency=1
+                local layout = Instance.new("UIListLayout", holder)
+                layout.FillDirection = Enum.FillDirection.Horizontal
+                layout.Padding = UDim.new(0,8)
+                layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+                local function makeModeBtn(txtLabel, modeVal)
+                    local btn = Instance.new("TextButton", holder)
+                    btn.Size = UDim2.new(0.5,-6,1,0)
+                    local isActive = (State.aimbotMode==modeVal)
+                    btn.BackgroundColor3 = isActive and Color3.fromRGB(30,132,73) or Color3.fromRGB(22,32,24)
+                    btn.Text = txtLabel
+                    btn.TextColor3 = isActive and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,200,185)
+                    btn.Font = Enum.Font.GothamBold
+                    btn.TextSize = 11
+                    btn.BorderSizePixel=0
+                    local bc = Instance.new("UICorner", btn); bc.CornerRadius = UDim.new(0,8)
+                    local bs = Instance.new("UIStroke", btn)
+                    bs.Color = isActive and Color3.fromRGB(60,180,100) or Color3.fromRGB(40,60,45)
+                    bs.Thickness = 1.2
+                    btn.MouseButton1Click:Connect(function()
+                        State.aimbotMode = modeVal
+                        if requestSave then requestSave() end
+                        for _, child in ipairs(holder:GetChildren()) do
+                            if child:IsA("TextButton") then
+                                local sel = (modeVal=="original" and child.Text=="ORIGINAL") or (modeVal=="sakura" and child.Text=="SAKURA ANTI BAT")
+                                child.BackgroundColor3 = sel and Color3.fromRGB(30,132,73) or Color3.fromRGB(22,32,24)
+                                child.TextColor3 = sel and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,200,185)
+                                local s = child:FindFirstChildOfClass("UIStroke")
+                                if s then s.Color = sel and Color3.fromRGB(60,180,100) or Color3.fromRGB(40,60,45) end
+                            end
+                        end
+                        if State.batAimbotToggled then
+                            stopBatAimbot()
+                            task.wait(0.12)
+                            pcall(startBatAimbot)
+                        end
+                    end)
+                    return btn
+                end
+                makeModeBtn("ORIGINAL", "original")
+                makeModeBtn("SAKURA ANTI BAT", "sakura")
+            end
+
             setAutoSwing = makeToggleRow("Auto Swing", false, function(on) State.autoSwingEnabled=on end)
             toggleSetters["autoSwing"] = setAutoSwing
             local setMirrorTPDown = makeToggleRow("Mirror TP Down", mirrorTPDownEnabled, function(on) 
@@ -2412,43 +2482,147 @@ local function Main()
         end
         return closest
     end
+    -- ===================== SAKURA ANTI BAT BYPASS CORE =====================
+    _G.AceAntiBypassSlapList = _G.AceAntiBypassSlapList or {"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap"}
+    local SAKURA_SPEED = 58
+    local function sakuraGetBat()
+        local char=LP.Character; if not char then return nil end
+        for _, name in ipairs(_G.AceAntiBypassSlapList) do
+            local t=char:FindFirstChild(name)
+            if t and t:IsA("Tool") then return t end
+        end
+        local bp=LP:FindFirstChildOfClass("Backpack")
+        if bp then
+            for _, name in ipairs(_G.AceAntiBypassSlapList) do
+                local t=bp:FindFirstChild(name)
+                if t and t:IsA("Tool") then
+                    local hum=char:FindFirstChildOfClass("Humanoid")
+                    if hum then pcall(function() hum:EquipTool(t) end) end
+                    return t
+                end
+            end
+        end
+        for _, ch in ipairs(char:GetChildren()) do
+            if ch:IsA("Tool") and (ch.Name:lower():find("bat") or ch.Name:lower():find("slap")) then return ch end
+        end
+        return nil
+    end
+    local function sakuraTryHitBat()
+        if State.sakuraSwingCooldown then return end
+        State.sakuraSwingCooldown=true
+        pcall(function()
+            local char=LP.Character; if not char then return end
+            local bat=sakuraGetBat()
+            if bat then
+                if bat.Parent~=char then
+                    local hum=char:FindFirstChildOfClass("Humanoid")
+                    if hum then pcall(function() hum:EquipTool(bat) end) end
+                end
+                pcall(function() bat:Activate() end)
+            end
+        end)
+        task.delay(0.35, function() State.sakuraSwingCooldown=false end)
+    end
+    local function sakuraGetClosest()
+        local hrp=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return nil, math.huge, nil end
+        local cp, cd, cRoot=nil, math.huge, nil
+        for _, p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local tr=p.Character:FindFirstChild("HumanoidRootPart")
+                local hum=p.Character:FindFirstChildOfClass("Humanoid")
+                if tr and hum and hum.Health>0 then
+                    local d=(hrp.Position-tr.Position).Magnitude
+                    if d<cd then cd=d; cp=p; cRoot=tr end
+                end
+            end
+        end
+        return cp, cd, cRoot
+    end
+
     startBatAimbot = function()
         if _G.GreenSafeModeTryStart and not _G.GreenSafeModeTryStart() then return end
         if Conns.aimbot then Conns.aimbot:Disconnect() end
         if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
         if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
-        local hum0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-        if hum0 then hum0.AutoRotate=false end
-        Conns.aimbot = RunService.RenderStepped:Connect(function()
-            if not State.batAimbotToggled then return end
-            local char=LP.Character; if not char then return end
-            local root=char:FindFirstChild("HumanoidRootPart"); if not root then return end
-            local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-            if not char:FindFirstChildOfClass("Tool") then local bat=findBat(); if bat then pcall(function() hum:EquipTool(bat) end) end end
-            local target=getClosestTarget(); if not target then return end
-            _aimbotTarget=target
-            local targetVel=target.AssemblyLinearVelocity
-            local myPos=root.Position; local targetPos=target.Position
-            local predictPos=targetPos+targetVel*0.14; predictPos=predictPos+target.CFrame.LookVector*0.3
-            local direction=predictPos-myPos; local flatDir=Vector3.new(direction.X,0,direction.Z).Unit
-            local chaseSpeed=58; local desiredHeight=targetPos.Y+3.7
-            local yVel=(desiredHeight-myPos.Y)*19.5+targetVel.Y*0.8
-            if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
-            yVel=math.clamp(yVel,-70,110)
-            local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
-            root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
-            local speed3=targetVel.Magnitude
-            local predictTime=math.clamp(speed3/150,0.05,0.2)
-            local predictedPos=targetPos+targetVel*predictTime
-            local toPredict=predictedPos-myPos
-            if toPredict.Magnitude>0.1 then
-                local goalCF=CFrame.lookAt(myPos,predictedPos)
-                local diffCF=root.CFrame:Inverse()*goalCF
-                local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
-                rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
-                root.AssemblyAngularVelocity=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
-            end
-        end)
+
+        if State.aimbotMode=="original" then
+            local hum0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+            if hum0 then hum0.AutoRotate=false end
+            Conns.aimbot = RunService.RenderStepped:Connect(function()
+                if not State.batAimbotToggled then return end
+                if State.aimbotMode~="original" then return end
+                local char=LP.Character; if not char then return end
+                local root=char:FindFirstChild("HumanoidRootPart"); if not root then return end
+                local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+                if not char:FindFirstChildOfClass("Tool") then local bat=findBat(); if bat then pcall(function() hum:EquipTool(bat) end) end end
+                local target=getClosestTarget(); if not target then return end
+                _aimbotTarget=target
+                local targetVel=target.AssemblyLinearVelocity
+                local myPos=root.Position; local targetPos=target.Position
+                local predictPos=targetPos+targetVel*0.14; predictPos=predictPos+target.CFrame.LookVector*0.3
+                local direction=predictPos-myPos; local flatDir=Vector3.new(direction.X,0,direction.Z)
+                if flatDir.Magnitude>0 then flatDir=flatDir.Unit else flatDir=Vector3.zero end
+                local chaseSpeed=58; local desiredHeight=targetPos.Y+3.7
+                local yVel=(desiredHeight-myPos.Y)*19.5+targetVel.Y*0.8
+                if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
+                yVel=math.clamp(yVel,-70,110)
+                local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
+                root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+                local speed3=targetVel.Magnitude
+                local predictTime=math.clamp(speed3/150,0.05,0.2)
+                local predictedPos=targetPos+targetVel*predictTime
+                local toPredict=predictedPos-myPos
+                if toPredict.Magnitude>0.1 then
+                    local goalCF=CFrame.lookAt(myPos,predictedPos)
+                    local diffCF=root.CFrame:Inverse()*goalCF
+                    local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
+                    rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
+                    root.AssemblyAngularVelocity=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
+                end
+            end)
+        else
+            Conns.aimbot = RunService.RenderStepped:Connect(function()
+                if not State.batAimbotToggled then return end
+                if State.aimbotMode~="sakura" then return end
+                local char=LP.Character; if not char then return end
+                local hrp=char:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+                local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+                if not char:FindFirstChildOfClass("Tool") then
+                    local bat=sakuraGetBat()
+                    if bat then pcall(function() hum:EquipTool(bat) end) end
+                end
+                if State.sakuraPrevAutoRotate==nil then
+                    State.sakuraPrevAutoRotate=hum.AutoRotate
+                end
+                hum.AutoRotate=false
+                local targetPlayer, dist, targetRoot=sakuraGetClosest()
+                if targetPlayer and targetRoot then
+                    _aimbotTarget=targetRoot
+                    local myPos=hrp.Position
+                    local targetPos=targetRoot.Position
+                    local direction=targetPos-myPos
+                    local flatDir=Vector3.new(direction.X,0,direction.Z)
+                    if flatDir.Magnitude>0 then flatDir=flatDir.Unit else flatDir=Vector3.zero end
+                    local chaseSpeed=SAKURA_SPEED
+                    local desiredHeight=targetPos.Y+3.7
+                    local yVel=(desiredHeight-myPos.Y)*19.5
+                    if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
+                    yVel=math.clamp(yVel,-70,110)
+                    local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
+                    hrp.AssemblyLinearVelocity=hrp.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+                    local toTarget=targetPos-myPos
+                    if toTarget.Magnitude>0.1 then
+                        local goalCF=CFrame.lookAt(myPos,targetPos)
+                        local diffCF=hrp.CFrame:Inverse()*goalCF
+                        local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
+                        rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
+                        hrp.AssemblyAngularVelocity=hrp.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
+                    end
+                    if dist<=8 then sakuraTryHitBat() end
+                end
+            end)
+        end
     end
     stopBatAimbot = function()
         if Conns.aimbot then Conns.aimbot:Disconnect(); Conns.aimbot=nil end
@@ -2456,7 +2630,17 @@ local function Main()
         local c=LP.Character; local root=c and c:FindFirstChild("HumanoidRootPart")
         if root then root.AssemblyLinearVelocity=Vector3.zero; root.AssemblyAngularVelocity=Vector3.zero end
         local hum2=c and c:FindFirstChildOfClass("Humanoid")
-        if hum2 then hum2.AutoRotate=true end
+        if hum2 then
+            if State.aimbotMode=="sakura" and State.sakuraPrevAutoRotate~=nil then
+                hum2.AutoRotate=State.sakuraPrevAutoRotate
+                hum2.PlatformStand=false
+                pcall(function() hum2:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+            else
+                hum2.AutoRotate=true
+            end
+        end
+        State.sakuraPrevAutoRotate=nil
+        State.sakuraSwingCooldown=false
         State.hittingCooldown=false
     end
 
@@ -3190,6 +3374,7 @@ local function Main()
                 tpBatKey = Keys.tpBat and Keys.tpBat.Name or "X",
                 resetKey = Keys.reset and Keys.reset.Name or "R",
                 aimbotKey = Keys.aimbot and Keys.aimbot.Name or "Unknown",
+                aimbotMode = State.aimbotMode,
                 infJump = State.infJumpEnabled,
                 antiRagdoll = State.antiRagdollEnabled,
                 medusaCounter = State.medusaCounterEnabled,
@@ -3197,6 +3382,7 @@ local function Main()
                 autoStealEnabled = Steal.AutoStealEnabled,
                 autoSwing = State.autoSwingEnabled,
                 batAimbot = State.batAimbotToggled,
+                aimbotMode = State.aimbotMode,
                 antiLagEnabled = State.antiLagEnabled,
                 stretchedResEnabled = State.stretchedResEnabled,
                 stretchFOV = State.stretchFOV,
@@ -3361,7 +3547,8 @@ local function Main()
         local keyMap = {
             speedKey="speed", autoLeftKey="autoLeft", autoRightKey="autoRight",
             guiHideKey="guiHide", dropKey="drop", laggerKey="lagger",
-            tpDownKey="tpDown", tpBatKey="tpBat", resetKey="reset", aimbotKey="aimbot"
+            tpDownKey="tpDown", tpBatKey="tpBat", resetKey="reset", aimbotKey="aimbot",
+            aimbotMode="aimbotMode"
         }
         for cfgKey, stateKey in pairs(keyMap) do
             if decErr[cfgKey] then
@@ -3496,6 +3683,7 @@ local function Main()
                     end
                     if d.autoTP ~= nil then State.autoTPEnabled=d.autoTP; if toggleSetters["autoTP"] then toggleSetters["autoTP"](d.autoTP) end end
                     if d.autoTPHeight then State.autoTPHeight=d.autoTPHeight; if autoTPHeightBox then autoTPHeightBox.Text=tostring(d.autoTPHeight) end end
+                    if d.aimbotMode and (d.aimbotMode=="original" or d.aimbotMode=="sakura") then State.aimbotMode=d.aimbotMode end
                 end)
                 break
             end
@@ -3589,3 +3777,108 @@ Players.PlayerAdded:Connect(function(player)
     task.spawn(function() setupOtherPlayerSpeed(player) end)
 end)
 end)()
+
+-- ============ STANDALONE AIMBOT MODE SELECTOR (ALWAYS VISIBLE) ============
+task.spawn(function()
+    task.wait(2)
+    local gui = game:GetService("CoreGui"):FindFirstChild("SakuraModeSelectorGUI")
+    if gui then gui:Destroy() end
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "SakuraModeSelectorGUI"
+    sg.ResetOnSpawn = false
+    sg.Parent = game:GetService("CoreGui")
+
+    local frame = Instance.new("Frame", sg)
+    frame.Size = UDim2.new(0, 260, 0, 50)
+    frame.Position = UDim2.new(0.5, -130, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(14,22,16)
+    frame.BorderSizePixel = 0
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,10)
+    local st = Instance.new("UIStroke", frame)
+    st.Color = Color3.fromRGB(30,132,73)
+    st.Thickness = 1.5
+
+    local title = Instance.new("TextLabel", frame)
+    title.Size = UDim2.new(1,0,0,16)
+    title.Position = UDim2.new(0,0,0,2)
+    title.BackgroundTransparency=1
+    title.Text = "AIMBOT: "..(State.aimbotMode or "original"):upper()
+    title.TextColor3 = Color3.fromRGB(120,255,140)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 11
+
+    local holder = Instance.new("Frame", frame)
+    holder.Size = UDim2.new(1,-10,0,28)
+    holder.Position = UDim2.new(0,5,0,18)
+    holder.BackgroundTransparency=1
+    local l = Instance.new("UIListLayout", holder)
+    l.FillDirection = Enum.FillDirection.Horizontal
+    l.Padding = UDim.new(0,6)
+
+    local function mkBtn(txt, mode)
+        local b = Instance.new("TextButton", holder)
+        b.Size = UDim2.new(0.5,-4,1,0)
+        local active = State.aimbotMode==mode
+        b.BackgroundColor3 = active and Color3.fromRGB(30,132,73) or Color3.fromRGB(25,35,28)
+        b.Text = txt
+        b.TextColor3 = Color3.new(1,1,1)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 11
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0,6)
+        b.MouseButton1Click:Connect(function()
+            State.aimbotMode = mode
+            title.Text = "AIMBOT: "..mode:upper()
+            for _, ch in ipairs(holder:GetChildren()) do
+                if ch:IsA("TextButton") then
+                    local sel = (ch.Text==txt)
+                    ch.BackgroundColor3 = sel and Color3.fromRGB(30,132,73) or Color3.fromRGB(25,35,28)
+                end
+            end
+            if State.batAimbotToggled then
+                if stopBatAimbot then stopBatAimbot() end
+                task.wait(0.1)
+                if startBatAimbot then pcall(startBatAimbot) end
+            end
+            print("[Duels] Mode -> "..mode)
+        end)
+        return b
+    end
+    mkBtn("ORIGINAL","original")
+    mkBtn("SAKURA","sakura")
+    
+    -- Make draggable
+    local UIS = game:GetService("UserInputService")
+    local dragging, dragStart, startPos
+    frame.InputBegan:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 then
+            dragging=true
+            dragStart=inp.Position
+            startPos=frame.Position
+        end
+    end)
+    UIS.InputChanged:Connect(function(inp)
+        if dragging and inp.UserInputType==Enum.UserInputType.MouseMovement then
+            local delta = inp.Position-dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+delta.X, startPos.Y.Scale, startPos.Y.Offset+delta.Y)
+        end
+    end)
+    frame.InputEnded:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
+    end)
+end)
+
+-- Chat command to switch: !mode original / !mode sakura
+if Players.LocalPlayer then
+    Players.LocalPlayer.Chatted:Connect(function(msg)
+        local m = msg:lower()
+        if m:find("!mode original") then
+            State.aimbotMode="original"
+            print("[Duels] Switched to ORIGINAL")
+            if State.batAimbotToggled then stopBatAimbot(); task.wait(0.1); pcall(startBatAimbot) end
+        elseif m:find("!mode sakura") then
+            State.aimbotMode="sakura"
+            print("[Duels] Switched to SAKURA")
+            if State.batAimbotToggled then stopBatAimbot(); task.wait(0.1); pcall(startBatAimbot) end
+        end
+    end)
+end
