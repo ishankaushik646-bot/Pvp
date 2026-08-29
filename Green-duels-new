@@ -1662,7 +1662,6 @@ local function Main()
     do
         local page = buildPage("Combat", function()
             makeGap(2); makeSectionHeader("Bat Aimbot"); makeGap(2)
-            -- AIMBOT MODE SELECTOR - ORIGINAL vs SAKURA
             do
                 local row = Instance.new("Frame", currentPage)
                 row.Size = UDim2.new(1,-16,0,64)
@@ -1670,7 +1669,6 @@ local function Main()
                 row.BorderSizePixel=0; row.LayoutOrder=LO()
                 local cr = Instance.new("UICorner", row); cr.CornerRadius = UDim.new(0,12)
                 local st = Instance.new("UIStroke", row); st.Color = Color3.fromRGB(34,76,46); st.Thickness=1; st.Transparency=0.5
-
                 local title = Instance.new("TextLabel", row)
                 title.Size = UDim2.new(1,-16,0,16)
                 title.Position = UDim2.new(0,12,0,6)
@@ -1680,7 +1678,6 @@ local function Main()
                 title.Font = Enum.Font.GothamBold
                 title.TextSize = 10
                 title.TextXAlignment = Enum.TextXAlignment.Left
-
                 local holder = Instance.new("Frame", row)
                 holder.Size = UDim2.new(1,-16,0,32)
                 holder.Position = UDim2.new(0,8,0,26)
@@ -1689,7 +1686,6 @@ local function Main()
                 layout.FillDirection = Enum.FillDirection.Horizontal
                 layout.Padding = UDim.new(0,8)
                 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
                 local function makeModeBtn(txtLabel, modeVal)
                     local btn = Instance.new("TextButton", holder)
                     btn.Size = UDim2.new(0.5,-6,1,0)
@@ -2545,7 +2541,6 @@ local function Main()
         if Conns.aimbot then Conns.aimbot:Disconnect() end
         if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
         if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
-
         if State.aimbotMode=="original" then
             local hum0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
             if hum0 then hum0.AutoRotate=false end
@@ -3374,7 +3369,6 @@ local function Main()
                 tpBatKey = Keys.tpBat and Keys.tpBat.Name or "X",
                 resetKey = Keys.reset and Keys.reset.Name or "R",
                 aimbotKey = Keys.aimbot and Keys.aimbot.Name or "Unknown",
-                aimbotMode = State.aimbotMode,
                 infJump = State.infJumpEnabled,
                 antiRagdoll = State.antiRagdollEnabled,
                 medusaCounter = State.medusaCounterEnabled,
@@ -3382,7 +3376,6 @@ local function Main()
                 autoStealEnabled = Steal.AutoStealEnabled,
                 autoSwing = State.autoSwingEnabled,
                 batAimbot = State.batAimbotToggled,
-                aimbotMode = State.aimbotMode,
                 antiLagEnabled = State.antiLagEnabled,
                 stretchedResEnabled = State.stretchedResEnabled,
                 stretchFOV = State.stretchFOV,
@@ -3402,6 +3395,7 @@ local function Main()
                 mirrorTPDownEnabled = mirrorTPDownEnabled,
                 safeMode = State.safeModeEnabled,
                 stealMode = Steal.StealMode,
+                aimbotMode = State.aimbotMode,
             }
             local encoded = HttpService:JSONEncode(cfg)
             _writefile(CONFIG_FILE, encoded)
@@ -3497,6 +3491,12 @@ local function Main()
             end
         end
 
+        -- RESTORE AIMBOT MODE
+        if decErr.aimbotMode and (decErr.aimbotMode == "original" or decErr.aimbotMode == "sakura") then
+            State.aimbotMode = decErr.aimbotMode
+            print("[Duels] Restored Aimbot Mode:", State.aimbotMode)
+        end
+
         -- RESTORE STEAL MODE (Normal / Semi) - FIXED SAVE/LOAD
         if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
             Steal.StealMode = decErr.stealMode
@@ -3547,8 +3547,7 @@ local function Main()
         local keyMap = {
             speedKey="speed", autoLeftKey="autoLeft", autoRightKey="autoRight",
             guiHideKey="guiHide", dropKey="drop", laggerKey="lagger",
-            tpDownKey="tpDown", tpBatKey="tpBat", resetKey="reset", aimbotKey="aimbot",
-            aimbotMode="aimbotMode"
+            tpDownKey="tpDown", tpBatKey="tpBat", resetKey="reset", aimbotKey="aimbot"
         }
         for cfgKey, stateKey in pairs(keyMap) do
             if decErr[cfgKey] then
@@ -3683,7 +3682,6 @@ local function Main()
                     end
                     if d.autoTP ~= nil then State.autoTPEnabled=d.autoTP; if toggleSetters["autoTP"] then toggleSetters["autoTP"](d.autoTP) end end
                     if d.autoTPHeight then State.autoTPHeight=d.autoTPHeight; if autoTPHeightBox then autoTPHeightBox.Text=tostring(d.autoTPHeight) end end
-                    if d.aimbotMode and (d.aimbotMode=="original" or d.aimbotMode=="sakura") then State.aimbotMode=d.aimbotMode end
                 end)
                 break
             end
@@ -3787,7 +3785,6 @@ task.spawn(function()
     sg.Name = "SakuraModeSelectorGUI"
     sg.ResetOnSpawn = false
     sg.Parent = game:GetService("CoreGui")
-
     local frame = Instance.new("Frame", sg)
     frame.Size = UDim2.new(0, 260, 0, 50)
     frame.Position = UDim2.new(0.5, -130, 0, 10)
@@ -3797,7 +3794,6 @@ task.spawn(function()
     local st = Instance.new("UIStroke", frame)
     st.Color = Color3.fromRGB(30,132,73)
     st.Thickness = 1.5
-
     local title = Instance.new("TextLabel", frame)
     title.Size = UDim2.new(1,0,0,16)
     title.Position = UDim2.new(0,0,0,2)
@@ -3806,7 +3802,6 @@ task.spawn(function()
     title.TextColor3 = Color3.fromRGB(120,255,140)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 11
-
     local holder = Instance.new("Frame", frame)
     holder.Size = UDim2.new(1,-10,0,28)
     holder.Position = UDim2.new(0,5,0,18)
@@ -3814,7 +3809,6 @@ task.spawn(function()
     local l = Instance.new("UIListLayout", holder)
     l.FillDirection = Enum.FillDirection.Horizontal
     l.Padding = UDim.new(0,6)
-
     local function mkBtn(txt, mode)
         local b = Instance.new("TextButton", holder)
         b.Size = UDim2.new(0.5,-4,1,0)
@@ -3834,51 +3828,15 @@ task.spawn(function()
                     ch.BackgroundColor3 = sel and Color3.fromRGB(30,132,73) or Color3.fromRGB(25,35,28)
                 end
             end
+            if requestSave then requestSave() end
             if State.batAimbotToggled then
                 if stopBatAimbot then stopBatAimbot() end
                 task.wait(0.1)
                 if startBatAimbot then pcall(startBatAimbot) end
             end
-            print("[Duels] Mode -> "..mode)
         end)
         return b
     end
     mkBtn("ORIGINAL","original")
     mkBtn("SAKURA","sakura")
-    
-    -- Make draggable
-    local UIS = game:GetService("UserInputService")
-    local dragging, dragStart, startPos
-    frame.InputBegan:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1 then
-            dragging=true
-            dragStart=inp.Position
-            startPos=frame.Position
-        end
-    end)
-    UIS.InputChanged:Connect(function(inp)
-        if dragging and inp.UserInputType==Enum.UserInputType.MouseMovement then
-            local delta = inp.Position-dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+delta.X, startPos.Y.Scale, startPos.Y.Offset+delta.Y)
-        end
-    end)
-    frame.InputEnded:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
-    end)
 end)
-
--- Chat command to switch: !mode original / !mode sakura
-if Players.LocalPlayer then
-    Players.LocalPlayer.Chatted:Connect(function(msg)
-        local m = msg:lower()
-        if m:find("!mode original") then
-            State.aimbotMode="original"
-            print("[Duels] Switched to ORIGINAL")
-            if State.batAimbotToggled then stopBatAimbot(); task.wait(0.1); pcall(startBatAimbot) end
-        elseif m:find("!mode sakura") then
-            State.aimbotMode="sakura"
-            print("[Duels] Switched to SAKURA")
-            if State.batAimbotToggled then stopBatAimbot(); task.wait(0.1); pcall(startBatAimbot) end
-        end
-    end)
-end
