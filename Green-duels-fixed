@@ -510,7 +510,7 @@ local State = {
     autoLeftPhase=1, autoRightPhase=1,
     medusaLastUsed=0, medusaDebounce=false, medusaCounterEnabled=false,
     batAimbotToggled=false,
-    aimbotMode="original", -- "original" or "sakura"
+    aimbotMode="original",
     sakuraSwingCooldown=false,
     sakuraPrevAutoRotate=nil,
 
@@ -1662,169 +1662,70 @@ local function Main()
     do
         local page = buildPage("Combat", function()
             makeGap(2); makeSectionHeader("Bat Aimbot"); makeGap(2)
-            -- AIMBOT MODE SELECTOR
+            -- AIMBOT MODE SELECTOR - ORIGINAL vs SAKURA
             do
-                local selectorContainer = Instance.new("Frame")
-                selectorContainer.Name = "AimbotModeSelector"
-                selectorContainer.Size = UDim2.new(1, -16, 0, 60)
-                selectorContainer.BackgroundColor3 = Color3.fromRGB(28,28,32)
-                selectorContainer.BorderSizePixel = 0
-                Instance.new("UICorner", selectorContainer).CornerRadius = UDim.new(0, 8)
-                selectorContainer.Parent = MainFrame -- will be reparented by buildPage automatically via last parent tracking
+                local row = Instance.new("Frame", currentPage)
+                row.Size = UDim2.new(1,-16,0,64)
+                row.BackgroundColor3 = Color3.fromRGB(14,22,16)
+                row.BorderSizePixel=0; row.LayoutOrder=LO()
+                local cr = Instance.new("UICorner", row); cr.CornerRadius = UDim.new(0,12)
+                local st = Instance.new("UIStroke", row); st.Color = Color3.fromRGB(34,76,46); st.Thickness=1; st.Transparency=0.5
 
-                -- Try to get correct parent: use the page being built
-                pcall(function()
-                    -- buildPage passes pageContainer internally via upvalue, we attempt to find it
-                    for _, v in ipairs(getfenv(0)) do end
-                end)
-
-                local function buildSelector(parent)
-                    parent = parent or selectorContainer.Parent
-                    if selectorContainer.Parent ~= parent then selectorContainer.Parent = parent end
-                    selectorContainer:ClearAllChildren()
-                    Instance.new("UICorner", selectorContainer).CornerRadius = UDim.new(0, 8)
-                    local title = Instance.new("TextLabel", selectorContainer)
-                    title.Size = UDim2.new(1, -12, 0, 16)
-                    title.Position = UDim2.new(0, 8, 0, 5)
-                    title.BackgroundTransparency = 1
-                    title.Text = "AIMBOT TYPE - SELECTOR"
-                    title.TextColor3 = Color3.fromRGB(180,180,185)
-                    title.Font = Enum.Font.GothamBold
-                    title.TextSize = 10
-                    title.TextXAlignment = Enum.TextXAlignment.Left
-
-                    local btnHolder = Instance.new("Frame", selectorContainer)
-                    btnHolder.Size = UDim2.new(1, -12, 0, 30)
-                    btnHolder.Position = UDim2.new(0, 6, 0, 24)
-                    btnHolder.BackgroundTransparency = 1
-                    local list = Instance.new("UIListLayout", btnHolder)
-                    list.FillDirection = Enum.FillDirection.Horizontal
-                    list.Padding = UDim.new(0, 6)
-                    list.HorizontalAlignment = Enum.HorizontalAlignment.Center
-                    list.VerticalAlignment = Enum.VerticalAlignment.Center
-
-                    local function mkBtn(label, modeVal)
-                        local b = Instance.new("TextButton", btnHolder)
-                        b.Size = UDim2.new(0.5, -6, 1, 0)
-                        b.BackgroundColor3 = (State.aimbotMode==modeVal) and Color3.fromRGB(255,85,125) or Color3.fromRGB(50,50,55)
-                        b.Text = label
-                        b.TextColor3 = Color3.fromRGB(255,255,255)
-                        b.Font = Enum.Font.GothamBold
-                        b.TextSize = 11
-                        b.BorderSizePixel = 0
-                        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-                        local stroke = Instance.new("UIStroke", b)
-                        stroke.Color = (State.aimbotMode==modeVal) and Color3.fromRGB(255,150,170) or Color3.fromRGB(80,80,85)
-                        stroke.Thickness = 1
-                        b.MouseButton1Click:Connect(function()
-                            State.aimbotMode = modeVal
-                            if requestSave then requestSave() end
-                            for _, ch in ipairs(btnHolder:GetChildren()) do
-                                if ch:IsA("TextButton") then
-                                    local isSelected = (modeVal=="original" and ch.Text=="ORIGINAL") or (modeVal=="sakura" and ch.Text=="SAKURA ANTI BAT")
-                                    ch.BackgroundColor3 = isSelected and Color3.fromRGB(255,85,125) or Color3.fromRGB(50,50,55)
-                                    local s = ch:FindFirstChildOfClass("UIStroke")
-                                    if s then s.Color = isSelected and Color3.fromRGB(255,150,170) or Color3.fromRGB(80,80,85) end
-                                end
-                            end
-                            if State.batAimbotToggled then
-                                stopBatAimbot()
-                                task.wait(0.15)
-                                pcall(startBatAimbot)
-                            end
-                        end)
-                        return b
-                    end
-                    mkBtn("ORIGINAL", "original")
-                    mkBtn("SAKURA ANTI BAT", "sakura")
-                end
-
-                -- We need to parent correctly inside the Combat page function - store builder for later
-                _G._DuelsBuildSelector = buildSelector
-                -- Actual building happens inside page builder using addCustom
-                task.spawn(function()
-                    task.wait(0.1)
-                    if _G._DuelsBuildSelector then
-                        -- Find Combat page frame
-                        pcall(function()
-                            local main = MainFrame
-                            -- brute find selector container and reparent if needed
-                        end)
-                    end
-                end)
-            end
-
-            -- Real selector injected with proper parent handling using makeCustom pattern:
-            do
-                local container = Instance.new("Frame")
-                container.Size = UDim2.new(1, 0, 0, 62)
-                container.BackgroundTransparency = 1
-                -- custom row
-                local inner = Instance.new("Frame", container)
-                inner.Size = UDim2.new(1, -16, 1, 0)
-                inner.Position = UDim2.new(0, 8, 0, 0)
-                inner.BackgroundColor3 = Color3.fromRGB(30,30,35)
-                inner.BorderSizePixel = 0
-                Instance.new("UICorner", inner).CornerRadius = UDim.new(0, 8)
-                local stroke = Instance.new("UIStroke", inner)
-                stroke.Color = Color3.fromRGB(60,60,65)
-                stroke.Thickness = 1
-
-                local title = Instance.new("TextLabel", inner)
-                title.Size = UDim2.new(1, -12, 0, 16)
-                title.Position = UDim2.new(0, 8, 0, 6)
-                title.BackgroundTransparency = 1
-                title.Text = "AIMBOT MODE"
-                title.TextColor3 = Color3.fromRGB(200,200,205)
+                local title = Instance.new("TextLabel", row)
+                title.Size = UDim2.new(1,-16,0,16)
+                title.Position = UDim2.new(0,12,0,6)
+                title.BackgroundTransparency=1
+                title.Text = "AIMBOT TYPE"
+                title.TextColor3 = Color3.fromRGB(120,200,140)
                 title.Font = Enum.Font.GothamBold
                 title.TextSize = 10
                 title.TextXAlignment = Enum.TextXAlignment.Left
 
-                local holder = Instance.new("Frame", inner)
-                holder.Size = UDim2.new(1, -12, 0, 30)
-                holder.Position = UDim2.new(0, 6, 0, 26)
-                holder.BackgroundTransparency = 1
+                local holder = Instance.new("Frame", row)
+                holder.Size = UDim2.new(1,-16,0,32)
+                holder.Position = UDim2.new(0,8,0,26)
+                holder.BackgroundTransparency=1
                 local layout = Instance.new("UIListLayout", holder)
                 layout.FillDirection = Enum.FillDirection.Horizontal
-                layout.Padding = UDim.new(0, 8)
+                layout.Padding = UDim.new(0,8)
                 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-                local function makeBtn(txt, mode)
+                local function makeModeBtn(txtLabel, modeVal)
                     local btn = Instance.new("TextButton", holder)
-                    btn.Size = UDim2.new(0.5, -6, 1, 0)
-                    btn.BackgroundColor3 = (State.aimbotMode==mode) and Color3.fromRGB(255,90,130) or Color3.fromRGB(50,50,58)
-                    btn.Text = txt
-                    btn.TextColor3 = Color3.new(1,1,1)
+                    btn.Size = UDim2.new(0.5,-6,1,0)
+                    local isActive = (State.aimbotMode==modeVal)
+                    btn.BackgroundColor3 = isActive and Color3.fromRGB(30,132,73) or Color3.fromRGB(22,32,24)
+                    btn.Text = txtLabel
+                    btn.TextColor3 = isActive and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,200,185)
                     btn.Font = Enum.Font.GothamBold
                     btn.TextSize = 11
-                    btn.BorderSizePixel = 0
-                    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-                    local st = Instance.new("UIStroke", btn)
-                    st.Color = (State.aimbotMode==mode) and Color3.fromRGB(255,150,175) or Color3.fromRGB(70,70,75)
-                    st.Thickness = 1.2
+                    btn.BorderSizePixel=0
+                    local bc = Instance.new("UICorner", btn); bc.CornerRadius = UDim.new(0,8)
+                    local bs = Instance.new("UIStroke", btn)
+                    bs.Color = isActive and Color3.fromRGB(60,180,100) or Color3.fromRGB(40,60,45)
+                    bs.Thickness = 1.2
                     btn.MouseButton1Click:Connect(function()
-                        State.aimbotMode = mode
+                        State.aimbotMode = modeVal
                         if requestSave then requestSave() end
-                        for _, c in ipairs(holder:GetChildren()) do
-                            if c:IsA("TextButton") then
-                                local sel = (mode=="original" and c.Text=="ORIGINAL") or (mode=="sakura" and c.Text=="SAKURA")
-                                c.BackgroundColor3 = sel and Color3.fromRGB(255,90,130) or Color3.fromRGB(50,50,58)
-                                local s = c:FindFirstChildOfClass("UIStroke")
-                                if s then s.Color = sel and Color3.fromRGB(255,150,175) or Color3.fromRGB(70,70,75) end
+                        for _, child in ipairs(holder:GetChildren()) do
+                            if child:IsA("TextButton") then
+                                local sel = (modeVal=="original" and child.Text=="ORIGINAL") or (modeVal=="sakura" and child.Text=="SAKURA ANTI BAT")
+                                child.BackgroundColor3 = sel and Color3.fromRGB(30,132,73) or Color3.fromRGB(22,32,24)
+                                child.TextColor3 = sel and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,200,185)
+                                local s = child:FindFirstChildOfClass("UIStroke")
+                                if s then s.Color = sel and Color3.fromRGB(60,180,100) or Color3.fromRGB(40,60,45) end
                             end
                         end
                         if State.batAimbotToggled then
                             stopBatAimbot()
-                            task.wait(0.1)
+                            task.wait(0.12)
                             pcall(startBatAimbot)
                         end
                     end)
                     return btn
                 end
-                makeBtn("ORIGINAL", "original")
-                makeBtn("SAKURA", "sakura")
-                -- add to page via custom method
-                if _G.DuelsAddCustomRow then _G.DuelsAddCustomRow(container) else container.Parent = MainFrame end
+                makeModeBtn("ORIGINAL", "original")
+                makeModeBtn("SAKURA ANTI BAT", "sakura")
             end
 
             setAutoSwing = makeToggleRow("Auto Swing", false, function(on) State.autoSwingEnabled=on end)
@@ -2581,7 +2482,6 @@ local function Main()
         end
         return closest
     end
-
     -- ===================== SAKURA ANTI BAT BYPASS CORE =====================
     _G.AceAntiBypassSlapList = _G.AceAntiBypassSlapList or {"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap"}
     local SAKURA_SPEED = 58
@@ -2646,7 +2546,6 @@ local function Main()
         if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
         if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
 
-        -- ORIGINAL AIMBOT MODE
         if State.aimbotMode=="original" then
             local hum0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
             if hum0 then hum0.AutoRotate=false end
@@ -2683,7 +2582,6 @@ local function Main()
                 end
             end)
         else
-            -- SAKURA ANTI BAT BYPASS MODE
             Conns.aimbot = RunService.RenderStepped:Connect(function()
                 if not State.batAimbotToggled then return end
                 if State.aimbotMode~="sakura" then return end
@@ -2698,7 +2596,6 @@ local function Main()
                     State.sakuraPrevAutoRotate=hum.AutoRotate
                 end
                 hum.AutoRotate=false
-
                 local targetPlayer, dist, targetRoot=sakuraGetClosest()
                 if targetPlayer and targetRoot then
                     _aimbotTarget=targetRoot
@@ -2746,7 +2643,6 @@ local function Main()
         State.sakuraSwingCooldown=false
         State.hittingCooldown=false
     end
-
 
     local BAT_COUNTER_SLAP_LIST={"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap"}
     local function findBatForCounter()
