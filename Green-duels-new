@@ -2396,7 +2396,7 @@ local function Main()
 -- ============================================================
 -- ACE ANTI BYPASS LOGIC - ADDED
 -- ============================================================
-local selectedAimbotMode = "Normal" -- Change to "Anti Bypass" for Ace logic
+local selectedAimbotMode = "Normal"
 _G.AceAntiBypassSlapList = {"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap"}
 _G.AceAntiBypassAimbot = {swingCooldown=false, prevAutoRotate=nil}
 _G.AceAntiBypassAimbotSpeed = 58
@@ -2613,106 +2613,7 @@ end
                 if not hum then return true end
                 local st = hum:GetState()
                 return st ~= Enum.HumanoidStateType.Physics and st ~= Enum.HumanoidStateType.Ragdoll and st ~= Enum.HumanoidStateType.FallingDown
-            
--- ============================================================
--- EXTERNAL SELECTOR GUI (Ace style, with Mirror TP Down) - SAFE, does not touch Duels menu
--- ============================================================
-task.spawn(function()
-    task.wait(2)
-    local pg = LP:WaitForChild("PlayerGui")
-    local old = pg:FindFirstChild("AceModeSelector")
-    if old then old:Destroy() end
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "AceModeSelector"
-    gui.ResetOnSpawn = false
-    gui.Parent = pg
-    
-    local frame = Instance.new("Frame", gui)
-    frame.Size = UDim2.new(0, 220, 0, 130)
-    frame.Position = UDim2.new(0, 20, 0, 300)
-    frame.BackgroundColor3 = Color3.fromRGB(14,22,16)
-    frame.BorderSizePixel = 0
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
-    local st = Instance.new("UIStroke", frame); st.Color = Color3.fromRGB(34,76,46); st.Thickness=1
-    
-    local title = Instance.new("TextLabel", frame)
-    title.Size = UDim2.new(1,-10,0,24); title.Position=UDim2.new(0,10,0,6)
-    title.BackgroundTransparency=1; title.Text="AIMBOT MODE (Ace)"; title.TextColor3=Color3.fromRGB(100,255,130)
-    title.Font=Enum.Font.GothamBlack; title.TextSize=12; title.TextXAlignment=Enum.TextXAlignment.Left
-    
-    local modeLbl = Instance.new("TextLabel", frame)
-    modeLbl.Size = UDim2.new(1,-10,0,20); modeLbl.Position=UDim2.new(0,10,0,30)
-    modeLbl.BackgroundTransparency=1; modeLbl.Text="Current: "..selectedAimbotMode; modeLbl.TextColor3=Color3.fromRGB(200,255,200)
-    modeLbl.Font=Enum.Font.GothamBold; modeLbl.TextSize=11; modeLbl.TextXAlignment=Enum.TextXAlignment.Left
-    
-    local function makeBtn(txt, y, color)
-        local b = Instance.new("TextButton", frame)
-        b.Size = UDim2.new(0, 98, 0, 28); b.Position = UDim2.new(0, y, 0, 54)
-        b.BackgroundColor3 = color; b.Text=txt; b.TextColor3=Color3.new(1,1,1)
-        b.Font=Enum.Font.GothamBold; b.TextSize=11; b.BorderSizePixel=0
-        Instance.new("UICorner", b).CornerRadius=UDim.new(0,8)
-        return b
-    end
-    
-    local normalBtn = makeBtn("NORMAL", 10, Color3.fromRGB(30,132,73))
-    local bypassBtn = makeBtn("ANTI BYPASS", 112, Color3.fromRGB(30,36,32))
-    
-    local function updateButtons()
-        modeLbl.Text = "Current: "..selectedAimbotMode
-        if selectedAimbotMode == "Normal" then
-            normalBtn.BackgroundColor3 = Color3.fromRGB(30,132,73)
-            bypassBtn.BackgroundColor3 = Color3.fromRGB(30,36,32)
-        else
-            normalBtn.BackgroundColor3 = Color3.fromRGB(30,36,32)
-            bypassBtn.BackgroundColor3 = Color3.fromRGB(30,132,73)
-        end
-        -- restart if running
-        if State and State.batAimbotToggled then
-            pcall(function() stopBatAimbot() end)
-            task.wait(0.1)
-            pcall(function() startBatAimbot() end)
-        end
-    end
-    
-    normalBtn.MouseButton1Click:Connect(function() selectedAimbotMode="Normal"; updateButtons() end)
-    bypassBtn.MouseButton1Click:Connect(function() selectedAimbotMode="Anti Bypass"; updateButtons() end)
-    
-    -- Mirror TP Down toggle (works with both)
-    local mirrorBtn = Instance.new("TextButton", frame)
-    mirrorBtn.Size = UDim2.new(1,-20,0,26); mirrorBtn.Position=UDim2.new(0,10,0,90)
-    mirrorBtn.BackgroundColor3 = Color3.fromRGB(14,22,16); mirrorBtn.BorderSizePixel=0
-    mirrorBtn.Text="Mirror TP Down: OFF"; mirrorBtn.TextColor3=Color3.fromRGB(200,200,200)
-    mirrorBtn.Font=Enum.Font.GothamBold; mirrorBtn.TextSize=11
-    Instance.new("UICorner", mirrorBtn).CornerRadius=UDim.new(0,8)
-    Instance.new("UIStroke", mirrorBtn).Color=Color3.fromRGB(34,76,46)
-    mirrorBtn.MouseButton1Click:Connect(function()
-        mirrorTPDownEnabled = not mirrorTPDownEnabled
-        mirrorBtn.Text = "Mirror TP Down: "..(mirrorTPDownEnabled and "ON" or "OFF")
-        mirrorBtn.BackgroundColor3 = mirrorTPDownEnabled and Color3.fromRGB(30,132,73) or Color3.fromRGB(14,22,16)
-    end)
-    
-    _G.GreenGetAimbotMode = function() return selectedAimbotMode end
-    _G.GreenSetAimbotMode = function(m) if m=="Normal" or m=="Anti Bypass" then selectedAimbotMode=m; updateButtons() end end
-    
-    -- Draggable
-    local dragging, dragStart, startPos
-    frame.InputBegan:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
-            dragging=true; dragStart=inp.Position; startPos=frame.Position
-            inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end)
-        end
-    end)
-    game:GetService("UserInputService").InputChanged:Connect(function(inp)
-        if dragging and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
-            local d = inp.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-        end
-    end)
-    
-    updateButtons()
-end)
-
-end)()
+            end)()
             local lbl2 = getRagTimerLbl()
             if lbl2 then lbl2.Text = "" end
             _rtTimerActive = false
@@ -3673,6 +3574,100 @@ end)()
         end
     end)
 
+
+    -- External Ace Selector GUI - SAFE inside Main
+    task.spawn(function()
+        task.wait(1.5)
+        local pg = LP:WaitForChild("PlayerGui")
+        local old = pg:FindFirstChild("AceModeSelector")
+        if old then old:Destroy() end
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "AceModeSelector"
+        gui.ResetOnSpawn = false
+        gui.Parent = pg
+        
+        local frame = Instance.new("Frame", gui)
+        frame.Size = UDim2.new(0, 220, 0, 130)
+        frame.Position = UDim2.new(0, 20, 0, 320)
+        frame.BackgroundColor3 = Color3.fromRGB(14,22,16)
+        frame.BorderSizePixel = 0
+        Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
+        local st = Instance.new("UIStroke", frame); st.Color = Color3.fromRGB(34,76,46); st.Thickness=1
+        
+        local title = Instance.new("TextLabel", frame)
+        title.Size = UDim2.new(1,-10,0,24); title.Position=UDim2.new(0,10,0,6)
+        title.BackgroundTransparency=1; title.Text="AIMBOT MODE (Ace)"; title.TextColor3=Color3.fromRGB(100,255,130)
+        title.Font=Enum.Font.GothamBlack; title.TextSize=12; title.TextXAlignment=Enum.TextXAlignment.Left
+        
+        local modeLbl = Instance.new("TextLabel", frame)
+        modeLbl.Size = UDim2.new(1,-10,0,20); modeLbl.Position=UDim2.new(0,10,0,30)
+        modeLbl.BackgroundTransparency=1; modeLbl.Text="Current: "..selectedAimbotMode; modeLbl.TextColor3=Color3.fromRGB(200,255,200)
+        modeLbl.Font=Enum.Font.GothamBold; modeLbl.TextSize=11; modeLbl.TextXAlignment=Enum.TextXAlignment.Left
+        
+        local function makeBtn(txt, x, color)
+            local b = Instance.new("TextButton", frame)
+            b.Size = UDim2.new(0, 98, 0, 28); b.Position = UDim2.new(0, x, 0, 54)
+            b.BackgroundColor3 = color; b.Text=txt; b.TextColor3=Color3.new(1,1,1)
+            b.Font=Enum.Font.GothamBold; b.TextSize=11; b.BorderSizePixel=0
+            Instance.new("UICorner", b).CornerRadius=UDim.new(0,8)
+            return b
+        end
+        
+        local normalBtn = makeBtn("NORMAL", 10, Color3.fromRGB(30,132,73))
+        local bypassBtn = makeBtn("ANTI BYPASS", 112, Color3.fromRGB(30,36,32))
+        
+        local function updateButtons()
+            modeLbl.Text = "Current: "..selectedAimbotMode
+            if selectedAimbotMode == "Normal" then
+                normalBtn.BackgroundColor3 = Color3.fromRGB(30,132,73)
+                bypassBtn.BackgroundColor3 = Color3.fromRGB(30,36,32)
+            else
+                normalBtn.BackgroundColor3 = Color3.fromRGB(30,36,32)
+                bypassBtn.BackgroundColor3 = Color3.fromRGB(30,132,73)
+            end
+            if State and State.batAimbotToggled then
+                pcall(function() stopBatAimbot() end)
+                task.wait(0.1)
+                pcall(function() startBatAimbot() end)
+            end
+        end
+        
+        normalBtn.MouseButton1Click:Connect(function() selectedAimbotMode="Normal"; updateButtons() end)
+        bypassBtn.MouseButton1Click:Connect(function() selectedAimbotMode="Anti Bypass"; updateButtons() end)
+        
+        local mirrorBtn = Instance.new("TextButton", frame)
+        mirrorBtn.Size = UDim2.new(1,-20,0,26); mirrorBtn.Position=UDim2.new(0,10,0,90)
+        mirrorBtn.BackgroundColor3 = Color3.fromRGB(14,22,16); mirrorBtn.BorderSizePixel=0
+        mirrorBtn.Text="Mirror TP Down: "..(mirrorTPDownEnabled and "ON" or "OFF"); mirrorBtn.TextColor3=Color3.fromRGB(200,200,200)
+        mirrorBtn.Font=Enum.Font.GothamBold; mirrorBtn.TextSize=11
+        Instance.new("UICorner", mirrorBtn).CornerRadius=UDim.new(0,8)
+        Instance.new("UIStroke", mirrorBtn).Color=Color3.fromRGB(34,76,46)
+        mirrorBtn.MouseButton1Click:Connect(function()
+            mirrorTPDownEnabled = not mirrorTPDownEnabled
+            mirrorBtn.Text = "Mirror TP Down: "..(mirrorTPDownEnabled and "ON" or "OFF")
+            mirrorBtn.BackgroundColor3 = mirrorTPDownEnabled and Color3.fromRGB(30,132,73) or Color3.fromRGB(14,22,16)
+        end)
+        
+        _G.GreenGetAimbotMode = function() return selectedAimbotMode end
+        _G.GreenSetAimbotMode = function(m) if m=="Normal" or m=="Anti Bypass" then selectedAimbotMode=m; updateButtons() end end
+        
+        local dragging, dragStart, startPos
+        frame.InputBegan:Connect(function(inp)
+            if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+                dragging=true; dragStart=inp.Position; startPos=frame.Position
+                inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end)
+            end
+        end)
+        UIS.InputChanged:Connect(function(inp)
+            if dragging and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
+                local d = inp.Position - dragStart
+                frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+            end
+        end)
+        updateButtons()
+    end)
+
+    
     startAutoSteal()
     print("[Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
@@ -3745,103 +3740,4 @@ end
 Players.PlayerAdded:Connect(function(player)
     task.spawn(function() setupOtherPlayerSpeed(player) end)
 end)
-
--- ============================================================
--- EXTERNAL SELECTOR GUI (Ace style, with Mirror TP Down) - SAFE, does not touch Duels menu
--- ============================================================
-task.spawn(function()
-    task.wait(2)
-    local pg = LP:WaitForChild("PlayerGui")
-    local old = pg:FindFirstChild("AceModeSelector")
-    if old then old:Destroy() end
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "AceModeSelector"
-    gui.ResetOnSpawn = false
-    gui.Parent = pg
-    
-    local frame = Instance.new("Frame", gui)
-    frame.Size = UDim2.new(0, 220, 0, 130)
-    frame.Position = UDim2.new(0, 20, 0, 300)
-    frame.BackgroundColor3 = Color3.fromRGB(14,22,16)
-    frame.BorderSizePixel = 0
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
-    local st = Instance.new("UIStroke", frame); st.Color = Color3.fromRGB(34,76,46); st.Thickness=1
-    
-    local title = Instance.new("TextLabel", frame)
-    title.Size = UDim2.new(1,-10,0,24); title.Position=UDim2.new(0,10,0,6)
-    title.BackgroundTransparency=1; title.Text="AIMBOT MODE (Ace)"; title.TextColor3=Color3.fromRGB(100,255,130)
-    title.Font=Enum.Font.GothamBlack; title.TextSize=12; title.TextXAlignment=Enum.TextXAlignment.Left
-    
-    local modeLbl = Instance.new("TextLabel", frame)
-    modeLbl.Size = UDim2.new(1,-10,0,20); modeLbl.Position=UDim2.new(0,10,0,30)
-    modeLbl.BackgroundTransparency=1; modeLbl.Text="Current: "..selectedAimbotMode; modeLbl.TextColor3=Color3.fromRGB(200,255,200)
-    modeLbl.Font=Enum.Font.GothamBold; modeLbl.TextSize=11; modeLbl.TextXAlignment=Enum.TextXAlignment.Left
-    
-    local function makeBtn(txt, y, color)
-        local b = Instance.new("TextButton", frame)
-        b.Size = UDim2.new(0, 98, 0, 28); b.Position = UDim2.new(0, y, 0, 54)
-        b.BackgroundColor3 = color; b.Text=txt; b.TextColor3=Color3.new(1,1,1)
-        b.Font=Enum.Font.GothamBold; b.TextSize=11; b.BorderSizePixel=0
-        Instance.new("UICorner", b).CornerRadius=UDim.new(0,8)
-        return b
-    end
-    
-    local normalBtn = makeBtn("NORMAL", 10, Color3.fromRGB(30,132,73))
-    local bypassBtn = makeBtn("ANTI BYPASS", 112, Color3.fromRGB(30,36,32))
-    
-    local function updateButtons()
-        modeLbl.Text = "Current: "..selectedAimbotMode
-        if selectedAimbotMode == "Normal" then
-            normalBtn.BackgroundColor3 = Color3.fromRGB(30,132,73)
-            bypassBtn.BackgroundColor3 = Color3.fromRGB(30,36,32)
-        else
-            normalBtn.BackgroundColor3 = Color3.fromRGB(30,36,32)
-            bypassBtn.BackgroundColor3 = Color3.fromRGB(30,132,73)
-        end
-        -- restart if running
-        if State and State.batAimbotToggled then
-            pcall(function() stopBatAimbot() end)
-            task.wait(0.1)
-            pcall(function() startBatAimbot() end)
-        end
-    end
-    
-    normalBtn.MouseButton1Click:Connect(function() selectedAimbotMode="Normal"; updateButtons() end)
-    bypassBtn.MouseButton1Click:Connect(function() selectedAimbotMode="Anti Bypass"; updateButtons() end)
-    
-    -- Mirror TP Down toggle (works with both)
-    local mirrorBtn = Instance.new("TextButton", frame)
-    mirrorBtn.Size = UDim2.new(1,-20,0,26); mirrorBtn.Position=UDim2.new(0,10,0,90)
-    mirrorBtn.BackgroundColor3 = Color3.fromRGB(14,22,16); mirrorBtn.BorderSizePixel=0
-    mirrorBtn.Text="Mirror TP Down: OFF"; mirrorBtn.TextColor3=Color3.fromRGB(200,200,200)
-    mirrorBtn.Font=Enum.Font.GothamBold; mirrorBtn.TextSize=11
-    Instance.new("UICorner", mirrorBtn).CornerRadius=UDim.new(0,8)
-    Instance.new("UIStroke", mirrorBtn).Color=Color3.fromRGB(34,76,46)
-    mirrorBtn.MouseButton1Click:Connect(function()
-        mirrorTPDownEnabled = not mirrorTPDownEnabled
-        mirrorBtn.Text = "Mirror TP Down: "..(mirrorTPDownEnabled and "ON" or "OFF")
-        mirrorBtn.BackgroundColor3 = mirrorTPDownEnabled and Color3.fromRGB(30,132,73) or Color3.fromRGB(14,22,16)
-    end)
-    
-    _G.GreenGetAimbotMode = function() return selectedAimbotMode end
-    _G.GreenSetAimbotMode = function(m) if m=="Normal" or m=="Anti Bypass" then selectedAimbotMode=m; updateButtons() end end
-    
-    -- Draggable
-    local dragging, dragStart, startPos
-    frame.InputBegan:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
-            dragging=true; dragStart=inp.Position; startPos=frame.Position
-            inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end)
-        end
-    end)
-    game:GetService("UserInputService").InputChanged:Connect(function(inp)
-        if dragging and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
-            local d = inp.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-        end
-    end)
-    
-    updateButtons()
-end)
-
 end)()
