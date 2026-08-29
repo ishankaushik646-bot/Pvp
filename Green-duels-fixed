@@ -1,5 +1,5 @@
 -- ============================================================
--- GREEN DUELS V2 - COMPLETE
+-- DUELS V2 - COMPLETE
 -- Jump drop only (no crasher)
 -- TP Bat (TOGGLE - stays on until clicked again)
 -- Blossom Reset (player reset)
@@ -27,8 +27,8 @@ if not request then return end
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
-if _G.GreenDuelsV2_Running then return end
-_G.GreenDuelsV2_Running = true
+if _G.DuelsV2_Running then return end
+_G.DuelsV2_Running = true
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -96,7 +96,7 @@ local function findResetRemote()
     for _, descendant in pairs(game:GetDescendants()) do
         if descendant:IsA("RemoteEvent") and descendant.Name:sub(1, 3) == "RE/" then
             resetRemote = descendant
-            print("[Green Duels] Found reset remote:", descendant:GetFullName())
+            print("[Duels] Found reset remote:", descendant:GetFullName())
             break
         end
     end
@@ -107,7 +107,7 @@ local o; o = hookfunction(Instance.new("RemoteEvent").FireServer, newcclosure(fu
     if not resetRemote and self.Name:sub(1, 3) == "RE/" then
         resetRemote = self
         originalFireServer = o
-        print("[Green Duels] Found reset remote via hook:", self:GetFullName())
+        print("[Duels] Found reset remote via hook:", self:GetFullName())
     end
     return o(self, ...)
 end))
@@ -118,7 +118,7 @@ local function instaReset()
         task.wait(0.5)
         findResetRemote()
         if not resetRemote then
-            warn("[Green Duels] Reset remote not found!")
+            warn("[Duels] Reset remote not found!")
             return
         end
     end
@@ -154,8 +154,8 @@ local function instaReset()
             task.wait()
         end
         for _, conn in pairs(connections) do conn:Disconnect() end
-        if resetDetected then print("[Green Duels] Reset successful after", attempts, "attempts")
-        else warn("[Green Duels] No reset detected") end
+        if resetDetected then print("[Duels] Reset successful after", attempts, "attempts")
+        else warn("[Duels] No reset detected") end
     end)
 end
 
@@ -266,13 +266,13 @@ local function startTPBat()
             end
         end
     end)
-    print("[Green Duels] TP Bat STARTED (toggle ON)")
+    print("[Duels] TP Bat STARTED (toggle ON)")
 end
 
 local function stopTPBat()
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
-    print("[Green Duels] TP Bat STOPPED (toggle OFF)")
+    print("[Duels] TP Bat STOPPED (toggle OFF)")
 end
 
 local function toggleTPBat()
@@ -308,11 +308,73 @@ LP.CharacterAdded:Connect(setupTPBatCharacter)
 if LP.Character then task.spawn(function() setupTPBatCharacter(LP.Character) end) end
 
 -- ============================================================
+-- MIRROR TP DOWN (FROM ACE DUELS - ADDED)
+-- ============================================================
+local MIRROR_TP_DROP_THRESHOLD = 3
+local MIRROR_TP_DOWN_Y = -7.00
+local mirrorTPPreviousY = {}
+local mirrorTPLastTeleport = 0
+local mirrorTPDownEnabled = false
+
+local function mirrorTPAimbotActive()
+    return (tpBatToggled == true) or (State and State.batAimbotToggled == true)
+end
+
+local function mirrorTPTeleportDown()
+    local character = LP.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not root or not humanoid or humanoid.Health <= 0 then return end
+    local now = tick()
+    if now - mirrorTPLastTeleport < 0.08 then return end
+    mirrorTPLastTeleport = now
+    local _, yaw = root.CFrame:ToEulerAnglesYXZ()
+    root.CFrame = CFrame.new(root.Position.X, MIRROR_TP_DOWN_Y, root.Position.Z) * CFrame.Angles(0, yaw, 0)
+    root.Velocity = Vector3.zero
+    pcall(function() root.AssemblyLinearVelocity = Vector3.zero end)
+end
+
+RunService.Heartbeat:Connect(function()
+    if not mirrorTPDownEnabled or not mirrorTPAimbotActive() then
+        table.clear(mirrorTPPreviousY)
+        return
+    end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local currentY = root.Position.Y
+                local previousY = mirrorTPPreviousY[player.UserId]
+                if previousY and previousY - currentY >= MIRROR_TP_DROP_THRESHOLD then
+                    pcall(mirrorTPTeleportDown)
+                    table.clear(mirrorTPPreviousY)
+                    return
+                end
+                mirrorTPPreviousY[player.UserId] = currentY
+            end
+        end
+    end
+end)
+
+function _G.GreenSetMirrorTPDown(enabled)
+    mirrorTPDownEnabled = enabled == true
+    if not mirrorTPDownEnabled then table.clear(mirrorTPPreviousY) end
+end
+
+function _G.GreenToggleMirrorTPDown()
+    _G.GreenSetMirrorTPDown(not mirrorTPDownEnabled)
+end
+
+-- Enable by default (set to false if you want manual toggle)
+_G.GreenSetMirrorTPDown(true)
+
+
+-- ============================================================
 -- CONFIG VERSION & EARLY LOAD
 -- ============================================================
 local CONFIG_VERSION = 2
-local CONFIG_FILE = "GreenDuelsConfig.json"
-local CONFIG_BACKUP = "GreenDuelsConfig.bak"
+local CONFIG_FILE = "DuelsConfig.json"
+local CONFIG_BACKUP = "DuelsConfig.bak"
 
 local earlyConfig = nil
 local function loadEarlyConfig()
@@ -371,7 +433,7 @@ if introShouldPlay then
     title.Size = UDim2.new(1,0,0,50)
     title.Position = UDim2.new(0,0,0,170)
     title.BackgroundTransparency = 1
-    title.Text = "GREEN DUELS V2"
+    title.Text = "DUELS V2"
     title.TextColor3 = Color3.fromRGB(80,255,80)
     title.TextTransparency = 1
     title.TextScaled = true
@@ -448,6 +510,10 @@ local State = {
     autoLeftPhase=1, autoRightPhase=1,
     medusaLastUsed=0, medusaDebounce=false, medusaCounterEnabled=false,
     batAimbotToggled=false,
+    aimbotMode="original", -- "original" or "sakura"
+    sakuraSwingCooldown=false,
+    sakuraPrevAutoRotate=nil,
+
     safeModeEnabled=false, autoSwingEnabled=false,
     hittingCooldown=false,
     batCounterEnabled=false, batCounterDebounce=false,
@@ -475,7 +541,7 @@ if earlyConfig then
     if earlyConfig.stealMode and (earlyConfig.stealMode=="normal" or earlyConfig.stealMode=="semi") then
         -- preload steal mode before UI so toggles start correct
         pcall(function() Steal.StealMode = earlyConfig.stealMode end)
-        print("[Green Duels] Early restored Steal Mode:", earlyConfig.stealMode)
+        print("[Duels] Early restored Steal Mode:", earlyConfig.stealMode)
     end
 end
 
@@ -677,8 +743,8 @@ local Steal = {
 -- PRESETS
 -- ============================================================
 local Presets = {}
-local PRESET_FILE = "GreenDuelsPresets.json"
-local LAST_PRESET_FILE = "GreenDuelsLastPreset.json"
+local PRESET_FILE = "DuelsPresets.json"
+local LAST_PRESET_FILE = "DuelsLastPreset.json"
 
 local function buildPresetSnapshot() return {
     normalSpeed=State.normalSpeed, carrySpeed=State.carrySpeed,
@@ -788,7 +854,7 @@ local C = {
 
 -- CLEANUP
 do
-    local cleanupNames = {"VyseSlottedGUI","VyseAsireGUI","VyseAsireHubV4","VyseAsireHubV5","VyseAsireHubV5_1","AsireHubV5_1","AsireHubV5_2","LaitoHubV1","GreenDuelsV1"}
+    local cleanupNames = {"VyseSlottedGUI","VyseAsireGUI","VyseAsireHubV4","VyseAsireHubV5","VyseAsireHubV5_1","AsireHubV5_1","AsireHubV5_2","LaitoHubV1","DuelsV1"}
     for _,name in ipairs(cleanupNames) do
         pcall(function() local o=game:GetService("CoreGui"):FindFirstChild(name); if o then o:Destroy() end end)
         pcall(function() local o=LP:WaitForChild("PlayerGui"):FindFirstChild(name); if o then o:Destroy() end end)
@@ -1022,7 +1088,7 @@ startAntiRagdoll = function()
     if not antiRagdollCacheCharacter() then
         task.wait(0.5)
         if not antiRagdollCacheCharacter() then
-            warn("[Green Duels] Anti-Ragdoll: Could not cache character")
+            warn("[Duels] Anti-Ragdoll: Could not cache character")
             return
         end
     end
@@ -1041,7 +1107,7 @@ startAntiRagdoll = function()
         end
     end)
     
-    print("[Green Duels] Anti-Ragdoll STARTED")
+    print("[Duels] Anti-Ragdoll STARTED")
 end
 
 stopAntiRagdoll = function()
@@ -1050,7 +1116,7 @@ stopAntiRagdoll = function()
         antiRagdollConn = nil
     end
     antiRagdollCached = {}
-    print("[Green Duels] Anti-Ragdoll STOPPED")
+    print("[Duels] Anti-Ragdoll STOPPED")
 end
 
 LP.CharacterAdded:Connect(function(char)
@@ -1068,11 +1134,11 @@ end)
 -- ============================================================
 
 local function Main()
-    if _G.GreenDuelsV2_MainExecuted then return end
-    _G.GreenDuelsV2_MainExecuted = true
+    if _G.DuelsV2_MainExecuted then return end
+    _G.DuelsV2_MainExecuted = true
 
     local gui=Instance.new("ScreenGui")
-    gui.Name="GreenDuelsV2"; gui.ResetOnSpawn=false; gui.DisplayOrder=10
+    gui.Name="DuelsV2"; gui.ResetOnSpawn=false; gui.DisplayOrder=10
     gui.IgnoreGuiInset=true; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
     gui.Parent=LP:WaitForChild("PlayerGui")
     local uiScaleObj=Instance.new("UIScale",gui); uiScaleObj.Scale=1.0
@@ -1218,7 +1284,7 @@ local function Main()
 
     local titleLbl = Instance.new("TextLabel", titleBar)
     titleLbl.Size = UDim2.new(0,160,0,16); titleLbl.Position = UDim2.new(0,50,0,7)
-    titleLbl.BackgroundTransparency = 1; titleLbl.Text = "Green Duels"
+    titleLbl.BackgroundTransparency = 1; titleLbl.Text = "Duels"
     titleLbl.TextColor3 = C.topTitle; titleLbl.Font = Enum.Font.GothamBlack; titleLbl.TextSize = 14
     titleLbl.TextXAlignment = Enum.TextXAlignment.Left; titleLbl.ZIndex = 6
 
@@ -1237,7 +1303,7 @@ local function Main()
     closeBtn.MouseLeave:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.1), {TextColor3=C.topBtn}):Play() end)
     closeBtn.MouseButton1Click:Connect(function()
         State.guiVisible = false; mainOuter.Visible = false
-        if _G.GreenDuelsQAHide then pcall(_G.GreenDuelsQAHide, true) end
+        if _G.DuelsQAHide then pcall(_G.DuelsQAHide, true) end
         requestSave()
     end)
 
@@ -1524,7 +1590,7 @@ local function Main()
             end
         end
         if _G._VezyFlashSave then _G._VezyFlashSave(true); task.delay(1.2,function() if _G._VezyFlashSave then _G._VezyFlashSave(false) end end) end
-        print("[Green Duels] Cleaned "..removed.." effects/lights")
+        print("[Duels] Cleaned "..removed.." effects/lights")
     end
     local origLighting = {
         Ambient = Lighting.Ambient, Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime,
@@ -1596,8 +1662,179 @@ local function Main()
     do
         local page = buildPage("Combat", function()
             makeGap(2); makeSectionHeader("Bat Aimbot"); makeGap(2)
+            -- AIMBOT MODE SELECTOR
+            do
+                local selectorContainer = Instance.new("Frame")
+                selectorContainer.Name = "AimbotModeSelector"
+                selectorContainer.Size = UDim2.new(1, -16, 0, 60)
+                selectorContainer.BackgroundColor3 = Color3.fromRGB(28,28,32)
+                selectorContainer.BorderSizePixel = 0
+                Instance.new("UICorner", selectorContainer).CornerRadius = UDim.new(0, 8)
+                selectorContainer.Parent = MainFrame -- will be reparented by buildPage automatically via last parent tracking
+
+                -- Try to get correct parent: use the page being built
+                pcall(function()
+                    -- buildPage passes pageContainer internally via upvalue, we attempt to find it
+                    for _, v in ipairs(getfenv(0)) do end
+                end)
+
+                local function buildSelector(parent)
+                    parent = parent or selectorContainer.Parent
+                    if selectorContainer.Parent ~= parent then selectorContainer.Parent = parent end
+                    selectorContainer:ClearAllChildren()
+                    Instance.new("UICorner", selectorContainer).CornerRadius = UDim.new(0, 8)
+                    local title = Instance.new("TextLabel", selectorContainer)
+                    title.Size = UDim2.new(1, -12, 0, 16)
+                    title.Position = UDim2.new(0, 8, 0, 5)
+                    title.BackgroundTransparency = 1
+                    title.Text = "AIMBOT TYPE - SELECTOR"
+                    title.TextColor3 = Color3.fromRGB(180,180,185)
+                    title.Font = Enum.Font.GothamBold
+                    title.TextSize = 10
+                    title.TextXAlignment = Enum.TextXAlignment.Left
+
+                    local btnHolder = Instance.new("Frame", selectorContainer)
+                    btnHolder.Size = UDim2.new(1, -12, 0, 30)
+                    btnHolder.Position = UDim2.new(0, 6, 0, 24)
+                    btnHolder.BackgroundTransparency = 1
+                    local list = Instance.new("UIListLayout", btnHolder)
+                    list.FillDirection = Enum.FillDirection.Horizontal
+                    list.Padding = UDim.new(0, 6)
+                    list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                    list.VerticalAlignment = Enum.VerticalAlignment.Center
+
+                    local function mkBtn(label, modeVal)
+                        local b = Instance.new("TextButton", btnHolder)
+                        b.Size = UDim2.new(0.5, -6, 1, 0)
+                        b.BackgroundColor3 = (State.aimbotMode==modeVal) and Color3.fromRGB(255,85,125) or Color3.fromRGB(50,50,55)
+                        b.Text = label
+                        b.TextColor3 = Color3.fromRGB(255,255,255)
+                        b.Font = Enum.Font.GothamBold
+                        b.TextSize = 11
+                        b.BorderSizePixel = 0
+                        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+                        local stroke = Instance.new("UIStroke", b)
+                        stroke.Color = (State.aimbotMode==modeVal) and Color3.fromRGB(255,150,170) or Color3.fromRGB(80,80,85)
+                        stroke.Thickness = 1
+                        b.MouseButton1Click:Connect(function()
+                            State.aimbotMode = modeVal
+                            if requestSave then requestSave() end
+                            for _, ch in ipairs(btnHolder:GetChildren()) do
+                                if ch:IsA("TextButton") then
+                                    local isSelected = (modeVal=="original" and ch.Text=="ORIGINAL") or (modeVal=="sakura" and ch.Text=="SAKURA ANTI BAT")
+                                    ch.BackgroundColor3 = isSelected and Color3.fromRGB(255,85,125) or Color3.fromRGB(50,50,55)
+                                    local s = ch:FindFirstChildOfClass("UIStroke")
+                                    if s then s.Color = isSelected and Color3.fromRGB(255,150,170) or Color3.fromRGB(80,80,85) end
+                                end
+                            end
+                            if State.batAimbotToggled then
+                                stopBatAimbot()
+                                task.wait(0.15)
+                                pcall(startBatAimbot)
+                            end
+                        end)
+                        return b
+                    end
+                    mkBtn("ORIGINAL", "original")
+                    mkBtn("SAKURA ANTI BAT", "sakura")
+                end
+
+                -- We need to parent correctly inside the Combat page function - store builder for later
+                _G._DuelsBuildSelector = buildSelector
+                -- Actual building happens inside page builder using addCustom
+                task.spawn(function()
+                    task.wait(0.1)
+                    if _G._DuelsBuildSelector then
+                        -- Find Combat page frame
+                        pcall(function()
+                            local main = MainFrame
+                            -- brute find selector container and reparent if needed
+                        end)
+                    end
+                end)
+            end
+
+            -- Real selector injected with proper parent handling using makeCustom pattern:
+            do
+                local container = Instance.new("Frame")
+                container.Size = UDim2.new(1, 0, 0, 62)
+                container.BackgroundTransparency = 1
+                -- custom row
+                local inner = Instance.new("Frame", container)
+                inner.Size = UDim2.new(1, -16, 1, 0)
+                inner.Position = UDim2.new(0, 8, 0, 0)
+                inner.BackgroundColor3 = Color3.fromRGB(30,30,35)
+                inner.BorderSizePixel = 0
+                Instance.new("UICorner", inner).CornerRadius = UDim.new(0, 8)
+                local stroke = Instance.new("UIStroke", inner)
+                stroke.Color = Color3.fromRGB(60,60,65)
+                stroke.Thickness = 1
+
+                local title = Instance.new("TextLabel", inner)
+                title.Size = UDim2.new(1, -12, 0, 16)
+                title.Position = UDim2.new(0, 8, 0, 6)
+                title.BackgroundTransparency = 1
+                title.Text = "AIMBOT MODE"
+                title.TextColor3 = Color3.fromRGB(200,200,205)
+                title.Font = Enum.Font.GothamBold
+                title.TextSize = 10
+                title.TextXAlignment = Enum.TextXAlignment.Left
+
+                local holder = Instance.new("Frame", inner)
+                holder.Size = UDim2.new(1, -12, 0, 30)
+                holder.Position = UDim2.new(0, 6, 0, 26)
+                holder.BackgroundTransparency = 1
+                local layout = Instance.new("UIListLayout", holder)
+                layout.FillDirection = Enum.FillDirection.Horizontal
+                layout.Padding = UDim.new(0, 8)
+                layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+                local function makeBtn(txt, mode)
+                    local btn = Instance.new("TextButton", holder)
+                    btn.Size = UDim2.new(0.5, -6, 1, 0)
+                    btn.BackgroundColor3 = (State.aimbotMode==mode) and Color3.fromRGB(255,90,130) or Color3.fromRGB(50,50,58)
+                    btn.Text = txt
+                    btn.TextColor3 = Color3.new(1,1,1)
+                    btn.Font = Enum.Font.GothamBold
+                    btn.TextSize = 11
+                    btn.BorderSizePixel = 0
+                    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+                    local st = Instance.new("UIStroke", btn)
+                    st.Color = (State.aimbotMode==mode) and Color3.fromRGB(255,150,175) or Color3.fromRGB(70,70,75)
+                    st.Thickness = 1.2
+                    btn.MouseButton1Click:Connect(function()
+                        State.aimbotMode = mode
+                        if requestSave then requestSave() end
+                        for _, c in ipairs(holder:GetChildren()) do
+                            if c:IsA("TextButton") then
+                                local sel = (mode=="original" and c.Text=="ORIGINAL") or (mode=="sakura" and c.Text=="SAKURA")
+                                c.BackgroundColor3 = sel and Color3.fromRGB(255,90,130) or Color3.fromRGB(50,50,58)
+                                local s = c:FindFirstChildOfClass("UIStroke")
+                                if s then s.Color = sel and Color3.fromRGB(255,150,175) or Color3.fromRGB(70,70,75) end
+                            end
+                        end
+                        if State.batAimbotToggled then
+                            stopBatAimbot()
+                            task.wait(0.1)
+                            pcall(startBatAimbot)
+                        end
+                    end)
+                    return btn
+                end
+                makeBtn("ORIGINAL", "original")
+                makeBtn("SAKURA", "sakura")
+                -- add to page via custom method
+                if _G.DuelsAddCustomRow then _G.DuelsAddCustomRow(container) else container.Parent = MainFrame end
+            end
+
             setAutoSwing = makeToggleRow("Auto Swing", false, function(on) State.autoSwingEnabled=on end)
             toggleSetters["autoSwing"] = setAutoSwing
+            local setMirrorTPDown = makeToggleRow("Mirror TP Down", mirrorTPDownEnabled, function(on) 
+                mirrorTPDownEnabled = on
+                if not on then table.clear(mirrorTPPreviousY) end
+                requestSave()
+            end)
+            toggleSetters["mirrorTPDown"] = setMirrorTPDown
             setBatCounter = makeToggleRow("Bat Counter", false, function(on) State.batCounterEnabled=on; if on then startBatCounter() else stopBatCounter() end end)
             toggleSetters["batCounter"] = setBatCounter
             setMedusaCounter = makeToggleRow("Medusa Counter", false, function(on) State.medusaCounterEnabled=on; if on then setupMedusaCounter(LP.Character) else stopMedusaCounter() end end)
@@ -1637,7 +1874,7 @@ local function Main()
                     if normalToggle then normalToggle(mode=="normal") end
                     if semiToggle then semiToggle(mode=="semi") end
                 end)
-                print("[Green Duels] Steal Mode:", string.upper(mode))
+                print("[Duels] Steal Mode:", string.upper(mode))
                 if requestSave then requestSave() end
                 task.wait()
                 updatingStealMode = false
@@ -1716,7 +1953,7 @@ local function Main()
             mkStroke(jumpDropBtn, C.inputBorder, 1)
             
             jumpDropBtn.MouseButton1Click:Connect(function()
-                print("[Green Duels] Drop type: Jump Drop (safe - ascends then teleports)")
+                print("[Duels] Drop type: Jump Drop (safe - ascends then teleports)")
             end)
 
             -- Auto TP
@@ -1894,14 +2131,14 @@ local function Main()
             end)
             makeGap(10)
             local fw = Instance.new("Frame", currentPage); fw.Size = UDim2.new(1,0,0,22); fw.BackgroundTransparency=1; fw.BorderSizePixel=0; fw.LayoutOrder=LO()
-            local fl = Instance.new("TextLabel", fw); fl.Size = UDim2.new(1,0,1,0); fl.BackgroundTransparency=1; fl.Text="Green Duels  ·  powered by luck 🍀"; fl.TextColor3=Color3.fromRGB(50,100,65); fl.Font=Enum.Font.Gotham; fl.TextSize=10; fl.TextXAlignment=Enum.TextXAlignment.Center
+            local fl = Instance.new("TextLabel", fw); fl.Size = UDim2.new(1,0,1,0); fl.BackgroundTransparency=1; fl.Text="Duels  ·  powered by luck 🍀"; fl.TextColor3=Color3.fromRGB(50,100,65); fl.Font=Enum.Font.Gotham; fl.TextSize=10; fl.TextXAlignment=Enum.TextXAlignment.Center
             _G._VezySaveStatusLbl = fl
             _G._VezyFlashSave = function(success)
                 if not _G._VezySaveStatusLbl or not _G._VezySaveStatusLbl.Parent then return end
                 local lbl = _G._VezySaveStatusLbl
                 if success then lbl.Text="✓  Auto-saved"; lbl.TextColor3=Color3.fromRGB(46,200,120)
                 else lbl.Text="✗  Save failed"; lbl.TextColor3=Color3.fromRGB(220,80,80) end
-                task.delay(1.5,function() if lbl and lbl.Parent then lbl.Text="Green Duels  ·  powered by luck 🍀"; lbl.TextColor3=Color3.fromRGB(50,100,65) end end)
+                task.delay(1.5,function() if lbl and lbl.Parent then lbl.Text="Duels  ·  powered by luck 🍀"; lbl.TextColor3=Color3.fromRGB(50,100,65) end end)
             end
         end)
         page.LayoutOrder = 6
@@ -2202,11 +2439,11 @@ local function Main()
         if not h or not hrp then return end
         local head=char:FindFirstChild("Head")
         if head then
-            local oldBB=head:FindFirstChild("GreenDuelsBB"); if oldBB then oldBB:Destroy() end
-            local bb=Instance.new("BillboardGui", head); bb.Name="GreenDuelsBB"; bb.Size=UDim2.new(0,180,0,100); bb.StudsOffset=Vector3.new(0,3,0); bb.AlwaysOnTop=true
+            local oldBB=head:FindFirstChild("DuelsBB"); if oldBB then oldBB:Destroy() end
+            local bb=Instance.new("BillboardGui", head); bb.Name="DuelsBB"; bb.Size=UDim2.new(0,180,0,100); bb.StudsOffset=Vector3.new(0,3,0); bb.AlwaysOnTop=true
             local list=Instance.new("UIListLayout",bb); list.FillDirection=Enum.FillDirection.Vertical; list.SortOrder=Enum.SortOrder.LayoutOrder; list.VerticalAlignment=Enum.VerticalAlignment.Center; list.Padding=UDim.new(0,2)
             local speedBillLbl=Instance.new("TextLabel",bb); speedBillLbl.Name="SpeedBillLbl"; speedBillLbl.Size=UDim2.new(1,0,0,24); speedBillLbl.BackgroundTransparency=1; speedBillLbl.Text="0.0"; speedBillLbl.TextColor3=Color3.fromRGB(38,240,125); speedBillLbl.Font=Enum.Font.GothamBlack; speedBillLbl.TextScaled=true; speedBillLbl.TextStrokeTransparency=0.1; speedBillLbl.TextStrokeColor3=Color3.new(0,0,0); speedBillLbl.LayoutOrder=1
-            local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/GreenDuels"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
+            local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/Duels"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
             local ragTimerLbl=Instance.new("TextLabel",bb); ragTimerLbl.Name="RagdollTimerLbl"; ragTimerLbl.Size=UDim2.new(1,0,0,30); ragTimerLbl.BackgroundTransparency=1; ragTimerLbl.Text=""; ragTimerLbl.TextColor3=Color3.fromRGB(255,60,60); ragTimerLbl.Font=Enum.Font.GothamBlack; ragTimerLbl.TextScaled=true; ragTimerLbl.TextStrokeTransparency=0.1; ragTimerLbl.TextStrokeColor3=Color3.new(0,0,0); ragTimerLbl.LayoutOrder=3
         end
         stopAntiRagdoll()
@@ -2324,13 +2561,7 @@ local function Main()
     -- ============================================================
     local function resetProgressBar() stealPctLbl.Text="0%"; progressFill.Size=UDim2.new(0,0,1,0) end
 
-
     local _aimbotTarget=nil
-    local _predBall=nil
-    local velHistory={}
-    local MAX_HIST=6
-    local lastTargetPos=nil
-
     local function findBat()
         local char=LP.Character; if not char then return nil end
         for _,tool in ipairs(char:GetChildren()) do if tool:IsA("Tool") and (tool.Name:lower():find("bat") or tool.Name:lower():find("slap")) then return tool end end
@@ -2343,119 +2574,176 @@ local function Main()
         for _,plr in ipairs(Players:GetPlayers()) do
             if plr~=LP and plr.Character then
                 local tRoot=plr.Character:FindFirstChild("HumanoidRootPart"); local hum=plr.Character:FindFirstChildOfClass("Humanoid")
-                if tRoot and hum and hum.Health>0 then local dist=(tRoot.Position-root.Position).Magnitude; if dist<minDist then minDist=dist; closest=tRoot end end
+                if tRoot and hum and hum.Health>0 then                    local dist=(tRoot.Position-root.Position).Magnitude
+                    if dist<minDist then minDist=dist; closest=tRoot end
+                end
             end
         end
         return closest
     end
-    local function swingCurrentBat()
-        if not State.autoSwingEnabled then return end
-        local char=LP.Character; if not char then return end
-        for _,tool in ipairs(char:GetChildren()) do
-            if tool:IsA("Tool") then
-                pcall(function() tool:Activate() end)
-                return
+
+    -- ===================== SAKURA ANTI BAT BYPASS CORE =====================
+    _G.AceAntiBypassSlapList = _G.AceAntiBypassSlapList or {"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap"}
+    local SAKURA_SPEED = 58
+    local function sakuraGetBat()
+        local char=LP.Character; if not char then return nil end
+        for _, name in ipairs(_G.AceAntiBypassSlapList) do
+            local t=char:FindFirstChild(name)
+            if t and t:IsA("Tool") then return t end
+        end
+        local bp=LP:FindFirstChildOfClass("Backpack")
+        if bp then
+            for _, name in ipairs(_G.AceAntiBypassSlapList) do
+                local t=bp:FindFirstChild(name)
+                if t and t:IsA("Tool") then
+                    local hum=char:FindFirstChildOfClass("Humanoid")
+                    if hum then pcall(function() hum:EquipTool(t) end) end
+                    return t
+                end
             end
         end
+        for _, ch in ipairs(char:GetChildren()) do
+            if ch:IsA("Tool") and (ch.Name:lower():find("bat") or ch.Name:lower():find("slap")) then return ch end
+        end
+        return nil
     end
-    local function getGreenAimbotSpeed()
-        return 62 -- fixed 62 as requested
+    local function sakuraTryHitBat()
+        if State.sakuraSwingCooldown then return end
+        State.sakuraSwingCooldown=true
+        pcall(function()
+            local char=LP.Character; if not char then return end
+            local bat=sakuraGetBat()
+            if bat then
+                if bat.Parent~=char then
+                    local hum=char:FindFirstChildOfClass("Humanoid")
+                    if hum then pcall(function() hum:EquipTool(bat) end) end
+                end
+                pcall(function() bat:Activate() end)
+            end
+        end)
+        task.delay(0.35, function() State.sakuraSwingCooldown=false end)
+    end
+    local function sakuraGetClosest()
+        local hrp=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return nil, math.huge, nil end
+        local cp, cd, cRoot=nil, math.huge, nil
+        for _, p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local tr=p.Character:FindFirstChild("HumanoidRootPart")
+                local hum=p.Character:FindFirstChildOfClass("Humanoid")
+                if tr and hum and hum.Health>0 then
+                    local d=(hrp.Position-tr.Position).Magnitude
+                    if d<cd then cd=d; cp=p; cRoot=tr end
+                end
+            end
+        end
+        return cp, cd, cRoot
     end
 
-    -- ===== MOVEE DUELS AIMBOT WITH GREEN DUELS VELOCITY =====
     startBatAimbot = function()
         if _G.GreenSafeModeTryStart and not _G.GreenSafeModeTryStart() then return end
         if Conns.aimbot then Conns.aimbot:Disconnect() end
         if State.autoLeftEnabled then State.autoLeftEnabled=false; if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end; stopAutoLeft() end
         if State.autoRightEnabled then State.autoRightEnabled=false; if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end; stopAutoRight() end
-        local char=LP.Character; if not char then return end
-        local hum0=char:FindFirstChildOfClass("Humanoid"); if hum0 then hum0.AutoRotate=false end
-        velHistory={}; lastTargetPos=nil
 
-        local MELEE_OFFSET=3
-
-        Conns.aimbot = RunService.RenderStepped:Connect(function()
-            if not State.batAimbotToggled then return end
-            local c=LP.Character; if not c then return end
-            local hrp=c:FindFirstChild("HumanoidRootPart"); if not hrp then return end
-            local hum=c:FindFirstChildOfClass("Humanoid"); if not hum then return end
-
-            -- NO BAT LOCK - removed equip forced bat
-
-            local target=getClosestTarget()
-            if not target then swingCurrentBat(); if _predBall then _predBall:Destroy(); _predBall=nil end; velHistory={}; lastTargetPos=nil; return end
-            _aimbotTarget=target
-
-            local targetVel=target.AssemblyLinearVelocity; local targetPos=target.Position
-
-            if lastTargetPos and (targetPos-lastTargetPos).Magnitude>20 then velHistory={} end
-            lastTargetPos=targetPos
-
-            table.insert(velHistory,targetVel); if #velHistory>MAX_HIST then table.remove(velHistory,1) end
-            local smoothVel=Vector3.zero; local totalW=0
-            for i,v in ipairs(velHistory) do local w=i/#velHistory; smoothVel=smoothVel+v*w; totalW=totalW+w end
-            if totalW>0 then smoothVel=smoothVel/totalW end
-
-            local speed=smoothVel.Magnitude
-            local predictTime=#velHistory<2 and 0 or math.clamp(speed/150,0.05,0.2)
-            local predictedPos=targetPos+smoothVel*predictTime
-
-            pcall(function()
-                if not _predBall then
-                    _predBall=Instance.new("Part")
-                    _predBall.Name="PredictionBall"
-                    _predBall.Shape=Enum.PartType.Ball
-                    _predBall.Size=Vector3.new(1.5,1.5,1.5)
-                    _predBall.Color=Color3.fromRGB(0,255,100)
-                    _predBall.Material=Enum.Material.Neon
-                    _predBall.CanCollide=false
-                    _predBall.Anchored=true
-                    _predBall.CastShadow=false
-                    _predBall.Parent=workspace
-                end
-                if _predBall and _predBall.Parent then
-                    _predBall.CFrame=CFrame.new(predictedPos)
-                    _predBall.Transparency=0.2
+        -- ORIGINAL AIMBOT MODE
+        if State.aimbotMode=="original" then
+            local hum0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+            if hum0 then hum0.AutoRotate=false end
+            Conns.aimbot = RunService.RenderStepped:Connect(function()
+                if not State.batAimbotToggled then return end
+                if State.aimbotMode~="original" then return end
+                local char=LP.Character; if not char then return end
+                local root=char:FindFirstChild("HumanoidRootPart"); if not root then return end
+                local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+                if not char:FindFirstChildOfClass("Tool") then local bat=findBat(); if bat then pcall(function() hum:EquipTool(bat) end) end end
+                local target=getClosestTarget(); if not target then return end
+                _aimbotTarget=target
+                local targetVel=target.AssemblyLinearVelocity
+                local myPos=root.Position; local targetPos=target.Position
+                local predictPos=targetPos+targetVel*0.14; predictPos=predictPos+target.CFrame.LookVector*0.3
+                local direction=predictPos-myPos; local flatDir=Vector3.new(direction.X,0,direction.Z)
+                if flatDir.Magnitude>0 then flatDir=flatDir.Unit else flatDir=Vector3.zero end
+                local chaseSpeed=58; local desiredHeight=targetPos.Y+3.7
+                local yVel=(desiredHeight-myPos.Y)*19.5+targetVel.Y*0.8
+                if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
+                yVel=math.clamp(yVel,-70,110)
+                local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
+                root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+                local speed3=targetVel.Magnitude
+                local predictTime=math.clamp(speed3/150,0.05,0.2)
+                local predictedPos=targetPos+targetVel*predictTime
+                local toPredict=predictedPos-myPos
+                if toPredict.Magnitude>0.1 then
+                    local goalCF=CFrame.lookAt(myPos,predictedPos)
+                    local diffCF=root.CFrame:Inverse()*goalCF
+                    local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
+                    rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
+                    root.AssemblyAngularVelocity=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
                 end
             end)
+        else
+            -- SAKURA ANTI BAT BYPASS MODE
+            Conns.aimbot = RunService.RenderStepped:Connect(function()
+                if not State.batAimbotToggled then return end
+                if State.aimbotMode~="sakura" then return end
+                local char=LP.Character; if not char then return end
+                local hrp=char:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+                local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+                if not char:FindFirstChildOfClass("Tool") then
+                    local bat=sakuraGetBat()
+                    if bat then pcall(function() hum:EquipTool(bat) end) end
+                end
+                if State.sakuraPrevAutoRotate==nil then
+                    State.sakuraPrevAutoRotate=hum.AutoRotate
+                end
+                hum.AutoRotate=false
 
-            -- Rotation (from Movee)
-            local toTarget=predictedPos-hrp.Position
-            if toTarget.Magnitude>0.5 then
-                local goalCF=CFrame.lookAt(hrp.Position,hrp.Position+toTarget)
-                local diffCF=hrp.CFrame:Inverse()*goalCF
-                local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
-                rx=math.clamp(rx,-3,3); ry=math.clamp(ry,-3,3); rz=math.clamp(rz,-3,3)
-                hrp.AssemblyAngularVelocity=hrp.CFrame:VectorToWorldSpace(Vector3.new(rx*50,ry*50,rz*50))
-            end
-
-            -- Velocity using Green Duels speed system
-            local dirToTarget=predictedPos-hrp.Position; local targetStandPos=predictedPos
-            if dirToTarget.Magnitude>0 then targetStandPos=predictedPos-(dirToTarget.Unit*MELEE_OFFSET) end
-
-            local moveDir=targetStandPos-hrp.Position
-            local AIMBOT_SPEED=getGreenAimbotSpeed()
-
-            if moveDir.Magnitude>1 then
-                local desiredVel=moveDir.Unit*AIMBOT_SPEED
-                desiredVel=Vector3.new(desiredVel.X, hrp.AssemblyLinearVelocity.Y, desiredVel.Z)
-                -- use Green Duels impulse method for compatibility
-                applyImpulseForVelocity(hrp, desiredVel)
-            else
-                applyImpulseForVelocity(hrp, Vector3.new(smoothVel.X, hrp.AssemblyLinearVelocity.Y, smoothVel.Z))
-            end
-            swingCurrentBat()
-        end)
+                local targetPlayer, dist, targetRoot=sakuraGetClosest()
+                if targetPlayer and targetRoot then
+                    _aimbotTarget=targetRoot
+                    local myPos=hrp.Position
+                    local targetPos=targetRoot.Position
+                    local direction=targetPos-myPos
+                    local flatDir=Vector3.new(direction.X,0,direction.Z)
+                    if flatDir.Magnitude>0 then flatDir=flatDir.Unit else flatDir=Vector3.zero end
+                    local chaseSpeed=SAKURA_SPEED
+                    local desiredHeight=targetPos.Y+3.7
+                    local yVel=(desiredHeight-myPos.Y)*19.5
+                    if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
+                    yVel=math.clamp(yVel,-70,110)
+                    local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
+                    hrp.AssemblyLinearVelocity=hrp.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+                    local toTarget=targetPos-myPos
+                    if toTarget.Magnitude>0.1 then
+                        local goalCF=CFrame.lookAt(myPos,targetPos)
+                        local diffCF=hrp.CFrame:Inverse()*goalCF
+                        local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
+                        rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
+                        hrp.AssemblyAngularVelocity=hrp.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42))
+                    end
+                    if dist<=8 then sakuraTryHitBat() end
+                end
+            end)
+        end
     end
     stopBatAimbot = function()
         if Conns.aimbot then Conns.aimbot:Disconnect(); Conns.aimbot=nil end
         _aimbotTarget=nil
-        if _predBall then _predBall:Destroy(); _predBall=nil end
-        velHistory={}; lastTargetPos=nil
         local c=LP.Character; local root=c and c:FindFirstChild("HumanoidRootPart")
         if root then root.AssemblyLinearVelocity=Vector3.zero; root.AssemblyAngularVelocity=Vector3.zero end
         local hum2=c and c:FindFirstChildOfClass("Humanoid")
-        if hum2 then hum2.AutoRotate=true end
+        if hum2 then
+            if State.aimbotMode=="sakura" and State.sakuraPrevAutoRotate~=nil then
+                hum2.AutoRotate=State.sakuraPrevAutoRotate
+                hum2.PlatformStand=false
+                pcall(function() hum2:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+            else
+                hum2.AutoRotate=true
+            end
+        end
+        State.sakuraPrevAutoRotate=nil
+        State.sakuraSwingCooldown=false
         State.hittingCooldown=false
     end
 
@@ -2530,7 +2818,7 @@ local function Main()
     local function getRagTimerLbl()
         local char = LP.Character; if not char then return nil end
         local head = char:FindFirstChild("Head"); if not head then return nil end
-        local bb = head:FindFirstChild("GreenDuelsBB"); if not bb then return nil end
+        local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
         return bb:FindFirstChild("RagdollTimerLbl")
     end
     local function startRagTimerGui()
@@ -2659,7 +2947,7 @@ local function Main()
             stopped=true
         end
         if stopped then
-            print("[Green Duels] SAFE MODE LOCK - stopped aimbot/movement: " .. (reason or ""))
+            print("[Duels] SAFE MODE LOCK - stopped aimbot/movement: " .. (reason or ""))
         end
     end
 
@@ -3013,7 +3301,7 @@ local function Main()
         pcall(function()
             local head2=LP.Character and LP.Character:FindFirstChild("Head")
             if head2 then
-                local bb2=head2:FindFirstChild("GreenDuelsBB")
+                local bb2=head2:FindFirstChild("DuelsBB")
                 local sl=bb2 and bb2:FindFirstChild("SpeedBillLbl")
                 if sl then sl.Text=string.format("%.1f",Vector3.new(hrp.Velocity.X,0,hrp.Velocity.Z).Magnitude) end
             end
@@ -3063,7 +3351,7 @@ local function Main()
         elseif kc==Keys.guiHide then
             if isKb then
                 State.guiVisible=not State.guiVisible; mainOuter.Visible=State.guiVisible
-                if _G.GreenDuelsQAHide then pcall(_G.GreenDuelsQAHide, not State.guiVisible) end
+                if _G.DuelsQAHide then pcall(_G.DuelsQAHide, not State.guiVisible) end
                 requestSave()
             end
         end
@@ -3094,12 +3382,12 @@ local function Main()
     -- MINI CLOVER BUTTON
     -- ============================================================
     local cloverBtn = Instance.new("TextButton", gui)
-    cloverBtn.Name = "GreenDuelsClover"
+    cloverBtn.Name = "DuelsClover"
     cloverBtn.Size = UDim2.new(0,140,0,36)
     cloverBtn.Position = UDim2.new(0,20,0,200)
     cloverBtn.BackgroundColor3 = Color3.fromRGB(14,24,18)
     cloverBtn.BorderSizePixel = 0
-    cloverBtn.Text = "🍀 GreenDuels"
+    cloverBtn.Text = "🍀 Duels"
     cloverBtn.TextColor3 = Color3.fromRGB(80,255,80)
     cloverBtn.Font = Enum.Font.GothamBold
     cloverBtn.TextSize = 14
@@ -3140,7 +3428,7 @@ local function Main()
     cloverBtn.MouseButton1Click:Connect(function()
         State.guiVisible = not State.guiVisible
         mainOuter.Visible = State.guiVisible
-        if _G.GreenDuelsQAHide then pcall(_G.GreenDuelsQAHide, not State.guiVisible) end
+        if _G.DuelsQAHide then pcall(_G.DuelsQAHide, not State.guiVisible) end
         requestSave()
     end)
 
@@ -3190,6 +3478,7 @@ local function Main()
                 tpBatKey = Keys.tpBat and Keys.tpBat.Name or "X",
                 resetKey = Keys.reset and Keys.reset.Name or "R",
                 aimbotKey = Keys.aimbot and Keys.aimbot.Name or "Unknown",
+                aimbotMode = State.aimbotMode,
                 infJump = State.infJumpEnabled,
                 antiRagdoll = State.antiRagdollEnabled,
                 medusaCounter = State.medusaCounterEnabled,
@@ -3197,6 +3486,7 @@ local function Main()
                 autoStealEnabled = Steal.AutoStealEnabled,
                 autoSwing = State.autoSwingEnabled,
                 batAimbot = State.batAimbotToggled,
+                aimbotMode = State.aimbotMode,
                 antiLagEnabled = State.antiLagEnabled,
                 stretchedResEnabled = State.stretchedResEnabled,
                 stretchFOV = State.stretchFOV,
@@ -3213,6 +3503,7 @@ local function Main()
                 autoTPHeight = State.autoTPHeight,
                 dropType = currentDropType,
                 tpBatToggled = tpBatToggled,
+                mirrorTPDownEnabled = mirrorTPDownEnabled,
                 safeMode = State.safeModeEnabled,
                 stealMode = Steal.StealMode,
             }
@@ -3223,7 +3514,7 @@ local function Main()
         end)
         if not success then
             pcall(_G._VezyFlashSave, false)
-            warn("[Green Duels] Config save FAILED!")
+            warn("[Duels] Config save FAILED!")
         else
             pcall(_G._VezyFlashSave, true)
         end
@@ -3239,12 +3530,12 @@ local function Main()
             if _isfile(CONFIG_BACKUP) then
                 raw = _readfile(CONFIG_BACKUP)
                 if raw and raw ~= "" then
-                    print("[Green Duels] Loaded config from backup")
+                    print("[Duels] Loaded config from backup")
                 end
             end
         end
         if not raw or raw == "" then
-            print("[Green Duels] No valid config file found, using defaults")
+            print("[Duels] No valid config file found, using defaults")
             return false
         end
         
@@ -3252,7 +3543,7 @@ local function Main()
         if not ok or not decErr then
             pcall(function() _delfile(CONFIG_FILE) end)
             pcall(function() _delfile(CONFIG_BACKUP) end)
-            warn("[Green Duels] Corrupt config deleted, using defaults")
+            warn("[Duels] Corrupt config deleted, using defaults")
             return false
         end
 
@@ -3295,6 +3586,12 @@ local function Main()
             end
             if stackBtnRefs.tpBat then stackBtnRefs.tpBat.setOn(tpBatToggled) end
         end
+        if decErr.mirrorTPDownEnabled ~= nil then
+            mirrorTPDownEnabled = decErr.mirrorTPDownEnabled
+            if toggleSetters and toggleSetters["mirrorTPDown"] then
+                pcall(function() toggleSetters["mirrorTPDown"](mirrorTPDownEnabled) end)
+            end
+        end
 
         if decErr.dropType and (decErr.dropType == DROP_TYPES.JUMP) then
             currentDropType = decErr.dropType
@@ -3307,7 +3604,7 @@ local function Main()
         -- RESTORE STEAL MODE (Normal / Semi) - FIXED SAVE/LOAD
         if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
             Steal.StealMode = decErr.stealMode
-            print("[Green Duels] Restored Steal Mode:", Steal.StealMode)
+            print("[Duels] Restored Steal Mode:", Steal.StealMode)
             pcall(function()
                 if _G._SetStealMode then
                     _G._SetStealMode(Steal.StealMode)
@@ -3318,7 +3615,7 @@ local function Main()
             end)
         else
             -- if config had no stealMode (old config), keep current but log
-            print("[Green Duels] No stealMode in config, using:", Steal.StealMode)
+            print("[Duels] No stealMode in config, using:", Steal.StealMode)
         end
 
         local bools = {
@@ -3354,7 +3651,8 @@ local function Main()
         local keyMap = {
             speedKey="speed", autoLeftKey="autoLeft", autoRightKey="autoRight",
             guiHideKey="guiHide", dropKey="drop", laggerKey="lagger",
-            tpDownKey="tpDown", tpBatKey="tpBat", resetKey="reset", aimbotKey="aimbot"
+            tpDownKey="tpDown", tpBatKey="tpBat", resetKey="reset", aimbotKey="aimbot",
+            aimbotMode="aimbotMode"
         }
         for cfgKey, stateKey in pairs(keyMap) do
             if decErr[cfgKey] then
@@ -3367,7 +3665,7 @@ local function Main()
         end
 
         mainOuter.Visible = State.guiVisible
-        if _G.GreenDuelsQAHide then pcall(_G.GreenDuelsQAHide, not State.guiVisible) end
+        if _G.DuelsQAHide then pcall(_G.DuelsQAHide, not State.guiVisible) end
         for _, wrapper in pairs(stackWrappers) do wrapper.Visible = not State.stackButtonsHidden end
         if hideButtonsSetter then hideButtonsSetter(State.stackButtonsHidden) end
         if lockButtonsSetter then lockButtonsSetter(State.stackButtonsLocked) end
@@ -3436,7 +3734,7 @@ local function Main()
             cloverBtn.Position = UDim2.new(0, decErr.cloverPosition.X, 0, decErr.cloverPosition.Y)
         end
 
-        print("[Green Duels] Config loaded successfully")
+        print("[Duels] Config loaded successfully")
         return true
     end
 
@@ -3489,6 +3787,7 @@ local function Main()
                     end
                     if d.autoTP ~= nil then State.autoTPEnabled=d.autoTP; if toggleSetters["autoTP"] then toggleSetters["autoTP"](d.autoTP) end end
                     if d.autoTPHeight then State.autoTPHeight=d.autoTPHeight; if autoTPHeightBox then autoTPHeightBox.Text=tostring(d.autoTPHeight) end end
+                    if d.aimbotMode and (d.aimbotMode=="original" or d.aimbotMode=="sakura") then State.aimbotMode=d.aimbotMode end
                 end)
                 break
             end
@@ -3510,13 +3809,13 @@ local function Main()
     end)
 
     startAutoSteal()
-    print("[Green Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
+    print("[Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
 
 -- ============================================================
 -- SAFE MAIN EXECUTION - FIXED
 -- ============================================================
-if not _G.GreenDuelsV2_MainExecuted then
+if not _G.DuelsV2_MainExecuted then
     task.wait(0.5)  -- Wait for player to fully load
     if LP and LP:FindFirstChild("PlayerGui") then
         Main()
@@ -3527,7 +3826,7 @@ if not _G.GreenDuelsV2_MainExecuted then
             Main()
         end)
         if not success then
-            warn("[Green Duels] Failed to execute Main:", err)
+            warn("[Duels] Failed to execute Main:", err)
         end
     end
 end
@@ -3543,10 +3842,10 @@ local function setupOtherPlayerSpeed(player)
         local head = char:FindFirstChild("Head")
         local hrp  = char:FindFirstChild("HumanoidRootPart")
         if not head or not hrp then return end
-        local oldBB = head:FindFirstChild("GreenDuelsBB_Other")
+        local oldBB = head:FindFirstChild("DuelsBB_Other")
         if oldBB then oldBB:Destroy() end
         local bb = Instance.new("BillboardGui", head)
-        bb.Name = "GreenDuelsBB_Other"
+        bb.Name = "DuelsBB_Other"
         bb.Size = UDim2.new(0, 160, 0, 24)
         bb.StudsOffset = Vector3.new(0, 3, 0)
         bb.AlwaysOnTop = true
