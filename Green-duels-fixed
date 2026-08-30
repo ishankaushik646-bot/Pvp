@@ -46,7 +46,7 @@ local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
 local spoofedVelocity = Vector3.zero
 local _oldIndex; _oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
     if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") then
-        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and self:IsDescendantOf(LP.Character) then
+        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and LP.Character and self:IsDescendantOf(LP.Character) then
             return spoofedVelocity
         end
     end
@@ -54,7 +54,7 @@ local _oldIndex; _oldIndex = hookmetamethod(game, "__index", newcclosure(functio
 end))
 local _oldNewIndex; _oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, key, value)
     if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") then
-        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and self:IsDescendantOf(LP.Character) then
+        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and LP.Character and self:IsDescendantOf(LP.Character) then
             spoofedVelocity = value
             return
         end
