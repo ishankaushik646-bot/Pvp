@@ -1,0 +1,294 @@
+-- (reconstruction) rename by prince
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local Configuration = {
+    Names = {
+        ScreenGui = "IrishAntiDieUI",
+        Main = "Main",
+        DiscordTag = "DiscordTag",
+        HighlightTag = "IrishAntiDieEffect",
+        Dejavu = "dejavu"
+    },
+    Size = {
+        Main = UDim2.new(0, 330, 0, 250),
+        MainCollapsed = UDim2.new(0, 330, 0, 0),
+        Header = UDim2.new(1, 0, 0, 56),
+        Content = UDim2.new(1, 0, 1, -56),
+        AntiDieRow = UDim2.new(1, -36, 0, 64),
+        AntiFlingRow = UDim2.new(1, -36, 0, 64),
+        ToggleBG = UDim2.new(0, 58, 0, 30),
+        ToggleKnob = UDim2.new(0, 24, 0, 24),
+        MinimizeBtn = UDim2.new(0, 30, 0, 30),
+        DiscordLabel = UDim2.new(1, -36, 0, 28)
+    },
+    Position = {
+        Main = UDim2.new(0.5, -165, 0.5, -125),
+        RedDot = UDim2.new(0, 18, 0, 23),
+        TitleLabel = UDim2.new(0, 46, 0, 10),
+        SubtitleLabel = UDim2.new(0, 46, 0, 32),
+        MinimizeBtn = UDim2.new(1, -44, 0, 13),
+        AntiDieRow = UDim2.new(0, 18, 0, 13),
+        AntiFlingRow = UDim2.new(0, 18, 0, 90),
+        ToggleBG = UDim2.new(1, -78, 0.5, -15),
+        ToggleKnob = UDim2.new(0, 3, 0.5, -12),
+        LabelInRow = UDim2.new(0, 20, 0, 0),
+        DiscordLabel = UDim2.new(0, 18, 0, 167),
+        WatermarkTag = UDim2.new(1, -12, 1, -10)
+    },
+    Colors = {
+        MainBG = Color3.fromRGB(9, 10, 14),
+        RowBG = Color3.fromRGB(15, 17, 23),
+        RowStroke = Color3.fromRGB(48, 55, 68),
+        RedDot = Color3.fromRGB(255, 80, 95),
+        TitleText = Color3.fromRGB(245, 247, 255),
+        SubtitleText = Color3.fromRGB(145, 152, 166),
+        MinimizeBG = Color3.fromRGB(21, 24, 32),
+        MinimizeText = Color3.fromRGB(245, 247, 255),
+        MinimizeStroke = Color3.fromRGB(48, 55, 68),
+        MainStroke = Color3.fromRGB(48, 55, 68),
+        ToggleOffBG = Color3.fromRGB(35, 39, 50),
+        ToggleOnBG = Color3.fromRGB(24, 105, 52),
+        ToggleOffKnob = Color3.fromRGB(255, 255, 255),
+        ToggleOnKnob = Color3.fromRGB(85, 255, 145),
+        HighlightFill = Color3.fromRGB(85, 255, 145),
+        HighlightOutline = Color3.fromRGB(85, 255, 145),
+        WatermarkBG = Color3.fromRGB(0, 0, 0),
+        WatermarkText = Color3.fromRGB(255, 255, 255),
+        WatermarkStroke = Color3.fromRGB(25, 25, 25),
+        DiscordLabelBG = Color3.fromRGB(15, 17, 23)
+    },
+    UIScaleValue = 0.78,
+    MinimizeTweenTime = 0.3,
+    ToggleStates = {
+        AntiDie = false,
+        AntiFling = false
+    }
+}
+
+local GuiInstance, MainFrame, MinimizeButton, AntiDieKnob, AntiDieToggleBG, AntiFlingKnob, AntiFlingToggleBG
+local AntiDieConnections, AntiFlingConnections = {}, {}
+local isMinimized = false
+
+local function addCorner(parent, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 8)
+    corner.Parent = parent
+end
+
+local function addStroke(parent, color, transparency, thickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color or Color3.fromRGB(48, 55, 68)
+    stroke.Transparency = transparency or 0.3
+    stroke.Thickness = thickness or 1
+    stroke.Parent = parent
+end
+
+local function applyViewportScale(scaleObj)
+    local function updateScale()
+        scaleObj.Scale = Configuration.UIScaleValue
+    end
+    updateScale()
+    workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(updateScale)
+end
+
+local function makeDraggable(frame)
+    local dragging, dragStart, startPosition
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPosition = frame.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + delta.X, startPosition.Y.Scale, startPosition.Y.Offset + delta.Y)
+        end
+    end)
+    frame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+local function buildToggleRow(parent, labelText, yOffset)
+    local row = Instance.new("Frame")
+    row.Size = Configuration.Size[labelText == "Anti Die" and "AntiDieRow" or "AntiFlingRow"]
+    row.Position = yOffset
+    row.BackgroundColor3 = Configuration.Colors.RowBG
+    row.BorderSizePixel = 0
+    row.Parent = parent
+    addCorner(row, 15)
+    addStroke(row, Configuration.Colors.RowStroke, 0.42)
+    local lbl = Instance.new("TextLabel")
+    lbl.Text = labelText
+    lbl.TextColor3 = Configuration.Colors.TitleText
+    lbl.Font = Enum.Font.GothamMedium
+    lbl.TextSize = 14
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1, -120, 1, 0)
+    lbl.Position = Configuration.Position.LabelInRow
+    lbl.Parent = row
+    local toggleBG = Instance.new("Frame")
+    toggleBG.Size = Configuration.Size.ToggleBG
+    toggleBG.Position = Configuration.Position.ToggleBG
+    toggleBG.BackgroundColor3 = Configuration.Colors.ToggleOffBG
+    toggleBG.BorderSizePixel = 0
+    toggleBG.Parent = row
+    addCorner(toggleBG, 15)
+    local knob = Instance.new("Frame")
+    knob.Size = Configuration.Size.ToggleKnob
+    knob.Position = Configuration.Position.ToggleKnob
+    knob.BackgroundColor3 = Configuration.Colors.ToggleOffKnob
+    knob.BorderSizePixel = 0
+    knob.Parent = toggleBG
+    addCorner(knob, 12)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = ""
+    btn.Parent = row
+    return row, toggleBG, knob, btn
+end
+
+local function getHumanoid()
+    return LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+end
+
+local function applyAntiDie(humanoid)
+    if not humanoid then return end
+    humanoid.MaxHealth = math.huge
+    humanoid.Health = math.huge
+    humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+    table.insert(AntiDieConnections, humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+        if Configuration.ToggleStates.AntiDie then humanoid.Health = humanoid.MaxHealth end
+    end))
+    table.insert(AntiDieConnections, humanoid.StateChanged:Connect(function(_, state)
+        if state == Enum.HumanoidStateType.Dead and Configuration.ToggleStates.AntiDie then
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+            humanoid.Health = humanoid.MaxHealth
+        end
+    end))
+end
+
+local function setAntiDie(state)
+    Configuration.ToggleStates.AntiDie = state
+    AntiDieKnob.BackgroundColor3 = state and Configuration.Colors.ToggleOnKnob or Configuration.Colors.ToggleOffKnob
+    AntiDieToggleBG.BackgroundColor3 = state and Configuration.Colors.ToggleOnBG or Configuration.Colors.ToggleOffBG
+    for _, conn in ipairs(AntiDieConnections) do conn:Disconnect() end
+    AntiDieConnections = {}
+    if state then
+        local char = LocalPlayer.Character
+        if char then
+            local hl = Instance.new("Highlight")
+            hl.Name = Configuration.Names.HighlightTag
+            hl.FillColor = Configuration.Colors.HighlightFill
+            hl.OutlineColor = Configuration.Colors.HighlightOutline
+            hl.FillTransparency = 0.75
+            hl.Parent = char
+            applyAntiDie(getHumanoid())
+        end
+        table.insert(AntiDieConnections, LocalPlayer.CharacterAdded:Connect(function(newChar)
+            task.wait(0.2)
+            if Configuration.ToggleStates.AntiDie then
+                local hl = Instance.new("Highlight")
+                hl.Name = Configuration.Names.HighlightTag
+                hl.Parent = newChar
+                applyAntiDie(newChar:FindFirstChildOfClass("Humanoid"))
+            end
+        end))
+    else
+        if LocalPlayer.Character then
+            local hl = LocalPlayer.Character:FindFirstChild(Configuration.Names.HighlightTag)
+            if hl then hl:Destroy() end
+            local hum = getHumanoid()
+            if hum then hum.MaxHealth = 100 hum.Health = 100 end
+        end
+    end
+end
+
+local function claimOwnership(char)
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        pcall(function() char.HumanoidRootPart:SetNetworkOwner(LocalPlayer) end)
+    end
+end
+
+local function setAntiFling(state)
+    Configuration.ToggleStates.AntiFling = state
+    AntiFlingKnob.BackgroundColor3 = state and Configuration.Colors.ToggleOnKnob or Configuration.Colors.ToggleOffKnob
+    AntiFlingToggleBG.BackgroundColor3 = state and Configuration.Colors.ToggleOnBG or Configuration.Colors.ToggleOffBG
+    for _, conn in ipairs(AntiFlingConnections) do conn:Disconnect() end
+    AntiFlingConnections = {}
+    if state then
+        table.insert(AntiFlingConnections, RunService.RenderStepped:Connect(function()
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player.Character then claimOwnership(player.Character) end
+            end
+        end))
+    end
+end
+
+local function toggleMinimize()
+    isMinimized = not isMinimized
+    MinimizeButton.Text = isMinimized and "+" or "−"
+    TweenService:Create(MainFrame, TweenInfo.new(Configuration.MinimizeTweenTime), {Size = isMinimized and Configuration.Size.MainCollapsed or Configuration.Size.Main}):Play()
+end
+
+local function init()
+    GuiInstance = Instance.new("ScreenGui")
+    GuiInstance.Name = Configuration.Names.ScreenGui
+    GuiInstance.ResetOnSpawn = false
+    GuiInstance.IgnoreGuiInset = true
+    GuiInstance.Parent = CoreGui
+    MainFrame = Instance.new("Frame")
+    MainFrame.Name = Configuration.Names.Main
+    MainFrame.Size = Configuration.Size.Main
+    MainFrame.Position = Configuration.Position.Main
+    MainFrame.BackgroundColor3 = Configuration.Colors.MainBG
+    MainFrame.ClipsDescendants = true
+    MainFrame.Parent = GuiInstance
+    addCorner(MainFrame, 20)
+    addStroke(MainFrame, Configuration.Colors.MainStroke, 0.2)
+    local scale = Instance.new("UIScale")
+    scale.Scale = Configuration.UIScaleValue
+    scale.Parent = MainFrame
+    applyViewportScale(scale)
+    local header = Instance.new("Frame")
+    header.Size = Configuration.Size.Header
+    header.BackgroundTransparency = 1
+    header.Parent = MainFrame
+    MinimizeButton = Instance.new("TextButton")
+    MinimizeButton.Text = "−"
+    MinimizeButton.TextColor3 = Configuration.Colors.MinimizeText
+    MinimizeButton.BackgroundColor3 = Configuration.Colors.MinimizeBG
+    MinimizeButton.Size = Configuration.Size.MinimizeBtn
+    MinimizeButton.Position = Configuration.Position.MinimizeBtn
+    MinimizeButton.Parent = header
+    addCorner(MinimizeButton, 8)
+    addStroke(MinimizeButton, Configuration.Colors.MinimizeStroke, 0.35)
+    MinimizeButton.MouseButton1Click:Connect(toggleMinimize)
+    local content = Instance.new("Frame")
+    content.Size = Configuration.Size.Content
+    content.Position = UDim2.new(0, 0, 0, 56)
+    content.BackgroundTransparency = 1
+    content.Parent = MainFrame
+    local _, tbg1, k1, btn1 = buildToggleRow(content, "Anti Die", Configuration.Position.AntiDieRow)
+    AntiDieToggleBG, AntiDieKnob = tbg1, k1
+    btn1.MouseButton1Click:Connect(function() setAntiDie(not Configuration.ToggleStates.AntiDie) end)
+    local _, tbg2, k2, btn2 = buildToggleRow(content, "Anti Fling", Configuration.Position.AntiFlingRow)
+    AntiFlingToggleBG, AntiFlingKnob = tbg2, k2
+    btn2.MouseButton1Click:Connect(function() setAntiFling(not Configuration.ToggleStates.AntiFling) end)
+    makeDraggable(MainFrame)
+end
+
+init()
