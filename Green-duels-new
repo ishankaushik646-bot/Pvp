@@ -515,6 +515,8 @@ local function applyImpulseForVelocity(hrp, desiredVelocity)
     local spd = flat.Magnitude
     if spd < 0.05 then
         spoofedVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+        hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+        hrp.AssemblyAngularVelocity = Vector3.zero
         return
     end
     local dir = flat.Unit
@@ -2400,6 +2402,8 @@ local function Main()
     local spd = flat.Magnitude
     if spd < 0.05 then
         spoofedVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+        hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+        hrp.AssemblyAngularVelocity = Vector3.zero
         return
     end
     local dir = flat.Unit
