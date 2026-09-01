@@ -1153,9 +1153,7 @@ stopAntiRagdoll = function()
     print("[Duels] Anti-Ragdoll STOPPED")
 end
 
--- ============================================================
--- ANTI DIE (OPTIMIZED - NO LAG)
--- ============================================================
+-- ANTI DIE + ANTI FLING - OPTIMIZED NO LAG, NO DROP INTERFERENCE
 local antiDieConn = nil
 local antiDieLoop = nil
 
@@ -1175,7 +1173,6 @@ startAntiDie = function()
             if hum.Health < 10 then hum.Health = hum.MaxHealth end
         end
     end)
-    -- Throttled check 2x per second, not every frame
     antiDieLoop = task.spawn(function()
         while State.antiDieEnabled do
             local c = LP.Character
@@ -1184,7 +1181,7 @@ startAntiDie = function()
             if h and h.Health < h.MaxHealth * 0.35 then
                 h.Health = h.MaxHealth
             end
-            if hrp and hrp.Position.Y < -100 then
+            if hrp and not dropActive and hrp.Position.Y < -100 then
                 hrp.CFrame = CFrame.new(0,25,0)
                 spoofedVelocity = Vector3.zero
             end
@@ -1202,20 +1199,15 @@ stopAntiDie = function()
     print("[Duels] Anti-Die STOPPED")
 end
 
--- ============================================================
--- ANTI FLING (OPTIMIZED - NO LAG) - right where ragdoll is
--- ============================================================
 local antiFlingConn = nil
 
 startAntiFling = function()
     if antiFlingConn then return end
     antiFlingConn = RunService.Heartbeat:Connect(function()
         if not State.antiFlingEnabled then return end
-        -- Don't interfere with Jump Drop
         if dropActive then return end
         local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-        -- Only clamp if NOT dropping and not ascending intentionally
         if hrp.AssemblyLinearVelocity.Magnitude > 160 then
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
@@ -1924,6 +1916,7 @@ setAntiDie = makeToggleRow("Anti Die", false, function(on) State.antiDieEnabled=
 setAntiFling = makeToggleRow("Anti Fling", false, function(on) State.antiFlingEnabled=on; if on then startAntiFling() else stopAntiFling() end end)
 toggleSetters["antiDie"] = setAntiDie
 toggleSetters["antiFling"] = setAntiFling
+toggleSetters["antiRagdoll"] = setAntiRag
             toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
             makeKeybindRow("Auto Left", Keys.autoLeft, function(k) Keys.autoLeft=k end, "autoLeft")
@@ -2389,7 +2382,7 @@ toggleSetters["antiFling"] = setAntiFling
                 return
             end
             if def.key == "tpBat" then
-                toggleTPBat() -- Toggle ON/OFF - now turns light green like others
+                toggleTPBat()
                 return
             end
             if def.key == "reset" then
@@ -3818,7 +3811,7 @@ end
     end
     loadConfig()
 
-    -- Anti Ragdoll + Anti Die + Anti Fling persistence
+    -- Anti Ragdoll + Anti Die + Anti Fling persistence + config save fix
     task.spawn(function()
         task.wait(1)
         if State.antiRagdollEnabled then
@@ -3826,6 +3819,7 @@ end
             task.wait(0.2)
             pcall(function() startAntiRagdoll() end)
             if toggleSetters["antiRagdoll"] then pcall(toggleSetters["antiRagdoll"], true) end
+            if toggleSetters.antiRagdoll then pcall(toggleSetters.antiRagdoll, true) end
         end
         if State.antiDieEnabled then
             pcall(function() stopAntiDie() end)
