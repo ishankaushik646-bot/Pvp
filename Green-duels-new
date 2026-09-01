@@ -784,8 +784,7 @@ local function buildPresetSnapshot() return {
     laggerSpeed=State.laggerSpeed, laggerCarrySpeed=State.laggerCarrySpeed,
     stealRadius=Steal.StealRadius, stealDuration=Steal.StealDuration, stealMode=Steal.StealMode,
     infJump=State.infJumpEnabled, antiRagdoll=State.antiRagdollEnabled,
-antiDie=State.antiDieEnabled,
-antiFling=State.antiFlingEnabled,
+    antiDie=State.antiDieEnabled, antiFling=State.antiFlingEnabled,
     medusaCounter=State.medusaCounterEnabled, batCounter=State.batCounterEnabled,
     autoSteal=Steal.AutoStealEnabled,
     autoTP=State.autoTPEnabled, autoTPHeight=State.autoTPHeight,
@@ -1155,11 +1154,10 @@ stopAntiRagdoll = function()
 end
 
 -- ============================================================
--- ANTI DIE (TOGGLE) - isolated, no interference
+-- ANTI DIE (TOGGLE) - isolated
 -- ============================================================
 local antiDieConn = nil
 local antiDieHealthConn = nil
-
 local function antiDieGetChar()
     local char = LP.Character
     if not char then return nil end
@@ -1168,15 +1166,11 @@ local function antiDieGetChar()
     if not hum or not hrp then return nil end
     return char, hum, hrp
 end
-
 startAntiDie = function()
     if antiDieConn then return end
     local _, hum = antiDieGetChar()
     if not hum then
-        task.spawn(function()
-            task.wait(0.5)
-            if State.antiDieEnabled then startAntiDie() end
-        end)
+        task.spawn(function() task.wait(0.5) if State.antiDieEnabled then startAntiDie() end end)
         return
     end
     pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
@@ -1185,10 +1179,7 @@ startAntiDie = function()
         if newState == Enum.HumanoidStateType.Dead then
             pcall(function()
                 local _, h = antiDieGetChar()
-                if h then
-                    h:ChangeState(Enum.HumanoidStateType.GettingUp)
-                    h.Health = h.MaxHealth
-                end
+                if h then h:ChangeState(Enum.HumanoidStateType.GettingUp) h.Health = h.MaxHealth end
             end)
         end
     end)
@@ -1196,9 +1187,7 @@ startAntiDie = function()
         if not State.antiDieEnabled then return end
         local _, h, root = antiDieGetChar()
         if not h or not root then return end
-        if h.Health < h.MaxHealth * 0.4 then
-            pcall(function() h.Health = h.MaxHealth end)
-        end
+        if h.Health < h.MaxHealth * 0.4 then pcall(function() h.Health = h.MaxHealth end) end
         if root.Position.Y < -120 then
             root.CFrame = CFrame.new(0, 30, 0)
             root.Velocity = Vector3.zero
@@ -1208,22 +1197,18 @@ startAntiDie = function()
     end)
     print("[Duels] Anti-Die STARTED")
 end
-
 stopAntiDie = function()
-    if antiDieConn then antiDieConn:Disconnect(); antiDieConn = nil end
-    if antiDieHealthConn then antiDieHealthConn:Disconnect(); antiDieHealthConn = nil end
+    if antiDieConn then antiDieConn:Disconnect() antiDieConn=nil end
+    if antiDieHealthConn then antiDieHealthConn:Disconnect() antiDieHealthConn=nil end
     local _, hum = antiDieGetChar()
-    if hum then
-        pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end)
-    end
+    if hum then pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end) end
     print("[Duels] Anti-Die STOPPED")
 end
 
 -- ============================================================
--- ANTI FLING (TOGGLE) - placed exactly where anti ragdoll is
+-- ANTI FLING (TOGGLE) - right where anti ragdoll is
 -- ============================================================
 local antiFlingConn = nil
-
 startAntiFling = function()
     if antiFlingConn then return end
     antiFlingConn = RunService.Heartbeat:Connect(function()
@@ -1233,31 +1218,25 @@ startAntiFling = function()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
         if hrp.AssemblyLinearVelocity.Magnitude > 90 then
-            hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
-            hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
             hrp.Velocity = Vector3.zero
             spoofedVelocity = Vector3.zero
         end
         for _, v in ipairs(char:GetDescendants()) do
             if (v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity")) and v.Name ~= "BatTPVelocity" and v.Name ~= "TPBatVelocity" then
-                if v.Velocity.Magnitude > 60 then
-                    pcall(function() v:Destroy() end)
-                end
+                if v.Velocity.Magnitude > 60 then pcall(function() v:Destroy() end) end
             end
             if (v:IsA("LinearVelocity") or v:IsA("AngularVelocity")) and v.Name ~= "BatTPVelocity" then
-                local mag = 0
-                pcall(function() mag = v.VectorVelocity.Magnitude end)
-                if mag > 60 then
-                    pcall(function() v:Destroy() end)
-                end
+                local mag=0 pcall(function() mag=v.VectorVelocity.Magnitude end)
+                if mag>60 then pcall(function() v:Destroy() end) end
             end
         end
     end)
     print("[Duels] Anti-Fling STARTED")
 end
-
 stopAntiFling = function()
-    if antiFlingConn then antiFlingConn:Disconnect(); antiFlingConn = nil end
+    if antiFlingConn then antiFlingConn:Disconnect() antiFlingConn=nil end
     print("[Duels] Anti-Fling STOPPED")
 end
 
@@ -1953,6 +1932,8 @@ local function Main()
             setAntiRag = makeToggleRow("Anti Ragdoll", false, function(on) State.antiRagdollEnabled=on; if on then startAntiRagdoll() else stopAntiRagdoll() end end)
 setAntiDie = makeToggleRow("Anti Die", false, function(on) State.antiDieEnabled=on; if on then startAntiDie() else stopAntiDie() end end)
 setAntiFling = makeToggleRow("Anti Fling", false, function(on) State.antiFlingEnabled=on; if on then startAntiFling() else stopAntiFling() end end)
+toggleSetters["antiDie"] = setAntiDie
+toggleSetters["antiFling"] = setAntiFling
             toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
             makeKeybindRow("Auto Left", Keys.autoLeft, function(k) Keys.autoLeft=k end, "autoLeft")
@@ -3839,6 +3820,9 @@ end
                     end
                     if d.autoTP ~= nil then State.autoTPEnabled=d.autoTP; if toggleSetters["autoTP"] then toggleSetters["autoTP"](d.autoTP) end end
                     if d.autoTPHeight then State.autoTPHeight=d.autoTPHeight; if autoTPHeightBox then autoTPHeightBox.Text=tostring(d.autoTPHeight) end end
+                    if d.antiRagdoll ~= nil then State.antiRagdollEnabled=d.antiRagdoll; if toggleSetters["antiRagdoll"] then toggleSetters["antiRagdoll"](d.antiRagdoll) end end
+                    if d.antiDie ~= nil then State.antiDieEnabled=d.antiDie; if toggleSetters["antiDie"] then toggleSetters["antiDie"](d.antiDie) end end
+                    if d.antiFling ~= nil then State.antiFlingEnabled=d.antiFling; if toggleSetters["antiFling"] then toggleSetters["antiFling"](d.antiFling) end end
                 end)
                 break
             end
@@ -3846,32 +3830,27 @@ end
     end
     loadConfig()
 
-    -- Anti Ragdoll + Anti Die + Anti Fling persistence fix
+    -- Anti Ragdoll + Anti Die + Anti Fling persistence + save fix
     task.spawn(function()
         task.wait(1)
         if State.antiRagdollEnabled then
             pcall(function() stopAntiRagdoll() end)
             task.wait(0.2)
             pcall(function() startAntiRagdoll() end)
-            if toggleSetters.antiRagdoll then
-                pcall(toggleSetters.antiRagdoll, true)
-            end
+            if toggleSetters.antiRagdoll then pcall(toggleSetters.antiRagdoll, true) end
+            if toggleSetters["antiRagdoll"] then pcall(toggleSetters["antiRagdoll"], true) end
         end
         if State.antiDieEnabled then
             pcall(function() stopAntiDie() end)
             task.wait(0.2)
             pcall(function() startAntiDie() end)
-            if toggleSetters.antiDie then
-                pcall(toggleSetters.antiDie, true)
-            end
+            if toggleSetters["antiDie"] then pcall(toggleSetters["antiDie"], true) end
         end
         if State.antiFlingEnabled then
             pcall(function() stopAntiFling() end)
             task.wait(0.2)
             pcall(function() startAntiFling() end)
-            if toggleSetters.antiFling then
-                pcall(toggleSetters.antiFling, true)
-            end
+            if toggleSetters["antiFling"] then pcall(toggleSetters["antiFling"], true) end
         end
     end)
 
