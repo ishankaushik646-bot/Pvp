@@ -1153,7 +1153,6 @@ stopAntiRagdoll = function()
     print("[Duels] Anti-Ragdoll STOPPED")
 end
 
--- ANTI DIE + ANTI FLING - OPTIMIZED NO LAG, NO DROP INTERFERENCE
 local antiDieConn = nil
 local antiDieLoop = nil
 
@@ -1188,7 +1187,6 @@ startAntiDie = function()
             task.wait(0.5)
         end
     end)
-    print("[Duels] Anti-Die STARTED")
 end
 
 stopAntiDie = function()
@@ -1196,7 +1194,6 @@ stopAntiDie = function()
     if antiDieLoop then task.cancel(antiDieLoop) antiDieLoop=nil end
     local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
     if hum then pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end) end
-    print("[Duels] Anti-Die STOPPED")
 end
 
 local antiFlingConn = nil
@@ -1214,12 +1211,10 @@ startAntiFling = function()
             spoofedVelocity = Vector3.zero
         end
     end)
-    print("[Duels] Anti-Fling STARTED")
 end
 
 stopAntiFling = function()
     if antiFlingConn then antiFlingConn:Disconnect() antiFlingConn=nil end
-    print("[Duels] Anti-Fling STOPPED")
 end
 
 
@@ -2382,7 +2377,20 @@ toggleSetters["antiRagdoll"] = setAntiRag
                 return
             end
             if def.key == "tpBat" then
-                toggleTPBat()
+                local ns = not btnState
+                setOn(ns)
+                tpBatToggled = ns
+                if ns then
+                    local char = LP.Character
+                    if char then
+                        tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+                        tpBatH = char:FindFirstChildOfClass("Humanoid")
+                    end
+                    startTPBat()
+                else
+                    stopTPBat()
+                end
+                requestSave()
                 return
             end
             if def.key == "reset" then
@@ -3488,6 +3496,8 @@ end
                 aimbotKey = Keys.aimbot and Keys.aimbot.Name or "Unknown",
                 infJump = State.infJumpEnabled,
                 antiRagdoll = State.antiRagdollEnabled,
+                antiDie = State.antiDieEnabled,
+                antiFling = State.antiFlingEnabled,
                 medusaCounter = State.medusaCounterEnabled,
                 batCounter = State.batCounterEnabled,
                 autoStealEnabled = Steal.AutoStealEnabled,
@@ -3595,7 +3605,9 @@ end
         end
         if decErr.mirrorTPDownEnabled ~= nil then
             mirrorTPDownEnabled = decErr.mirrorTPDownEnabled
-            if toggleSetters and toggleSetters["mirrorTPDown"] then
+            if toggleSetters and toggleSetters["antiDie"] then pcall(function() toggleSetters["antiDie"](State.antiDieEnabled) end) end
+        if toggleSetters and toggleSetters["antiFling"] then pcall(function() toggleSetters["antiFling"](State.antiFlingEnabled) end) end
+        if toggleSetters and toggleSetters["mirrorTPDown"] then
                 pcall(function() toggleSetters["mirrorTPDown"](mirrorTPDownEnabled) end)
             end
         end
@@ -3634,6 +3646,7 @@ end
         local bools = {
             stackButtonsHidden="stackButtonsHidden", stackButtonsLocked="stackButtonsLocked",
             infJump="infJumpEnabled", antiRagdoll="antiRagdollEnabled",
+            antiDie="antiDieEnabled", antiFling="antiFlingEnabled",
             medusaCounter="medusaCounterEnabled", batCounter="batCounterEnabled",
             autoStealEnabled="autoStealEnabled", autoSwing="autoSwingEnabled",
             batAimbot="batAimbotToggled", antiLagEnabled="antiLagEnabled",
@@ -3811,7 +3824,7 @@ end
     end
     loadConfig()
 
-    -- Anti Ragdoll + Anti Die + Anti Fling persistence + config save fix
+    -- Anti Ragdoll + Anti Die + Anti Fling persistence + save fix
     task.spawn(function()
         task.wait(1)
         if State.antiRagdollEnabled then
