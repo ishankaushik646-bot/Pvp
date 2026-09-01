@@ -1953,8 +1953,6 @@ local function Main()
             setAntiRag = makeToggleRow("Anti Ragdoll", false, function(on) State.antiRagdollEnabled=on; if on then startAntiRagdoll() else stopAntiRagdoll() end end)
 setAntiDie = makeToggleRow("Anti Die", false, function(on) State.antiDieEnabled=on; if on then startAntiDie() else stopAntiDie() end end)
 setAntiFling = makeToggleRow("Anti Fling", false, function(on) State.antiFlingEnabled=on; if on then startAntiFling() else stopAntiFling() end end)
-setAimbotToggle = makeToggleRow("Aimbot [TOGGLE]", State.batAimbotToggled, function(on) State.batAimbotToggled=on; if on then pcall(startBatAimbot) else pcall(stopBatAimbot) end end)
-setBatTPToggle = makeToggleRow("Bat TP [TOGGLE]", tpBatToggled, function(on) tpBatToggled=on end)
             toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
             makeKeybindRow("Auto Left", Keys.autoLeft, function(k) Keys.autoLeft=k end, "autoLeft")
