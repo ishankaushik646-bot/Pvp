@@ -1154,87 +1154,77 @@ stopAntiRagdoll = function()
 end
 
 -- ============================================================
--- ANTI DIE (TOGGLE) - isolated
+-- ANTI DIE (OPTIMIZED - NO LAG)
 -- ============================================================
 local antiDieConn = nil
-local antiDieHealthConn = nil
-local function antiDieGetChar()
-    local char = LP.Character
-    if not char then return nil end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hum or not hrp then return nil end
-    return char, hum, hrp
-end
+local antiDieLoop = nil
+
 startAntiDie = function()
     if antiDieConn then return end
-    local _, hum = antiDieGetChar()
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not hum then
         task.spawn(function() task.wait(0.5) if State.antiDieEnabled then startAntiDie() end end)
         return
     end
     pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
-    antiDieConn = hum.StateChanged:Connect(function(_, newState)
+    antiDieConn = hum.StateChanged:Connect(function(_, new)
         if not State.antiDieEnabled then return end
-        if newState == Enum.HumanoidStateType.Dead then
-            pcall(function()
-                local _, h = antiDieGetChar()
-                if h then h:ChangeState(Enum.HumanoidStateType.GettingUp) h.Health = h.MaxHealth end
-            end)
+        if new == Enum.HumanoidStateType.Dead then
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            if hum.Health < 10 then hum.Health = hum.MaxHealth end
         end
     end)
-    antiDieHealthConn = RunService.Heartbeat:Connect(function()
-        if not State.antiDieEnabled then return end
-        local _, h, root = antiDieGetChar()
-        if not h or not root then return end
-        if h.Health < h.MaxHealth * 0.4 then pcall(function() h.Health = h.MaxHealth end) end
-        if root.Position.Y < -120 then
-            root.CFrame = CFrame.new(0, 30, 0)
-            root.Velocity = Vector3.zero
-            root.AssemblyLinearVelocity = Vector3.zero
-            spoofedVelocity = Vector3.zero
+    -- Throttled check 2x per second, not every frame
+    antiDieLoop = task.spawn(function()
+        while State.antiDieEnabled do
+            local c = LP.Character
+            local h = c and c:FindFirstChildOfClass("Humanoid")
+            local hrp = c and c:FindFirstChild("HumanoidRootPart")
+            if h and h.Health < h.MaxHealth * 0.35 then
+                h.Health = h.MaxHealth
+            end
+            if hrp and hrp.Position.Y < -100 then
+                hrp.CFrame = CFrame.new(0,25,0)
+                spoofedVelocity = Vector3.zero
+            end
+            task.wait(0.5)
         end
     end)
     print("[Duels] Anti-Die STARTED")
 end
+
 stopAntiDie = function()
     if antiDieConn then antiDieConn:Disconnect() antiDieConn=nil end
-    if antiDieHealthConn then antiDieHealthConn:Disconnect() antiDieHealthConn=nil end
-    local _, hum = antiDieGetChar()
+    if antiDieLoop then task.cancel(antiDieLoop) antiDieLoop=nil end
+    local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
     if hum then pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end) end
     print("[Duels] Anti-Die STOPPED")
 end
 
 -- ============================================================
--- ANTI FLING (TOGGLE) - right where anti ragdoll is
+-- ANTI FLING (OPTIMIZED - NO LAG) - right where ragdoll is
 -- ============================================================
 local antiFlingConn = nil
+
 startAntiFling = function()
     if antiFlingConn then return end
     antiFlingConn = RunService.Heartbeat:Connect(function()
         if not State.antiFlingEnabled then return end
-        local char = LP.Character
-        if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
+        -- Don't interfere with Jump Drop
+        if dropActive then return end
+        local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-        if hrp.AssemblyLinearVelocity.Magnitude > 90 then
+        -- Only clamp if NOT dropping and not ascending intentionally
+        if hrp.AssemblyLinearVelocity.Magnitude > 160 then
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-            hrp.Velocity = Vector3.zero
             spoofedVelocity = Vector3.zero
-        end
-        for _, v in ipairs(char:GetDescendants()) do
-            if (v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity")) and v.Name ~= "BatTPVelocity" and v.Name ~= "TPBatVelocity" then
-                if v.Velocity.Magnitude > 60 then pcall(function() v:Destroy() end) end
-            end
-            if (v:IsA("LinearVelocity") or v:IsA("AngularVelocity")) and v.Name ~= "BatTPVelocity" then
-                local mag=0 pcall(function() mag=v.VectorVelocity.Magnitude end)
-                if mag>60 then pcall(function() v:Destroy() end) end
-            end
         end
     end)
     print("[Duels] Anti-Fling STARTED")
 end
+
 stopAntiFling = function()
     if antiFlingConn then antiFlingConn:Disconnect() antiFlingConn=nil end
     print("[Duels] Anti-Fling STOPPED")
@@ -3830,14 +3820,13 @@ end
     end
     loadConfig()
 
-    -- Anti Ragdoll + Anti Die + Anti Fling persistence + save fix
+    -- Anti Ragdoll + Anti Die + Anti Fling persistence
     task.spawn(function()
         task.wait(1)
         if State.antiRagdollEnabled then
             pcall(function() stopAntiRagdoll() end)
             task.wait(0.2)
             pcall(function() startAntiRagdoll() end)
-            if toggleSetters.antiRagdoll then pcall(toggleSetters.antiRagdoll, true) end
             if toggleSetters["antiRagdoll"] then pcall(toggleSetters["antiRagdoll"], true) end
         end
         if State.antiDieEnabled then
