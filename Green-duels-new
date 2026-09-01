@@ -738,7 +738,7 @@ local COLS = 3
 
 local stackDefs = {
     {key="drop",        label="DROP"},
-    {key="tpBat",       label="BAT\nMODE"},
+    {key="tpBat",       label="TP\nBAT"},
     {key="autoLeft",    label="AUTO\nLEFT"},
     {key="autoRight",   label="AUTO\nRIGHT"},
     {key="aimbot",      label="AIMBOT"},
@@ -2389,9 +2389,7 @@ toggleSetters["antiFling"] = setAntiFling
                 return
             end
             if def.key == "tpBat" then
-                task.spawn(function()
-                    toggleTPBat()  -- Toggle ON/OFF
-                end)
+                toggleTPBat() -- Toggle ON/OFF - now turns light green like others
                 return
             end
             if def.key == "reset" then
