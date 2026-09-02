@@ -15,7 +15,7 @@ local ConfigFile = "ViolenciaLaggerConfig.json"
 -- âš™ï¸ PODER EXACTO: 23 - 32 - 70
 local NIVELES = {
     Low     = { poder = 23 },
-    Mid     = { poder = 32 },
+    Mid     = { poder = 50 },
     High    = { poder = 70 }
 }
 
