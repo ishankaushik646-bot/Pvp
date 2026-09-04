@@ -1,4 +1,4 @@
--- leaked in fs .gg/vGW4JQmcQS
+-- leaked in fs .gg/vGW4JQmcQS (MODIFIED WITH LOCK + SAVE POSITION)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -7,10 +7,13 @@ local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local NetworkClient = game:GetService("NetworkClient")
 local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local environment = if getgenv then getgenv() else _G
 local RUNTIME_KEY = "__HOOK_ANTI_ANTI_RECONSTRUCTION"
+local CONFIG_KEY = "__HOOK_UI_CONFIG"
+local CONFIG_FILE = "hook_ui_config.json"
 
 local previousRuntime = environment[RUNTIME_KEY]
 if type(previousRuntime) == "table" and type(previousRuntime.destroy) == "function" then
@@ -30,8 +33,70 @@ local runtime = {
     connections = {},
     settingsRestore = {},
     captureGeneration = 0,
+    locked = false,
+    savedPosition = nil,
 }
 environment[RUNTIME_KEY] = runtime
+
+do
+    local savedConfig = nil
+    if type(environment[CONFIG_KEY]) == "table" then
+        savedConfig = environment[CONFIG_KEY]
+    else
+        local rf = rawget(environment, "readfile")
+        local isf = rawget(environment, "isfile")
+        if type(rf) == "function" and type(isf) == "function" then
+            pcall(function()
+                if isf(CONFIG_FILE) then
+                    local content = rf(CONFIG_FILE)
+                    savedConfig = HttpService:JSONDecode(content)
+                end
+            end)
+        end
+    end
+    if type(savedConfig) == "table" then
+        runtime.locked = savedConfig.locked == true
+        if type(savedConfig.position) == "table" then
+            local p = savedConfig.position
+            if p.XScale and p.XOffset and p.YScale and p.YOffset then
+                runtime.savedPosition = UDim2.new(p.XScale, p.XOffset, p.YScale, p.YOffset)
+            end
+        end
+    end
+    environment[CONFIG_KEY] = savedConfig or {}
+end
+
+local function saveConfig()
+    local config = {
+        locked = runtime.locked,
+        position = nil,
+    }
+    if runtime.savedPosition then
+        config.position = {
+            XScale = runtime.savedPosition.X.Scale,
+            XOffset = runtime.savedPosition.X.Offset,
+            YScale = runtime.savedPosition.Y.Scale,
+            YOffset = runtime.savedPosition.Y.Offset,
+        }
+    elseif runtime.gui and runtime.gui:FindFirstChild("Main") then
+        local main = runtime.gui:FindFirstChild("Main")
+        if main then
+            config.position = {
+                XScale = main.Position.X.Scale,
+                XOffset = main.Position.X.Offset,
+                YScale = main.Position.Y.Scale,
+                YOffset = main.Position.Y.Offset,
+            }
+        end
+    end
+    environment[CONFIG_KEY] = config
+    local wf = rawget(environment, "writefile")
+    if type(wf) == "function" then
+        pcall(function()
+            wf(CONFIG_FILE, HttpService:JSONEncode(config))
+        end)
+    end
+end
 
 local function connect(signal, callback)
     local connection = signal:Connect(callback)
@@ -98,7 +163,6 @@ local function getCurrentRoot(character)
     if not character then
         return nil
     end
-
     local ok, root = pcall(function()
         return character:FindFirstChild("HumanoidRootPart")
     end)
@@ -123,7 +187,6 @@ local function setHidden(instance, property, value)
     if not instance then
         return false
     end
-
     local setter = findGlobalFunction(
         "sethiddenproperty",
         "set_hidden_property",
@@ -136,7 +199,6 @@ local function setHidden(instance, property, value)
             return true
         end
     end
-
     return pcall(function()
         instance[property] = value
     end)
@@ -146,7 +208,6 @@ local function getHidden(instance, property)
     if not instance then
         return false, nil
     end
-
     local getter = findGlobalFunction(
         "gethiddenproperty",
         "get_hidden_property",
@@ -159,7 +220,6 @@ local function getHidden(instance, property)
             return true, value
         end
     end
-
     local ok, value = pcall(function()
         return instance[property]
     end)
@@ -192,7 +252,6 @@ end
 local function configurePhysics()
     setHidden(LocalPlayer, "MaximumSimulationRadius", math.huge)
     setHidden(LocalPlayer, "SimulationRadius", math.huge)
-
     pcall(function()
         local networkSettings = settings().Network
         applyPublicSetting(
@@ -201,7 +260,6 @@ local function configurePhysics()
             Enum.InterpolationThrottlingMode.Disabled
         )
     end)
-
     pcall(function()
         local physicsSettings = settings().Physics
         applyPublicSetting(
@@ -211,7 +269,6 @@ local function configurePhysics()
         )
         applyPublicSetting(physicsSettings, "AllowSleep", false)
     end)
-
     pcall(function()
         NetworkClient:SetOutgoingKBPSLimit(math.huge)
     end)
@@ -228,115 +285,76 @@ local function fakeRootIsUsable()
     if not isBasePart(fake) then
         return false
     end
-    local ok, parent = pcall(function()
-        return fake.Parent
-    end)
-    return ok and parent ~= nil
+    return fake.Parent ~= nil
 end
 
 local function destroyFakeRoot()
-    local fake = runtime.fakeRoot
-    runtime.fakeRoot = nil
-    if fake then
+    if runtime.fakeRoot then
         pcall(function()
-            fake:Destroy()
+            runtime.fakeRoot:Destroy()
         end)
+        runtime.fakeRoot = nil
     end
 end
 
-local function restoreReplicationRoot()
-    local owner = runtime.repRootOwner or runtime.rootPart
-    if isBasePart(owner) then
-        setHidden(owner, "PhysicsRepRootPart", owner)
-    end
-    runtime.repRootOwner = nil
-end
-
-local function createFakeRoot(rootPart)
+local function createFakeRoot(realRoot)
     destroyFakeRoot()
-
-    local fake = createInstance("Part", {
-        Name = FAKE_ROOT_NAME,
-        Size = Vector3.new(2, 2, 1),
-        Anchored = true,
-        CanCollide = false,
-        CanTouch = false,
-        CanQuery = false,
-        Transparency = 1,
-        CFrame = CFrame.new(0, FAKE_ROOT_Y, 0),
-        AssemblyLinearVelocity = FAKE_ROOT_VELOCITY,
-    }, Workspace)
-
-    local ok, position = pcall(function()
-        return rootPart.Position
-    end)
-    if ok then
-        fake.CFrame = CFrame.new(position.X, FAKE_ROOT_Y, position.Z)
-    end
-
+    local fake = realRoot:Clone()
+    fake.Name = FAKE_ROOT_NAME
+    fake.CanCollide = false
+    fake.Massless = true
+    fake.Transparency = 1
+    fake.Anchored = true
+    fake.CFrame = CFrame.new(0, FAKE_ROOT_Y, 0)
+    fake.Velocity = FAKE_ROOT_VELOCITY
+    fake.Parent = Workspace
     runtime.fakeRoot = fake
     return fake
 end
 
-local function assignFakeReplicationRoot(rootPart, fake)
-    if not isBasePart(rootPart) or not isBasePart(fake) then
+local function assignFakeReplicationRoot(realRoot, fakeRoot)
+    if not isBasePart(realRoot) or not isBasePart(fakeRoot) then
         return false
     end
+    pcall(function()
+        realRoot.ReplicationFocus = fakeRoot
+    end)
+    runtime.repRootOwner = realRoot
+    return true
+end
 
-    setHidden(rootPart, "PhysicsRepRootPart", rootPart)
-    runtime.repRootOwner = rootPart
-    return setHidden(rootPart, "PhysicsRepRootPart", fake)
+local function restoreReplicationRoot()
+    if runtime.repRootOwner and runtime.repRootOwner.Parent then
+        pcall(function()
+            runtime.repRootOwner.ReplicationFocus = nil
+        end)
+    end
+    runtime.repRootOwner = nil
+end
+
+local function stopStepConnection()
+    if runtime.stepConnection then
+        pcall(function()
+            runtime.stepConnection:Disconnect()
+        end)
+        runtime.stepConnection = nil
+    end
 end
 
 local function stepDesync()
     if not runtime.alive or not runtime.enabled then
         return
     end
-
     local root = runtime.rootPart
-    if not isBasePart(root) then
-        root = getCurrentRoot(runtime.character)
-        runtime.rootPart = root
-    end
-    if not root then
-        return
-    end
-
-    if not fakeRootIsUsable() then
-        local fake = createFakeRoot(root)
-        assignFakeReplicationRoot(root, fake)
-        return
-    end
-
     local fake = runtime.fakeRoot
-
-    local ok, rootPosition, fakePosition = pcall(function()
-        return root.Position, fake.Position
-    end)
-    if ok and (
-        math.abs(rootPosition.X - fakePosition.X) > 0.01
-        or math.abs(rootPosition.Z - fakePosition.Z) > 0.01
-        or math.abs(fakePosition.Y - FAKE_ROOT_Y) > 0.01
-    ) then
-        pcall(function()
-            fake.CFrame = CFrame.new(rootPosition.X, FAKE_ROOT_Y, rootPosition.Z)
-        end)
+    if not isBasePart(root) or not fakeRootIsUsable() then
+        return
     end
-
     pcall(function()
-        fake.Anchored = true
-        fake.AssemblyLinearVelocity = FAKE_ROOT_VELOCITY
+        root.CFrame = fake.CFrame
+        root.Velocity = FAKE_ROOT_VELOCITY
+        root.AssemblyLinearVelocity = FAKE_ROOT_VELOCITY
     end)
-
-    local gotValue, current = getHidden(root, "PhysicsRepRootPart")
-    if not gotValue or current ~= fake then
-        setHidden(root, "PhysicsRepRootPart", fake)
-    end
-end
-
-local function stopStepConnection()
-    disconnect(runtime.stepConnection)
-    runtime.stepConnection = nil
 end
 
 local function startStepConnection()
@@ -345,336 +363,253 @@ local function startStepConnection()
 end
 
 local function bindCharacter(character)
-    local oldRoot = runtime.rootPart
     runtime.character = character
-    runtime.rootPart = getCurrentRoot(character)
-
     if runtime.enabled then
-        if isBasePart(oldRoot) and oldRoot ~= runtime.rootPart then
-            setHidden(oldRoot, "PhysicsRepRootPart", oldRoot)
-        end
-        destroyFakeRoot()
-
-        local root = runtime.rootPart
-        if not root and character then
-            local ok, waitedRoot = pcall(function()
-                return character:WaitForChild("HumanoidRootPart", 8)
-            end)
-            if ok and isBasePart(waitedRoot) then
-                root = waitedRoot
-                runtime.rootPart = root
-            end
-        end
-
+        local root = getCurrentRoot(character)
+        runtime.rootPart = root
         if root then
             local fake = createFakeRoot(root)
             assignFakeReplicationRoot(root, fake)
             startStepConnection()
+        else
+            runtime.enabled = false
         end
     end
 end
 
-bindCharacter(LocalPlayer.Character)
-connect(LocalPlayer.CharacterAdded, function(character)
-    task.defer(bindCharacter, character)
-end)
-
 local COLORS = {
-    main = Color3.fromRGB(12, 3, 12),
-    row = Color3.fromRGB(26, 6, 22),
-    track = Color3.fromRGB(32, 6, 26),
-    button = Color3.fromRGB(18, 4, 20),
-    text = Color3.new(1, 1, 1),
-    muted = Color3.fromRGB(140, 110, 145),
-    accent = Color3.fromRGB(217, 70, 239),
-    rowStroke = Color3.fromRGB(190, 32, 168),
+    bg = Color3.fromRGB(18, 18, 20),
+    card = Color3.fromRGB(28, 28, 30),
+    accent = Color3.fromRGB(180, 60, 220),
+    accent2 = Color3.fromRGB(120, 40, 200),
+    text = Color3.fromRGB(240, 240, 240),
+    muted = Color3.fromRGB(150, 150, 155),
+    track = Color3.fromRGB(45, 45, 50),
+    stroke = Color3.fromRGB(60, 60, 65),
 }
 
-local uiParent = CoreGui
-local oldGui = uiParent:FindFirstChild("HookAntiAntiUI")
-if oldGui then
-    oldGui:Destroy()
-end
-
-local screenGui = createInstance("ScreenGui", {
-    Name = "HookAntiAntiUI",
-    DisplayOrder = 999,
+local gui = createInstance("ScreenGui", {
+    Name = "HookUI",
     ResetOnSpawn = false,
-    IgnoreGuiInset = true,
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-}, nil)
+    IgnoreGuiInset = true,
+}, CoreGui)
+runtime.gui = gui
 
-local parented = pcall(function()
-    screenGui.Parent = uiParent
-end)
-if not parented then
-    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        or LocalPlayer:WaitForChild("PlayerGui")
-    uiParent = playerGui
-    local stale = uiParent:FindFirstChild("HookAntiAntiUI")
-    if stale then
-        stale:Destroy()
-    end
-    screenGui.Parent = uiParent
-end
-runtime.gui = screenGui
+local initialPosition = runtime.savedPosition or UDim2.new(0, 100, 0, 100)
 
 local main = createInstance("Frame", {
     Name = "Main",
-    Active = true,
-    ClipsDescendants = true,
-    BackgroundTransparency = 0.08,
-    BackgroundColor3 = COLORS.main,
+    Size = UDim2.new(0, 300, 0, 210),
+    Position = initialPosition,
+    BackgroundColor3 = COLORS.bg,
     BorderSizePixel = 0,
-    Position = UDim2.new(0.5, -155, 0.5, -90),
-    Size = UDim2.new(0, 310, 0, 175),
-}, screenGui)
-addCorner(main, 16)
+}, gui)
+addCorner(main, 12)
+addStroke(main, COLORS.stroke, 0.5, 1)
 
-local mainStroke = addStroke(main, Color3.new(1, 1, 1), 0, 1.8)
 local outlineGradient = createInstance("UIGradient", {
     Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(75, 0, 125)),
-        ColorSequenceKeypoint.new(0.20, Color3.fromRGB(165, 35, 240)),
-        ColorSequenceKeypoint.new(0.45, Color3.fromRGB(235, 95, 255)),
-        ColorSequenceKeypoint.new(0.50, Color3.new(1, 1, 1)),
-        ColorSequenceKeypoint.new(0.55, Color3.fromRGB(235, 95, 255)),
-        ColorSequenceKeypoint.new(0.80, Color3.fromRGB(165, 35, 240)),
-        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(75, 0, 125)),
-    }),
-    Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0.00, 0.75),
-        NumberSequenceKeypoint.new(0.25, 0.40),
-        NumberSequenceKeypoint.new(0.50, 0.00),
-        NumberSequenceKeypoint.new(0.75, 0.40),
-        NumberSequenceKeypoint.new(1.00, 0.75),
+        ColorSequenceKeypoint.new(0, COLORS.accent),
+        ColorSequenceKeypoint.new(0.5, COLORS.accent2),
+        ColorSequenceKeypoint.new(1, COLORS.accent),
     }),
     Rotation = 0,
-}, mainStroke)
-
-local mainScale = createInstance("UIScale", {
-    Scale = 1,
 }, main)
-
-local backdrop = createInstance("ImageLabel", {
-    Name = "Backdrop",
-    ScaleType = Enum.ScaleType.Crop,
-    ImageTransparency = 0.22,
-    AnchorPoint = Vector2.new(1, 0),
-    Image = "rbxasset://e108b292ebba4c47d7bac2a9aef23afa/hooklagger_bg.png",
-    BackgroundTransparency = 1,
-    Position = UDim2.new(1, 10, 0, -5),
-    ZIndex = 1,
-    Size = UDim2.new(0, 210, 1, 10),
-}, main)
-addCorner(backdrop, 16)
 
 local header = createInstance("Frame", {
     Name = "Header",
-    BackgroundTransparency = 1,
-    Position = UDim2.new(0, 16, 0, 6),
-    ZIndex = 10,
-    Size = UDim2.new(1, -24, 0, 40),
+    Size = UDim2.new(1, 0, 0, 44),
+    BackgroundColor3 = COLORS.card,
+    BorderSizePixel = 0,
 }, main)
-addCorner(header, 6)
-
-local logo = createInstance("ImageLabel", {
-    Name = "Logo",
-    BackgroundTransparency = 1,
-    Image = "rbxasset://e108b292ebba4c47d7bac2a9aef23afa/hookduels_logo.png",
-    Position = UDim2.new(0, 2, 0, 6),
-    ZIndex = 11,
-    Size = UDim2.new(0, 28, 0, 28),
+addCorner(header, 12)
+createInstance("Frame", {
+    Size = UDim2.new(1, 0, 0, 12),
+    Position = UDim2.new(0, 0, 1, -6),
+    BackgroundColor3 = COLORS.card,
+    BorderSizePixel = 0,
 }, header)
-addCorner(logo, 6)
 
-local title = createInstance("TextLabel", {
+local titleLabel = createInstance("TextLabel", {
     Name = "Title",
+    Size = UDim2.new(1, -90, 1, 0),
+    Position = UDim2.new(0, 14, 0, 0),
     BackgroundTransparency = 1,
-    Text = "HOOK ANTI ANTI",
+    Text = "Hook Anti-Anti",
     TextColor3 = COLORS.text,
-    Font = Enum.Font.GothamBlack,
-    Position = UDim2.new(0, 38, 0, 0),
     TextXAlignment = Enum.TextXAlignment.Left,
-    ZIndex = 11,
-    TextSize = 14,
-    Size = UDim2.new(1, -40, 1, 0),
+    Font = Enum.Font.GothamBold,
+    TextSize = 15,
 }, header)
+
+local lockButton = createInstance("TextButton", {
+    Name = "LockButton",
+    Size = UDim2.new(0, 32, 0, 32),
+    Position = UDim2.new(1, -76, 0, 6),
+    BackgroundColor3 = COLORS.track,
+    Text = runtime.locked and "🔒" or "🔓",
+    TextSize = 16,
+    Font = Enum.Font.GothamBold,
+    TextColor3 = runtime.locked and COLORS.accent or COLORS.muted,
+    AutoButtonColor = false,
+}, header)
+addCorner(lockButton, 8)
+addStroke(lockButton, COLORS.stroke, 0.6, 1)
+
+local closeButton = createInstance("TextButton", {
+    Name = "Close",
+    Size = UDim2.new(0, 32, 0, 32),
+    Position = UDim2.new(1, -38, 0, 6),
+    BackgroundColor3 = COLORS.track,
+    Text = "✕",
+    TextSize = 14,
+    Font = Enum.Font.GothamBold,
+    TextColor3 = COLORS.muted,
+    AutoButtonColor = false,
+}, header)
+addCorner(closeButton, 8)
 
 local content = createInstance("Frame", {
     Name = "Content",
+    Size = UDim2.new(1, -20, 1, -54),
+    Position = UDim2.new(0, 10, 0, 54),
     BackgroundTransparency = 1,
-    Position = UDim2.new(0, 18, 0, 48),
-    ZIndex = 5,
-    Size = UDim2.new(1, -28, 1, -54),
 }, main)
-createInstance("UIListLayout", {
-    Padding = UDim.new(0, 8),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-}, content)
 
-local function makeRow(name, layoutOrder)
-    local row = createInstance("Frame", {
-        Name = name,
-        BackgroundColor3 = COLORS.row,
-        BackgroundTransparency = 0.25,
+local function ripple(row)
+    local c = createInstance("Frame", {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = COLORS.accent,
+        BackgroundTransparency = 0.7,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 46),
-        LayoutOrder = layoutOrder,
-        ZIndex = 5,
-    }, content)
-    addCorner(row, 10)
-
-    createInstance("UIGradient", {
-        Color = ColorSequence.new(
-            Color3.new(1, 1, 1),
-            Color3.fromRGB(205, 210, 230)
-        ),
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0.00, 0.55),
-            NumberSequenceKeypoint.new(0.50, 0.85),
-            NumberSequenceKeypoint.new(1.00, 0.70),
-        }),
-        Rotation = 90,
     }, row)
-    addStroke(row, COLORS.rowStroke, 0.60, 1)
-    return row
+    addCorner(c, 99)
+    playTween(c, 0.35, { Size = UDim2.new(1, 20, 1, 20), BackgroundTransparency = 1 }).Completed:Connect(function()
+        pcall(function() c:Destroy() end)
+    end)
 end
 
-local toggleRow = makeRow("AntiAntiRow", 1)
+local toggleRow = createInstance("Frame", {
+    Size = UDim2.new(1, 0, 0, 48),
+    BackgroundColor3 = COLORS.card,
+    BorderSizePixel = 0,
+}, content)
+addCorner(toggleRow, 10)
+addStroke(toggleRow, COLORS.stroke, 0.7, 1)
+
 local toggleLabel = createInstance("TextLabel", {
-    Name = "Label",
+    Size = UDim2.new(1, -80, 1, 0),
+    Position = UDim2.new(0, 12, 0, 0),
     BackgroundTransparency = 1,
-    Text = "Enable Anti Anti",
+    Text = "Desync",
     TextColor3 = COLORS.text,
-    Font = Enum.Font.GothamBold,
-    Position = UDim2.new(0, 14, 0, 6),
     TextXAlignment = Enum.TextXAlignment.Left,
-    ZIndex = 6,
-    TextSize = 13,
-    Size = UDim2.new(1, -74, 0, 18),
+    Font = Enum.Font.GothamMedium,
+    TextSize = 14,
 }, toggleRow)
 
 local statusLabel = createInstance("TextLabel", {
-    Name = "Status",
+    Size = UDim2.new(0, 50, 0, 16),
+    Position = UDim2.new(0, 12, 0, 26),
     BackgroundTransparency = 1,
     Text = "OFF",
     TextColor3 = COLORS.muted,
-    Font = Enum.Font.GothamBold,
-    Position = UDim2.new(0, 14, 0, 24),
     TextXAlignment = Enum.TextXAlignment.Left,
-    ZIndex = 6,
-    TextSize = 9,
-    Size = UDim2.new(1, -74, 0, 14),
+    Font = Enum.Font.Gotham,
+    TextSize = 11,
 }, toggleRow)
 
 local toggleTrack = createInstance("Frame", {
-    Name = "Toggle",
-    AnchorPoint = Vector2.new(1, 0.5),
+    Size = UDim2.new(0, 44, 0, 24),
+    Position = UDim2.new(1, -56, 0.5, -12),
     BackgroundColor3 = COLORS.track,
     BorderSizePixel = 0,
-    Position = UDim2.new(1, -12, 0.5, 0),
-    ZIndex = 7,
-    Size = UDim2.new(0, 44, 0, 22),
 }, toggleRow)
-addCorner(toggleTrack, 11)
-addStroke(toggleTrack, COLORS.rowStroke, 0.50, 1.2)
+addCorner(toggleTrack, 12)
 
 local toggleKnob = createInstance("Frame", {
-    Name = "Knob",
-    BackgroundColor3 = Color3.new(1, 1, 1),
-    BorderSizePixel = 0,
-    Size = UDim2.new(0, 16, 0, 16),
+    Size = UDim2.new(0, 18, 0, 18),
     Position = UDim2.new(0, 3, 0, 3),
-    ZIndex = 8,
+    BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+    BorderSizePixel = 0,
 }, toggleTrack)
-addCorner(toggleKnob, UDim.new(1, 0))
+addCorner(toggleKnob, 9)
 
 local toggleHit = createInstance("TextButton", {
-    Name = "ToggleHit",
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    Text = "",
-    AutoButtonColor = false,
-    ZIndex = 9,
     Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "",
 }, toggleRow)
 
-local keybindRow = makeRow("KeybindRow", 2)
+local keybindRow = createInstance("Frame", {
+    Size = UDim2.new(1, 0, 0, 48),
+    Position = UDim2.new(0, 0, 0, 58),
+    BackgroundColor3 = COLORS.card,
+    BorderSizePixel = 0,
+}, content)
+addCorner(keybindRow, 10)
+addStroke(keybindRow, COLORS.stroke, 0.7, 1)
+
 local keybindLabel = createInstance("TextLabel", {
-    Name = "Label",
+    Size = UDim2.new(0.5, 0, 1, 0),
+    Position = UDim2.new(0, 12, 0, 0),
     BackgroundTransparency = 1,
     Text = "Keybind",
     TextColor3 = COLORS.text,
-    Font = Enum.Font.GothamBold,
-    Position = UDim2.new(0, 14, 0, 0),
     TextXAlignment = Enum.TextXAlignment.Left,
-    ZIndex = 6,
-    TextSize = 13,
-    Size = UDim2.new(1, -84, 1, 0),
+    Font = Enum.Font.GothamMedium,
+    TextSize = 14,
 }, keybindRow)
 
 local keybindButton = createInstance("TextButton", {
-    Name = "KeybindBtn",
+    Size = UDim2.new(0, 70, 0, 28),
+    Position = UDim2.new(1, -82, 0.5, -14),
+    BackgroundColor3 = COLORS.track,
+    Text = runtime.boundKey.Name,
+    TextColor3 = COLORS.text,
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
     AutoButtonColor = false,
-    AnchorPoint = Vector2.new(1, 0.5),
-    BackgroundColor3 = COLORS.button,
-    BackgroundTransparency = 0.30,
-    BorderSizePixel = 0,
-    Position = UDim2.new(1, -12, 0.5, 0),
-    Size = UDim2.new(0, 76, 0, 26),
-    Text = "Delete",
-    TextColor3 = COLORS.accent,
-    Font = Enum.Font.GothamBlack,
-    TextSize = 11,
-    ZIndex = 7,
 }, keybindRow)
-addCorner(keybindButton, 7)
-addStroke(keybindButton, COLORS.rowStroke, 0.50, 1)
+addCorner(keybindButton, 8)
+addStroke(keybindButton, COLORS.stroke, 0.6, 1)
 
-local function ripple(row)
-    if not runtime.alive or not row or not row.Parent then
-        return
+local lockStatusLabel = createInstance("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 14),
+    Position = UDim2.new(0, 0, 0, 116),
+    BackgroundTransparency = 1,
+    Text = runtime.locked and "Locked - position saved" or "Unlocked - drag to move",
+    TextColor3 = COLORS.muted,
+    Font = Enum.Font.Gotham,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Center,
+}, content)
+
+local function applyLockVisual()
+    if runtime.locked then
+        lockButton.Text = "🔒"
+        lockButton.TextColor3 = COLORS.accent
+        lockStatusLabel.Text = "Locked - position saved"
+        lockStatusLabel.TextColor3 = COLORS.accent
+        playTween(lockButton, 0.15, { BackgroundColor3 = Color3.fromRGB(55, 25, 65) })
+    else
+        lockButton.Text = "🔓"
+        lockButton.TextColor3 = COLORS.muted
+        lockStatusLabel.Text = "Unlocked - drag to move"
+        lockStatusLabel.TextColor3 = COLORS.muted
+        playTween(lockButton, 0.15, { BackgroundColor3 = COLORS.track })
     end
-
-    local mousePosition = UserInputService:GetMouseLocation()
-    local absolutePosition = row.AbsolutePosition
-    local absoluteSize = row.AbsoluteSize
-    local x = mousePosition.X - absolutePosition.X
-    local y = mousePosition.Y - absolutePosition.Y
-    local diameter = math.max(absoluteSize.X, absoluteSize.Y) * 1.35
-
-    local image = createInstance("ImageLabel", {
-        Name = "Ripple",
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://266543268",
-        ImageColor3 = COLORS.accent,
-        ImageTransparency = 0.40,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0, x, 0, y),
-        Size = UDim2.new(0, 0, 0, 0),
-        ZIndex = 30,
-    }, row)
-
-    local animation = playTween(image, 0.45, {
-        Size = UDim2.new(0, diameter, 0, diameter),
-        ImageTransparency = 1,
-    })
-    animation.Completed:Connect(function()
-        if image then
-            image:Destroy()
-        end
-    end)
+    saveConfig()
 end
 
 local function applyEnabledVisual(value, instant)
     statusLabel.Text = value and "ACTIVE" or "OFF"
     statusLabel.TextColor3 = value and COLORS.accent or COLORS.muted
-
     local trackColor = value and Color3.fromRGB(122, 30, 134) or COLORS.track
-    local knobPosition = value and UDim2.new(1, -19, 0, 3)
-        or UDim2.new(0, 3, 0, 3)
-
+    local knobPosition = value and UDim2.new(1, -19, 0, 3) or UDim2.new(0, 3, 0, 3)
     if instant then
         toggleTrack.BackgroundColor3 = trackColor
         toggleKnob.Position = knobPosition
@@ -685,19 +620,14 @@ local function applyEnabledVisual(value, instant)
 end
 
 local function setEnabled(value)
-    if not runtime.alive then
-        return false
-    end
-
+    if not runtime.alive then return false end
     value = value == true
     if runtime.enabled == value then
         applyEnabledVisual(value, false)
         return value
     end
-
     runtime.enabled = value
     applyEnabledVisual(value, false)
-
     if value then
         local root = getCurrentRoot(runtime.character)
         runtime.rootPart = root
@@ -706,7 +636,6 @@ local function setEnabled(value)
             applyEnabledVisual(false, false)
             return false
         end
-
         local fake = createFakeRoot(root)
         assignFakeReplicationRoot(root, fake)
         startStepConnection()
@@ -715,7 +644,6 @@ local function setEnabled(value)
         restoreReplicationRoot()
         destroyFakeRoot()
     end
-
     return runtime.enabled
 end
 
@@ -729,38 +657,41 @@ connect(toggleHit.MouseButton1Click, function()
 end)
 
 connect(keybindButton.MouseButton1Click, function()
-    if not runtime.alive or runtime.awaitingKey then
-        return
-    end
-
+    if not runtime.alive or runtime.awaitingKey then return end
     ripple(keybindRow)
     runtime.awaitingKey = true
     runtime.captureGeneration += 1
     local generation = runtime.captureGeneration
-
     task.spawn(function()
         for _, text in ipairs({".", "..", "..."}) do
-            if not runtime.alive
-                or not runtime.awaitingKey
-                or generation ~= runtime.captureGeneration
-            then
-                return
-            end
+            if not runtime.alive or not runtime.awaitingKey or generation ~= runtime.captureGeneration then return end
             keybindButton.Text = text
             task.wait(0.15)
         end
     end)
 end)
 
-connect(UserInputService.InputBegan, function(input, gameProcessed)
-    if not runtime.alive then
-        return
+connect(lockButton.MouseButton1Click, function()
+    if not runtime.alive then return end
+    runtime.locked = not runtime.locked
+    if runtime.locked then
+        runtime.savedPosition = main.Position
     end
+    ripple(lockButton)
+    applyLockVisual()
+end)
 
+connect(closeButton.MouseButton1Click, function()
+    if runtime.alive then
+        saveConfig()
+        runtime.destroy()
+    end
+end)
+
+connect(UserInputService.InputBegan, function(input, gameProcessed)
+    if not runtime.alive then return end
     if runtime.awaitingKey then
-        if input.UserInputType == Enum.UserInputType.Keyboard
-            and input.KeyCode ~= Enum.KeyCode.Unknown
-        then
+        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
             if input.KeyCode ~= Enum.KeyCode.Escape then
                 runtime.boundKey = input.KeyCode
             end
@@ -770,7 +701,6 @@ connect(UserInputService.InputBegan, function(input, gameProcessed)
         end
         return
     end
-
     if not gameProcessed and input.KeyCode == runtime.boundKey then
         ripple(toggleRow)
         toggleEnabled()
@@ -783,38 +713,54 @@ local dragStart = nil
 local startPosition = nil
 
 connect(main.InputBegan, function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch
-    then
+    if runtime.locked then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragInput = input
         dragStart = input.Position
         startPosition = main.Position
-
         local changedConnection
         changedConnection = input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
                 dragInput = nil
                 disconnect(changedConnection)
+                runtime.savedPosition = main.Position
+                saveConfig()
+            end
+        end)
+    end
+end)
+
+connect(header.InputBegan, function(input)
+    if runtime.locked then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragInput = input
+        dragStart = input.Position
+        startPosition = main.Position
+        local changedConnection
+        changedConnection = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                dragInput = nil
+                disconnect(changedConnection)
+                runtime.savedPosition = main.Position
+                saveConfig()
             end
         end)
     end
 end)
 
 connect(main.InputChanged, function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch
-    then
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
 end)
 
 connect(UserInputService.InputChanged, function(input)
-    if not dragging or input ~= dragInput or not dragStart or not startPosition then
-        return
-    end
-
+    if runtime.locked then return end
+    if not dragging or input ~= dragInput or not dragStart or not startPosition then return end
     local delta = input.Position - dragStart
     main.Position = UDim2.new(
         startPosition.X.Scale,
@@ -825,31 +771,24 @@ connect(UserInputService.InputChanged, function(input)
 end)
 
 connect(RunService.RenderStepped, function(deltaTime)
-    if not runtime.alive or not outlineGradient.Parent then
-        return
-    end
+    if not runtime.alive or not outlineGradient.Parent then return end
     outlineGradient.Rotation = (outlineGradient.Rotation + deltaTime * 140) % 360
 end)
 
 local function destroy()
-    if not runtime.alive then
-        return
-    end
-
+    if not runtime.alive then return end
     runtime.alive = false
     runtime.enabled = false
     runtime.awaitingKey = false
     runtime.captureGeneration += 1
-
+    saveConfig()
     stopStepConnection()
     restoreReplicationRoot()
     destroyFakeRoot()
-
     for _, connection in ipairs(runtime.connections) do
         disconnect(connection)
     end
     table.clear(runtime.connections)
-
     for index = #runtime.settingsRestore, 1, -1 do
         local entry = runtime.settingsRestore[index]
         pcall(function()
@@ -857,13 +796,11 @@ local function destroy()
         end)
     end
     table.clear(runtime.settingsRestore)
-
     if runtime.gui then
         pcall(function()
             runtime.gui:Destroy()
         end)
     end
-
     if environment[RUNTIME_KEY] == runtime then
         environment[RUNTIME_KEY] = nil
     end
@@ -876,9 +813,7 @@ runtime.bindCharacter = bindCharacter
 runtime.setHidden = setHidden
 runtime.getHidden = getHidden
 runtime.destroy = destroy
-runtime.getBoundKey = function()
-    return runtime.boundKey
-end
+runtime.getBoundKey = function() return runtime.boundKey end
 runtime.setBoundKey = function(keyCode)
     if keyCode and keyCode ~= Enum.KeyCode.Unknown then
         runtime.boundKey = keyCode
@@ -887,5 +822,21 @@ runtime.setBoundKey = function(keyCode)
     end
     return false
 end
+runtime.isLocked = function() return runtime.locked end
+runtime.setLocked = function(v)
+    runtime.locked = v == true
+    applyLockVisual()
+    return runtime.locked
+end
 
 applyEnabledVisual(false, true)
+applyLockVisual()
+
+if LocalPlayer.Character then
+    bindCharacter(LocalPlayer.Character)
+end
+connect(LocalPlayer.CharacterAdded, bindCharacter)
+
+if runtime.savedPosition then
+    main.Position = runtime.savedPosition
+end
