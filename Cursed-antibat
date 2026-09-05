@@ -351,11 +351,11 @@ Cursed_Hub_Anti_Bat.Parent = PlayerGui
 local Main = Instance.new("Frame")
 Main.Name = "Main"
 Main.Active = true
-Main.Position = UDim2.new(0.5, -135, 0.5, -130)
-Main.Size = UDim2.new(0, 270, 0, 240)
+Main.Position = UDim2.new(0.5, -145, 0.5, -135)
+Main.Size = UDim2.new(0, 290, 0, 270)
 Main.BackgroundColor3 = Color3.fromRGB(15,15,18)
 Main.BorderSizePixel = 0
-Main.ClipsDescendants = true
+Main.ClipsDescendants = false
 Main.Parent = Cursed_Hub_Anti_Bat
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
 
@@ -414,8 +414,8 @@ local BgBtn = Instance.new("TextButton")
 BgBtn.Name = "BgBtn"
 BgBtn.ZIndex = 5
 BgBtn.AnchorPoint = Vector2.new(1, 0.5)
-BgBtn.Position = UDim2.new(1, -54, 0.5, 0)
-BgBtn.Size = UDim2.new(0, 36, 0, 22)
+BgBtn.Position = UDim2.new(1, -50, 0.5, 0)
+BgBtn.Size = UDim2.new(0, 32, 0, 22)
 BgBtn.BackgroundColor3 = Color3.fromRGB(30,30,35)
 BgBtn.Text = "BG"
 BgBtn.TextColor3 = Color3.fromRGB(255,255,255)
@@ -428,7 +428,7 @@ local MinBtn = Instance.new("TextButton")
 MinBtn.Name = "MinBtn"
 MinBtn.ZIndex = 5
 MinBtn.AnchorPoint = Vector2.new(1, 0.5)
-MinBtn.Position = UDim2.new(1, -10, 0.5, 0)
+MinBtn.Position = UDim2.new(1, -12, 0.5, 0)
 MinBtn.Size = UDim2.new(0, 28, 0, 24)
 MinBtn.BackgroundColor3 = Color3.fromRGB(25,25,25)
 MinBtn.Text = "-"
@@ -441,7 +441,7 @@ Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
 local ContentHolder = Instance.new("Frame")
 ContentHolder.Name = "ContentHolder"
 ContentHolder.Position = UDim2.new(0, 0, 0, 48)
-ContentHolder.Size = UDim2.new(1, 0, 1, -48)
+ContentHolder.Size = UDim2.new(1, 0, 1, -52)
 ContentHolder.BackgroundTransparency = 1
 ContentHolder.Parent = Main
 
@@ -459,7 +459,7 @@ local ContentPad = Instance.new("UIPadding")
 ContentPad.PaddingTop = UDim.new(0, 6)
 ContentPad.PaddingLeft = UDim.new(0, 10)
 ContentPad.PaddingRight = UDim.new(0, 10)
-ContentPad.PaddingBottom = UDim.new(0, 10)
+ContentPad.PaddingBottom = UDim.new(0, 14)
 ContentPad.Parent = Content
 
 -- Status
@@ -553,7 +553,7 @@ local ToggleBg = Instance.new("TextButton")
 ToggleBg.Name = "ToggleBg"
 ToggleBg.ZIndex = 2
 ToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-ToggleBg.Position = UDim2.new(1, -10, 0.5, 0)
+ToggleBg.Position = UDim2.new(1, -14, 0.5, 0)
 ToggleBg.Size = UDim2.new(0, 44, 0, 22)
 ToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 ToggleBg.Text = ""
@@ -591,7 +591,7 @@ local AntiTpToggleBg = Instance.new("TextButton")
 AntiTpToggleBg.Name = "AntiTpToggleBg"
 AntiTpToggleBg.ZIndex = 2
 AntiTpToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-AntiTpToggleBg.Position = UDim2.new(1, -10, 0.5, 0)
+AntiTpToggleBg.Position = UDim2.new(1, -14, 0.5, 0)
 AntiTpToggleBg.Size = UDim2.new(0, 44, 0, 22)
 AntiTpToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 AntiTpToggleBg.Text = ""
@@ -629,7 +629,7 @@ local InfToggleBg = Instance.new("TextButton")
 InfToggleBg.Name = "InfToggleBg"
 InfToggleBg.ZIndex = 2
 InfToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-InfToggleBg.Position = UDim2.new(1, -10, 0.5, 0)
+InfToggleBg.Position = UDim2.new(1, -14, 0.5, 0)
 InfToggleBg.Size = UDim2.new(0, 44, 0, 22)
 InfToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 InfToggleBg.Text = ""
@@ -790,11 +790,11 @@ MinBtn.MouseButton1Click:Connect(function()
     if minimized then
         ContentHolder.Visible = false
         BackgroundPicker.Visible = false
-        Main.Size = UDim2.new(0, 270, 0, 48)
+        Main.Size = UDim2.new(0, 290, 0, 48)
         MinBtn.Text = "+"
     else
         ContentHolder.Visible = true
-        Main.Size = UDim2.new(0, 270, 0, 240)
+        Main.Size = UDim2.new(0, 290, 0, 270)
         MinBtn.Text = "-"
     end
 end)
