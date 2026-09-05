@@ -119,29 +119,26 @@ local function setAntiBat(on)
     if AntiBatEnabled then startAntiBat() else stopAntiBat() end
     saveConfig()
 end
--- YOUR HOLD INFINITE JUMP LOGIC (only jump button / space)
-UserInputService.JumpRequest:Connect(function()
-    if not InfJumpHoldEnabled then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if root then
-        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.Space or input.UserInputType == Enum.UserInputType.Touch then
+        IsJumpingHold = true
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Space or input.UserInputType == Enum.UserInputType.Touch then
+        IsJumpingHold = false
     end
 end)
 RunService.Heartbeat:Connect(function()
-    if not InfJumpHoldEnabled then return end
+    if not InfJumpHoldEnabled or not IsJumpingHold then return end
     local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
-    if jumpHeld and root.Velocity.Y < 30 then
-        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
-    end
-    if root.Velocity.Y < -120 then
-        root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        local v = root.Velocity
+        if v.Y < 55 then
+            root.Velocity = Vector3.new(v.X, 55, v.Z)
+        end
     end
 end)
 local FAKE_ROOT_Y = 1e8
@@ -392,7 +389,7 @@ local BgBtn = Instance.new("TextButton")
 BgBtn.Name = "BgBtn"
 BgBtn.ZIndex = 5
 BgBtn.AnchorPoint = Vector2.new(1, 0.5)
-BgBtn.Position = UDim2.new(1, -44, 0.5, 0) -- FIXED
+BgBtn.Position = UDim2.new(1, -48, 0.5, 0) -- FIXED HEADER
 BgBtn.Size = UDim2.new(0, 42, 0, 22)
 BgBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 BgBtn.BackgroundTransparency = 0.15
@@ -409,7 +406,7 @@ local MinBtn = Instance.new("TextButton")
 MinBtn.Name = "MinBtn"
 MinBtn.ZIndex = 5
 MinBtn.AnchorPoint = Vector2.new(1, 0.5)
-MinBtn.Position = UDim2.new(1, -16, 0.5, 0) -- FIXED minimize was cut off at -12, now -16 fully inside
+MinBtn.Position = UDim2.new(1, -14, 0.5, 0) -- FIXED HEADER
 MinBtn.Size = UDim2.new(0, 24, 0, 24)
 MinBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MinBtn.BackgroundTransparency = 0.5
@@ -496,7 +493,7 @@ local ToggleBg = Instance.new("Frame")
 ToggleBg.Name = "ToggleBg"
 ToggleBg.ZIndex = 6
 ToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-ToggleBg.Position = UDim2.new(1, -12, 0.5, 0) -- FIXED was -58 no anchor, now -12 anchor 1
+ToggleBg.Position = UDim2.new(1, -12, 0.5, 0) -- FIXED ALIGNED
 ToggleBg.Size = UDim2.new(0, 44, 0, 22)
 ToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 ToggleBg.Parent = AntiBatRow
@@ -521,7 +518,7 @@ local AntiBatV1 = Instance.new("TextButton")
 AntiBatV1.Name = "AntiBatV1"
 AntiBatV1.ZIndex = 9
 AntiBatV1.AnchorPoint = Vector2.new(1, 0.5)
-AntiBatV1.Position = UDim2.new(1, -96, 0.5, 0) -- FIXED was -100
+AntiBatV1.Position = UDim2.new(1, -92, 0.5, 0) -- FIXED ALIGNED
 AntiBatV1.Size = UDim2.new(0, 24, 0, 20)
 AntiBatV1.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
 AntiBatV1.BackgroundTransparency = 0.1
@@ -539,7 +536,7 @@ local AntiBatV2 = Instance.new("TextButton")
 AntiBatV2.Name = "AntiBatV2"
 AntiBatV2.ZIndex = 9
 AntiBatV2.AnchorPoint = Vector2.new(1, 0.5)
-AntiBatV2.Position = UDim2.new(1, -68, 0.5, 0) -- FIXED was -72
+AntiBatV2.Position = UDim2.new(1, -62, 0.5, 0) -- FIXED ALIGNED
 AntiBatV2.Size = UDim2.new(0, 24, 0, 20)
 AntiBatV2.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 AntiBatV2.BackgroundTransparency = 0.1
@@ -578,7 +575,8 @@ local AntiTpToggleBg = Instance.new("Frame")
 AntiTpToggleBg.Name = "AntiTpToggleBg"
 AntiTpToggleBg.ZIndex = 6
 AntiTpToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-AntiTpToggleBg.Position = UDim2.new(1, -12, 0.5, 0) -- FIXED
+AntiTpToggleBg.AnchorPoint = Vector2.new(1, 0.5)
+AntiTpToggleBg.Position = UDim2.new(1, -12, 0.5, 0)
 AntiTpToggleBg.Size = UDim2.new(0, 44, 0, 22)
 AntiTpToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 AntiTpToggleBg.Parent = AntiTpBatRow
@@ -624,7 +622,8 @@ local InfToggleBg = Instance.new("Frame")
 InfToggleBg.Name = "InfToggleBg"
 InfToggleBg.ZIndex = 6
 InfToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-InfToggleBg.Position = UDim2.new(1, -12, 0.5, 0) -- FIXED
+InfToggleBg.AnchorPoint = Vector2.new(1, 0.5)
+InfToggleBg.Position = UDim2.new(1, -12, 0.5, 0)
 InfToggleBg.Size = UDim2.new(0, 44, 0, 22)
 InfToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 InfToggleBg.Parent = InfJumpRow
