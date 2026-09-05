@@ -119,60 +119,34 @@ local function setAntiBat(on)
     if AntiBatEnabled then startAntiBat() else stopAntiBat() end
     saveConfig()
 end
--- FIXED: Hold Inf Jump ONLY on Space / JumpButton, and drops when you release
-local activeJumpTouch = nil
-local function getJumpButton()
-    local tg = PlayerGui:FindFirstChild("TouchGui")
-    if tg then
-        local tf = tg:FindFirstChild("TouchControlFrame")
-        if tf then return tf:FindFirstChild("JumpButton") end
-    end
-    return nil
-end
-local function isTouchOnJumpButton(input)
-    local btn = getJumpButton()
-    if not btn then return false end
-    local pos = btn.AbsolutePosition
-    local size = btn.AbsoluteSize
-    local p = input.Position
-    return p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y
-end
-
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.Space then
-        IsJumpingHold = true
-    elseif input.UserInputType == Enum.UserInputType.Touch then
-        if isTouchOnJumpButton(input) then
-            activeJumpTouch = input
-            IsJumpingHold = true
-        end
-    end
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Space then
-        IsJumpingHold = false
-    elseif input.UserInputType == Enum.UserInputType.Touch then
-        if activeJumpTouch and input == activeJumpTouch then
-            IsJumpingHold = false
-            activeJumpTouch = nil
-        elseif not activeJumpTouch then
-            -- if we didn't track (old executor), still stop if touch was on jump button area
-            if isTouchOnJumpButton(input) then
-                IsJumpingHold = false
-            end
-        end
-    end
-end)
-RunService.Heartbeat:Connect(function()
-    if not InfJumpHoldEnabled or not IsJumpingHold then return end
+-- REPLACED WITH YOUR HOLD INFINITE JUMP LOGIC (adapted to use InfJumpHoldEnabled toggle)
+UserInputService.JumpRequest:Connect(function()
+    if not InfJumpHoldEnabled then return end
     local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
     if root then
-        local v = root.Velocity
-        if v.Y < 55 then
-            root.Velocity = Vector3.new(v.X, 55, v.Z)
-        end
+        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not InfJumpHoldEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    -- Hold jump to keep jumping (Space on PC, Jump=true on mobile = only JumpButton)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
+    if jumpHeld and root.Velocity.Y < 30 then
+        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+    end
+    
+    -- Fall speed limit from your logic
+    if root.Velocity.Y < -120 then
+        root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
     end
 end)
 local FAKE_ROOT_Y = 1e8
