@@ -119,7 +119,7 @@ local function setAntiBat(on)
     if AntiBatEnabled then startAntiBat() else stopAntiBat() end
     saveConfig()
 end
--- REPLACED WITH YOUR HOLD INFINITE JUMP LOGIC (adapted to use InfJumpHoldEnabled toggle)
+-- YOUR HOLD INFINITE JUMP LOGIC INSERTED HERE (only this part changed)
 UserInputService.JumpRequest:Connect(function()
     if not InfJumpHoldEnabled then return end
     local char = LocalPlayer.Character
@@ -136,15 +136,11 @@ RunService.Heartbeat:Connect(function()
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
-    
-    -- Hold jump to keep jumping (Space on PC, Jump=true on mobile = only JumpButton)
     local hum = char:FindFirstChildOfClass("Humanoid")
     local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
     if jumpHeld and root.Velocity.Y < 30 then
         root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
     end
-    
-    -- Fall speed limit from your logic
     if root.Velocity.Y < -120 then
         root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
     end
