@@ -119,15 +119,41 @@ local function setAntiBat(on)
     if AntiBatEnabled then startAntiBat() else stopAntiBat() end
     saveConfig()
 end
+-- FIXED: Hold Inf Jump now only on Jump button / Space, not any touch on screen
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if input.KeyCode == Enum.KeyCode.Space or input.UserInputType == Enum.UserInputType.Touch then
+    if input.KeyCode == Enum.KeyCode.Space then
         IsJumpingHold = true
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Space or input.UserInputType == Enum.UserInputType.Touch then
+    if input.KeyCode == Enum.KeyCode.Space then
         IsJumpingHold = false
+    end
+end)
+-- Mobile: JumpRequest fires only when you tap the Jump button
+UserInputService.JumpRequest:Connect(function()
+    if InfJumpHoldEnabled then
+        IsJumpingHold = true
+    end
+end)
+-- Auto-reset when you land / stop jumping (works for both PC and mobile)
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        local state = hum:GetState()
+        if state ~= Enum.HumanoidStateType.Jumping and state ~= Enum.HumanoidStateType.Freefall then
+            if not UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                -- on mobile, reset shortly after jump starts, will be set true again if holding jump button
+                if IsJumpingHold then
+                    -- keep it true only while Space is held, on mobile it will auto-reset when you leave Freefall
+                    if state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.Landed then
+                        IsJumpingHold = false
+                    end
+                end
+            end
+        end
     end
 end)
 RunService.Heartbeat:Connect(function()
@@ -406,7 +432,7 @@ local MinBtn = Instance.new("TextButton")
 MinBtn.Name = "MinBtn"
 MinBtn.ZIndex = 5
 MinBtn.AnchorPoint = Vector2.new(1, 0.5)
-MinBtn.Position = UDim2.new(1, -12, 0.5, 0)
+MinBtn.Position = UDim2.new(1, -16, 0.5, 0)
 MinBtn.Size = UDim2.new(0, 24, 0, 24)
 MinBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MinBtn.BackgroundTransparency = 0.5
@@ -517,7 +543,7 @@ local AntiBatV1 = Instance.new("TextButton")
 AntiBatV1.Name = "AntiBatV1"
 AntiBatV1.ZIndex = 9
 AntiBatV1.AnchorPoint = Vector2.new(1, 0.5)
-AntiBatV1.Position = UDim2.new(1, -100, 0.5, 0)
+AntiBatV1.Position = UDim2.new(1, -110, 0.5, 0)
 AntiBatV1.Size = UDim2.new(0, 24, 0, 20)
 AntiBatV1.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
 AntiBatV1.BackgroundTransparency = 0.1
@@ -535,7 +561,7 @@ local AntiBatV2 = Instance.new("TextButton")
 AntiBatV2.Name = "AntiBatV2"
 AntiBatV2.ZIndex = 9
 AntiBatV2.AnchorPoint = Vector2.new(1, 0.5)
-AntiBatV2.Position = UDim2.new(1, -72, 0.5, 0)
+AntiBatV2.Position = UDim2.new(1, -82, 0.5, 0)
 AntiBatV2.Size = UDim2.new(0, 24, 0, 20)
 AntiBatV2.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 AntiBatV2.BackgroundTransparency = 0.1
