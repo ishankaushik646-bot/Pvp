@@ -339,6 +339,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     task.defer(bindCharacter, char)
 end)
 if LocalPlayer.Character then bindCharacter(LocalPlayer.Character) end
+
 local Cursed_Hub_Anti_Bat = Instance.new("ScreenGui")
 Cursed_Hub_Anti_Bat.Name = "Cursed Hub Anti Bat"
 Cursed_Hub_Anti_Bat.IgnoreGuiInset = true
@@ -350,15 +351,13 @@ Cursed_Hub_Anti_Bat.Parent = PlayerGui
 local Main = Instance.new("Frame")
 Main.Name = "Main"
 Main.Active = true
-Main.ClipsDescendants = false
 Main.Position = UDim2.new(0.5, -135, 0.5, -130)
 Main.Size = UDim2.new(0, 270, 0, 240)
-Main.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Main.BackgroundColor3 = Color3.fromRGB(15,15,18)
 Main.BorderSizePixel = 0
+Main.ClipsDescendants = true
 Main.Parent = Cursed_Hub_Anti_Bat
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 14)
-UICorner.Parent = Main
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
 
 local SpaceBackground = Instance.new("ImageLabel")
 SpaceBackground.Name = "SpaceBackground"
@@ -367,9 +366,7 @@ SpaceBackground.BackgroundTransparency = 1
 SpaceBackground.Image = "rbxthumb://type=Asset&id=125478662519277&w=420&h=420"
 SpaceBackground.ScaleType = Enum.ScaleType.Crop
 SpaceBackground.Parent = Main
-local UICorner2 = Instance.new("UICorner")
-UICorner2.CornerRadius = UDim.new(0, 14)
-UICorner2.Parent = SpaceBackground
+Instance.new("UICorner", SpaceBackground).CornerRadius = UDim.new(0, 12)
 
 local Header = Instance.new("Frame")
 Header.Name = "Header"
@@ -383,7 +380,7 @@ HeaderIcon.Name = "HeaderIcon"
 HeaderIcon.ZIndex = 5
 HeaderIcon.Position = UDim2.new(0, 14, 0.5, -5)
 HeaderIcon.Size = UDim2.new(0, 10, 0, 10)
-HeaderIcon.BackgroundColor3 = Color3.fromRGB(120, 120, 130)
+HeaderIcon.BackgroundColor3 = Color3.fromRGB(120,120,130)
 HeaderIcon.Parent = Header
 Instance.new("UICorner", HeaderIcon).CornerRadius = UDim.new(0, 999)
 
@@ -394,7 +391,7 @@ Title.Position = UDim2.new(0, 34, 0, 6)
 Title.Size = UDim2.new(0, 120, 0, 18)
 Title.BackgroundTransparency = 1
 Title.Text = "ANTI BAT"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextColor3 = Color3.fromRGB(255,255,255)
 Title.TextSize = 14
 Title.Font = Enum.Font.GothamBlack
 Title.TextXAlignment = Enum.TextXAlignment.Left
@@ -407,7 +404,7 @@ SubTitle.Position = UDim2.new(0, 34, 0, 26)
 SubTitle.Size = UDim2.new(0, 140, 0, 14)
 SubTitle.BackgroundTransparency = 1
 SubTitle.Text = "Cursed Hub Anti Bat"
-SubTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+SubTitle.TextColor3 = Color3.fromRGB(200,200,200)
 SubTitle.Font = Enum.Font.Gotham
 SubTitle.TextSize = 11
 SubTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -419,10 +416,9 @@ BgBtn.ZIndex = 5
 BgBtn.AnchorPoint = Vector2.new(1, 0.5)
 BgBtn.Position = UDim2.new(1, -54, 0.5, 0)
 BgBtn.Size = UDim2.new(0, 36, 0, 22)
-BgBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-BgBtn.BackgroundTransparency = 0.15
+BgBtn.BackgroundColor3 = Color3.fromRGB(30,30,35)
 BgBtn.Text = "BG"
-BgBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+BgBtn.TextColor3 = Color3.fromRGB(255,255,255)
 BgBtn.TextSize = 10
 BgBtn.Font = Enum.Font.GothamBold
 BgBtn.Parent = Header
@@ -434,10 +430,9 @@ MinBtn.ZIndex = 5
 MinBtn.AnchorPoint = Vector2.new(1, 0.5)
 MinBtn.Position = UDim2.new(1, -10, 0.5, 0)
 MinBtn.Size = UDim2.new(0, 28, 0, 24)
-MinBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-MinBtn.BackgroundTransparency = 0.3
+MinBtn.BackgroundColor3 = Color3.fromRGB(25,25,25)
 MinBtn.Text = "-"
-MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinBtn.TextColor3 = Color3.fromRGB(255,255,255)
 MinBtn.TextSize = 16
 MinBtn.Font = Enum.Font.GothamBold
 MinBtn.Parent = Header
@@ -448,7 +443,6 @@ ContentHolder.Name = "ContentHolder"
 ContentHolder.Position = UDim2.new(0, 0, 0, 48)
 ContentHolder.Size = UDim2.new(1, 0, 1, -48)
 ContentHolder.BackgroundTransparency = 1
-ContentHolder.ClipsDescendants = false
 ContentHolder.Parent = Main
 
 local Content = Instance.new("Frame")
@@ -462,51 +456,43 @@ ContentList.SortOrder = Enum.SortOrder.LayoutOrder
 ContentList.Padding = UDim.new(0, 8)
 ContentList.Parent = Content
 local ContentPad = Instance.new("UIPadding")
-ContentPad.PaddingTop = UDim.new(0, 4)
-ContentPad.PaddingLeft = UDim.new(0, 12)
-ContentPad.PaddingRight = UDim.new(0, 12)
-ContentPad.PaddingBottom = UDim.new(0, 8)
+ContentPad.PaddingTop = UDim.new(0, 6)
+ContentPad.PaddingLeft = UDim.new(0, 10)
+ContentPad.PaddingRight = UDim.new(0, 10)
+ContentPad.PaddingBottom = UDim.new(0, 10)
 ContentPad.Parent = Content
 
--- Status Row
+-- Status
 local StatusRow = Instance.new("Frame")
 StatusRow.Name = "StatusRow"
-StatusRow.ZIndex = 4
 StatusRow.LayoutOrder = 1
 StatusRow.Size = UDim2.new(1, 0, 0, 32)
-StatusRow.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-StatusRow.BackgroundTransparency = 0.4
+StatusRow.BackgroundColor3 = Color3.fromRGB(25,25,30)
 StatusRow.Parent = Content
 Instance.new("UICorner", StatusRow).CornerRadius = UDim.new(0, 8)
-
 local StatusDot = Instance.new("Frame")
 StatusDot.Name = "StatusDot"
-StatusDot.ZIndex = 6
 StatusDot.Position = UDim2.new(0, 12, 0.5, -4)
 StatusDot.Size = UDim2.new(0, 8, 0, 8)
 StatusDot.BackgroundColor3 = Color3.fromRGB(255, 80, 100)
 StatusDot.Parent = StatusRow
 Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(0, 999)
-
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Name = "StatusLabel"
-StatusLabel.ZIndex = 6
 StatusLabel.Position = UDim2.new(0, 28, 0, 0)
 StatusLabel.Size = UDim2.new(0, 60, 1, 0)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.Text = "Status"
-StatusLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+StatusLabel.TextColor3 = Color3.fromRGB(220,220,220)
 StatusLabel.TextSize = 12
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatusLabel.Parent = StatusRow
-
 local StatusValue = Instance.new("TextLabel")
 StatusValue.Name = "StatusValue"
-StatusValue.ZIndex = 6
 StatusValue.AnchorPoint = Vector2.new(1, 0.5)
 StatusValue.Position = UDim2.new(1, -12, 0.5, 0)
-StatusValue.Size = UDim2.new(0, 80, 0, 16)
+StatusValue.Size = UDim2.new(0, 80, 16)
 StatusValue.BackgroundTransparency = 1
 StatusValue.Text = "INACTIVE"
 StatusValue.TextColor3 = Color3.fromRGB(255, 80, 100)
@@ -515,322 +501,196 @@ StatusValue.Font = Enum.Font.GothamBold
 StatusValue.TextXAlignment = Enum.TextXAlignment.Right
 StatusValue.Parent = StatusRow
 
--- Anti Bat Row (with V1 V2 and toggle aligned)
+-- Anti Bat Row
 local AntiBatRow = Instance.new("Frame")
 AntiBatRow.Name = "AntiBatRow"
-AntiBatRow.ZIndex = 4
 AntiBatRow.LayoutOrder = 2
 AntiBatRow.Size = UDim2.new(1, 0, 0, 40)
-AntiBatRow.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-AntiBatRow.BackgroundTransparency = 0.4
+AntiBatRow.BackgroundColor3 = Color3.fromRGB(25,25,30)
 AntiBatRow.Parent = Content
 Instance.new("UICorner", AntiBatRow).CornerRadius = UDim.new(0, 8)
-
 local AntiBatLabel = Instance.new("TextLabel")
 AntiBatLabel.Name = "AntiBatLabel"
-AntiBatLabel.ZIndex = 6
 AntiBatLabel.Position = UDim2.new(0, 12, 0, 0)
-AntiBatLabel.Size = UDim2.new(0, 60, 1, 0)
+AntiBatLabel.Size = UDim2.new(0, 70, 1, 0)
 AntiBatLabel.BackgroundTransparency = 1
 AntiBatLabel.Text = "Anti Bat"
-AntiBatLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+AntiBatLabel.TextColor3 = Color3.fromRGB(220,220,220)
 AntiBatLabel.TextSize = 12
 AntiBatLabel.Font = Enum.Font.Gotham
 AntiBatLabel.TextXAlignment = Enum.TextXAlignment.Left
 AntiBatLabel.Parent = AntiBatRow
 
--- Right controls container for Anti Bat
-local AntiBatRight = Instance.new("Frame")
-AntiBatRight.Name = "AntiBatRight"
-AntiBatRight.Size = UDim2.new(0, 150, 1, 0)
-AntiBatRight.AnchorPoint = Vector2.new(1, 0.5)
-AntiBatRight.Position = UDim2.new(1, -8, 0.5, 0)
-AntiBatRight.BackgroundTransparency = 1
-AntiBatRight.ZIndex = 5
-AntiBatRight.Parent = AntiBatRow
-
 local AntiBatV1 = Instance.new("TextButton")
 AntiBatV1.Name = "AntiBatV1"
-AntiBatV1.ZIndex = 9
-AntiBatV1.Position = UDim2.new(0, 0, 0.5, -10)
-AntiBatV1.Size = UDim2.new(0, 32, 0, 20)
+AntiBatV1.ZIndex = 2
+AntiBatV1.AnchorPoint = Vector2.new(0, 0.5)
+AntiBatV1.Position = UDim2.new(0, 90, 0.5, 0)
+AntiBatV1.Size = UDim2.new(0, 32, 0, 22)
 AntiBatV1.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-AntiBatV1.BackgroundTransparency = 0.1
 AntiBatV1.Text = "V1"
-AntiBatV1.TextColor3 = Color3.fromRGB(255, 255, 255)
+AntiBatV1.TextColor3 = Color3.fromRGB(255,255,255)
 AntiBatV1.TextSize = 10
 AntiBatV1.Font = Enum.Font.GothamBold
-AntiBatV1.AutoButtonColor = false
-AntiBatV1.Parent = AntiBatRight
-Instance.new("UICorner", AntiBatV1).CornerRadius = UDim.new(0, 5)
+AntiBatV1.Parent = AntiBatRow
+Instance.new("UICorner", AntiBatV1).CornerRadius = UDim.new(0, 6)
 
 local AntiBatV2 = Instance.new("TextButton")
 AntiBatV2.Name = "AntiBatV2"
-AntiBatV2.ZIndex = 9
-AntiBatV2.Position = UDim2.new(0, 36, 0.5, -10)
-AntiBatV2.Size = UDim2.new(0, 32, 0, 20)
-AntiBatV2.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-AntiBatV2.BackgroundTransparency = 0.1
+AntiBatV2.ZIndex = 2
+AntiBatV2.AnchorPoint = Vector2.new(0, 0.5)
+AntiBatV2.Position = UDim2.new(0, 126, 0.5, 0)
+AntiBatV2.Size = UDim2.new(0, 32, 0, 22)
+AntiBatV2.BackgroundColor3 = Color3.fromRGB(40,40,40)
 AntiBatV2.Text = "V2"
-AntiBatV2.TextColor3 = Color3.fromRGB(205, 205, 210)
+AntiBatV2.TextColor3 = Color3.fromRGB(200,200,200)
 AntiBatV2.TextSize = 10
 AntiBatV2.Font = Enum.Font.GothamBold
-AntiBatV2.AutoButtonColor = false
-AntiBatV2.Parent = AntiBatRight
-Instance.new("UICorner", AntiBatV2).CornerRadius = UDim.new(0, 5)
+AntiBatV2.Parent = AntiBatRow
+Instance.new("UICorner", AntiBatV2).CornerRadius = UDim.new(0, 6)
 
-local ToggleBg = Instance.new("Frame")
+local ToggleBg = Instance.new("TextButton")
 ToggleBg.Name = "ToggleBg"
-ToggleBg.ZIndex = 6
+ToggleBg.ZIndex = 2
 ToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-ToggleBg.Position = UDim2.new(1, 0, 0.5, 0)
+ToggleBg.Position = UDim2.new(1, -10, 0.5, 0)
 ToggleBg.Size = UDim2.new(0, 44, 0, 22)
 ToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-ToggleBg.Parent = AntiBatRight
+ToggleBg.Text = ""
+ToggleBg.AutoButtonColor = false
+ToggleBg.Parent = AntiBatRow
 Instance.new("UICorner", ToggleBg).CornerRadius = UDim.new(0, 11)
-
 local ToggleDot = Instance.new("Frame")
 ToggleDot.Name = "ToggleDot"
-ToggleDot.ZIndex = 7
 ToggleDot.Position = UDim2.new(0, 3, 0.5, -8)
 ToggleDot.Size = UDim2.new(0, 16, 0, 16)
-ToggleDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ToggleDot.BackgroundColor3 = Color3.fromRGB(255,255,255)
 ToggleDot.Parent = ToggleBg
 Instance.new("UICorner", ToggleDot).CornerRadius = UDim.new(0, 999)
 
-local AntiBatV1 = Instance.new("TextButton")
-AntiBatV1.Name = "AntiBatV1"
-AntiBatV1.ZIndex = 20
-AntiBatV1.Position = UDim2.new(0, 0, 0.5, -10)
-AntiBatV1.Size = UDim2.new(0, 32, 0, 20)
-AntiBatV1.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-AntiBatV1.BackgroundTransparency = 0.1
-AntiBatV1.Text = "V1"
-AntiBatV1.TextColor3 = Color3.fromRGB(255, 255, 255)
-AntiBatV1.TextSize = 10
-AntiBatV1.Font = Enum.Font.GothamBold
-AntiBatV1.AutoButtonColor = false
-AntiBatV1.Parent = AntiBatRight
-Instance.new("UICorner", AntiBatV1).CornerRadius = UDim.new(0, 5)
-
-local AntiBatV2 = Instance.new("TextButton")
-AntiBatV2.Name = "AntiBatV2"
-AntiBatV2.ZIndex = 20
-AntiBatV2.Position = UDim2.new(0, 36, 0.5, -10)
-AntiBatV2.Size = UDim2.new(0, 32, 0, 20)
-AntiBatV2.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-AntiBatV2.BackgroundTransparency = 0.1
-AntiBatV2.Text = "V2"
-AntiBatV2.TextColor3 = Color3.fromRGB(205, 205, 210)
-AntiBatV2.TextSize = 10
-AntiBatV2.Font = Enum.Font.GothamBold
-AntiBatV2.AutoButtonColor = false
-AntiBatV2.Parent = AntiBatRight
-Instance.new("UICorner", AntiBatV2).CornerRadius = UDim.new(0, 5)
-
-local ToggleBg = Instance.new("Frame")
-ToggleBg.Name = "ToggleBg"
-ToggleBg.ZIndex = 6
-ToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-ToggleBg.Position = UDim2.new(1, 0, 0.5, 0)
-ToggleBg.Size = UDim2.new(0, 44, 0, 22)
-ToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-ToggleBg.Parent = AntiBatRight
-Instance.new("UICorner", ToggleBg).CornerRadius = UDim.new(0, 11)
-
-local ToggleDot = Instance.new("Frame")
-ToggleDot.Name = "ToggleDot"
-ToggleDot.ZIndex = 7
-ToggleDot.Position = UDim2.new(0, 3, 0.5, -8)
-ToggleDot.Size = UDim2.new(0, 16, 0, 16)
-ToggleDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-ToggleDot.Parent = ToggleBg
-Instance.new("UICorner", ToggleDot).CornerRadius = UDim.new(0, 999)
-
-local AntiBatClick = Instance.new("TextButton")
-AntiBatClick.Name = "AntiBatClick"
-AntiBatClick.ZIndex = 30
-AntiBatClick.AnchorPoint = Vector2.new(1, 0.5)
-AntiBatClick.Position = UDim2.new(1, 0, 0.5, 0)
-AntiBatClick.Size = UDim2.new(0, 44, 0, 32)
-AntiBatClick.BackgroundTransparency = 1
-AntiBatClick.Text = ""
-AntiBatClick.Parent = AntiBatRight
-
--- Anti TP Bat Row
+-- Anti TP Row
 local AntiTpBatRow = Instance.new("Frame")
 AntiTpBatRow.Name = "AntiTpBatRow"
-AntiTpBatRow.ZIndex = 4
 AntiTpBatRow.LayoutOrder = 3
 AntiTpBatRow.Size = UDim2.new(1, 0, 0, 40)
-AntiTpBatRow.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-AntiTpBatRow.BackgroundTransparency = 0.4
+AntiTpBatRow.BackgroundColor3 = Color3.fromRGB(25,25,30)
 AntiTpBatRow.Parent = Content
 Instance.new("UICorner", AntiTpBatRow).CornerRadius = UDim.new(0, 8)
-
 local AntiTpBatLabel = Instance.new("TextLabel")
 AntiTpBatLabel.Name = "AntiTpBatLabel"
-AntiTpBatLabel.ZIndex = 6
 AntiTpBatLabel.Position = UDim2.new(0, 12, 0, 0)
-AntiTpBatLabel.Size = UDim2.new(0, 110, 1, 0)
+AntiTpBatLabel.Size = UDim2.new(0, 120, 1, 0)
 AntiTpBatLabel.BackgroundTransparency = 1
 AntiTpBatLabel.Text = "Anti TP Bat"
-AntiTpBatLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+AntiTpBatLabel.TextColor3 = Color3.fromRGB(220,220,220)
 AntiTpBatLabel.TextSize = 12
 AntiTpBatLabel.Font = Enum.Font.Gotham
 AntiTpBatLabel.TextXAlignment = Enum.TextXAlignment.Left
 AntiTpBatLabel.Parent = AntiTpBatRow
-
-local AntiTpToggleBg = Instance.new("Frame")
+local AntiTpToggleBg = Instance.new("TextButton")
 AntiTpToggleBg.Name = "AntiTpToggleBg"
-AntiTpToggleBg.ZIndex = 6
-AntiTpToggleBg.Active = false
+AntiTpToggleBg.ZIndex = 2
 AntiTpToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-AntiTpToggleBg.Position = UDim2.new(1, -8, 0.5, 0)
+AntiTpToggleBg.Position = UDim2.new(1, -10, 0.5, 0)
 AntiTpToggleBg.Size = UDim2.new(0, 44, 0, 22)
 AntiTpToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+AntiTpToggleBg.Text = ""
+AntiTpToggleBg.AutoButtonColor = false
 AntiTpToggleBg.Parent = AntiTpBatRow
 Instance.new("UICorner", AntiTpToggleBg).CornerRadius = UDim.new(0, 11)
-
 local AntiTpToggleDot = Instance.new("Frame")
 AntiTpToggleDot.Name = "AntiTpToggleDot"
-AntiTpToggleDot.ZIndex = 7
 AntiTpToggleDot.Position = UDim2.new(0, 3, 0.5, -8)
 AntiTpToggleDot.Size = UDim2.new(0, 16, 0, 16)
-AntiTpToggleDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+AntiTpToggleDot.BackgroundColor3 = Color3.fromRGB(255,255,255)
 AntiTpToggleDot.Parent = AntiTpToggleBg
 Instance.new("UICorner", AntiTpToggleDot).CornerRadius = UDim.new(0, 999)
-
-local AntiTpBatClick = Instance.new("TextButton")
-AntiTpBatClick.Name = "AntiTpBatClick"
-AntiTpBatClick.ZIndex = 30
-AntiTpBatClick.AnchorPoint = Vector2.new(1, 0.5)
-AntiTpBatClick.Position = UDim2.new(1, -8, 0.5, 0)
-AntiTpBatClick.Size = UDim2.new(0, 60, 1, 0)
-AntiTpBatClick.BackgroundTransparency = 1
-AntiTpBatClick.Text = ""
-AntiTpBatClick.Parent = AntiTpBatRow
 
 -- Inf Jump Row
 local InfJumpRow = Instance.new("Frame")
 InfJumpRow.Name = "InfJumpRow"
-InfJumpRow.ZIndex = 4
 InfJumpRow.LayoutOrder = 4
 InfJumpRow.Size = UDim2.new(1, 0, 0, 40)
-InfJumpRow.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-InfJumpRow.BackgroundTransparency = 0.4
+InfJumpRow.BackgroundColor3 = Color3.fromRGB(25,25,30)
 InfJumpRow.Parent = Content
 Instance.new("UICorner", InfJumpRow).CornerRadius = UDim.new(0, 8)
-
 local InfJumpLabel = Instance.new("TextLabel")
 InfJumpLabel.Name = "InfJumpLabel"
-InfJumpLabel.ZIndex = 6
 InfJumpLabel.Position = UDim2.new(0, 12, 0, 0)
-InfJumpLabel.Size = UDim2.new(0, 140, 1, 0)
+InfJumpLabel.Size = UDim2.new(0, 130, 1, 0)
 InfJumpLabel.BackgroundTransparency = 1
 InfJumpLabel.Text = "Hold Inf Jump"
-InfJumpLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+InfJumpLabel.TextColor3 = Color3.fromRGB(220,220,220)
 InfJumpLabel.TextSize = 12
 InfJumpLabel.Font = Enum.Font.Gotham
 InfJumpLabel.TextXAlignment = Enum.TextXAlignment.Left
 InfJumpLabel.Parent = InfJumpRow
-
-local InfToggleBg = Instance.new("Frame")
+local InfToggleBg = Instance.new("TextButton")
 InfToggleBg.Name = "InfToggleBg"
-InfToggleBg.ZIndex = 6
-InfToggleBg.Active = false
+InfToggleBg.ZIndex = 2
 InfToggleBg.AnchorPoint = Vector2.new(1, 0.5)
-InfToggleBg.Position = UDim2.new(1, -8, 0.5, 0)
+InfToggleBg.Position = UDim2.new(1, -10, 0.5, 0)
 InfToggleBg.Size = UDim2.new(0, 44, 0, 22)
 InfToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+InfToggleBg.Text = ""
+InfToggleBg.AutoButtonColor = false
 InfToggleBg.Parent = InfJumpRow
 Instance.new("UICorner", InfToggleBg).CornerRadius = UDim.new(0, 11)
-
 local InfToggleDot = Instance.new("Frame")
 InfToggleDot.Name = "InfToggleDot"
-InfToggleDot.ZIndex = 7
 InfToggleDot.Position = UDim2.new(0, 3, 0.5, -8)
 InfToggleDot.Size = UDim2.new(0, 16, 0, 16)
-InfToggleDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+InfToggleDot.BackgroundColor3 = Color3.fromRGB(255,255,255)
 InfToggleDot.Parent = InfToggleBg
 Instance.new("UICorner", InfToggleDot).CornerRadius = UDim.new(0, 999)
-
-local InfJumpClick = Instance.new("TextButton")
-InfJumpClick.Name = "InfJumpClick"
-InfJumpClick.ZIndex = 30
-InfJumpClick.AnchorPoint = Vector2.new(1, 0.5)
-InfJumpClick.Position = UDim2.new(1, -8, 0.5, 0)
-InfJumpClick.Size = UDim2.new(0, 60, 1, 0)
-InfJumpClick.BackgroundTransparency = 1
-InfJumpClick.Text = ""
-InfJumpClick.Parent = InfJumpRow
 
 local BackgroundPicker = Instance.new("Frame")
 BackgroundPicker.Name = "BackgroundPicker"
 BackgroundPicker.Visible = false
-BackgroundPicker.ZIndex = 20
+BackgroundPicker.ZIndex = 10
 BackgroundPicker.AnchorPoint = Vector2.new(0.5, 0.5)
 BackgroundPicker.Position = UDim2.new(0.5, 0, 0.5, 0)
 BackgroundPicker.Size = UDim2.new(0, 260, 0, 180)
 BackgroundPicker.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 BackgroundPicker.Parent = Cursed_Hub_Anti_Bat
 Instance.new("UICorner", BackgroundPicker).CornerRadius = UDim.new(0, 12)
-local bpStroke = Instance.new("UIStroke", BackgroundPicker)
-bpStroke.Color = Color3.fromRGB(110, 110, 120)
-bpStroke.Thickness = 1.5
-
 local Header2 = Instance.new("Frame")
 Header2.Name = "Header"
-Header2.ZIndex = 21
 Header2.Size = UDim2.new(1, 0, 0, 38)
-Header2.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-Header2.BackgroundTransparency = 0.15
+Header2.BackgroundColor3 = Color3.fromRGB(30,30,35)
 Header2.Parent = BackgroundPicker
 Instance.new("UICorner", Header2).CornerRadius = UDim.new(0, 12)
-
 local TextLabel = Instance.new("TextLabel")
-TextLabel.ZIndex = 22
 TextLabel.Position = UDim2.new(0, 12, 0, 0)
-TextLabel.Size = UDim2.new(1, -54, 1, 0)
+TextLabel.Size = UDim2.new(1, -50, 1, 0)
 TextLabel.BackgroundTransparency = 1
 TextLabel.Text = "Change Background"
-TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextLabel.TextColor3 = Color3.fromRGB(255,255,255)
 TextLabel.TextSize = 14
 TextLabel.Font = Enum.Font.GothamBold
 TextLabel.TextXAlignment = Enum.TextXAlignment.Left
 TextLabel.Parent = Header2
-
 local Close = Instance.new("TextButton")
 Close.Name = "Close"
-Close.ZIndex = 22
 Close.AnchorPoint = Vector2.new(1, 0.5)
-Close.Position = UDim2.new(1, -9, 0.5, 0)
-Close.Size = UDim2.new(0, 28, 0, 25)
-Close.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-Close.BackgroundTransparency = 0.1
-Close.Text = "×"
-Close.TextColor3 = Color3.fromRGB(255, 255, 255)
-Close.TextSize = 18
-Close.Font = Enum.Font.GothamBold
-Close.AutoButtonColor = false
+Close.Position = UDim2.new(1, -8, 0.5, 0)
+Close.Size = UDim2.new(0, 28, 0, 24)
+Close.BackgroundColor3 = Color3.fromRGB(50,50,55)
+Close.Text = "X"
+Close.TextColor3 = Color3.fromRGB(255,255,255)
 Close.Parent = Header2
-Instance.new("UICorner", Close).CornerRadius = UDim.new(0, 7)
-
+Instance.new("UICorner", Close).CornerRadius = UDim.new(0, 6)
 local BackgroundGrid = Instance.new("Frame")
 BackgroundGrid.Name = "BackgroundGrid"
-BackgroundGrid.ZIndex = 21
-BackgroundGrid.Position = UDim2.new(0, 12, 0, 48)
-BackgroundGrid.Size = UDim2.new(1, -24, 1, -60)
+BackgroundGrid.Position = UDim2.new(0, 10, 0, 48)
+BackgroundGrid.Size = UDim2.new(1, -20, 1, -58)
 BackgroundGrid.BackgroundTransparency = 1
 BackgroundGrid.Parent = BackgroundPicker
-
 local UIGridLayout = Instance.new("UIGridLayout")
 UIGridLayout.CellPadding = UDim2.new(0, 8, 0, 8)
 UIGridLayout.CellSize = UDim2.new(0, 72, 0, 72)
-UIGridLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIGridLayout.FillDirectionMaxCells = 3
 UIGridLayout.Parent = BackgroundGrid
-
 local bgList = {
     { name = "Default", image = "rbxthumb://type=Asset&id=125478662519277&w=420&h=420" },
     { name = "Space 1", image = "rbxassetid://76835310118322" },
@@ -839,32 +699,28 @@ local bgList = {
 for i, bg in ipairs(bgList) do
     local btn = Instance.new("ImageButton")
     btn.Name = bg.name
-    btn.ZIndex = 22
     btn.LayoutOrder = i
-    btn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    btn.BackgroundTransparency = 0.1
+    btn.BackgroundColor3 = Color3.fromRGB(15,15,15)
     btn.Image = bg.image
     btn.ScaleType = Enum.ScaleType.Crop
-    btn.AutoButtonColor = false
     btn.Parent = BackgroundGrid
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
-    local st = Instance.new("UIStroke", btn)
-    st.Color = Color3.fromRGB(120, 120, 130)
-    st.Transparency = 0.1
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     btn.MouseButton1Click:Connect(function()
         SpaceBackground.Image = bg.image
         BackgroundPicker.Visible = false
     end)
 end
+
+
 local function tween(obj, t, props)
     TweenService:Create(obj, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
 end
 
--- REMOVED REMOTE LOADER (was: loadstring HttpGet from Argian-dotcom/Jdkffkfo)
 local function setToggleVisual(bg, dot, on)
     tween(bg, 0.15, { BackgroundColor3 = on and Color3.fromRGB(80, 200, 120) or Color3.fromRGB(40, 40, 40) })
     tween(dot, 0.15, { Position = on and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8) })
 end
+
 local function refreshStatus()
     local any = AntiBatEnabled or HookAntiEnabled
     StatusValue.Text = any and "ACTIVE" or "INACTIVE"
@@ -872,52 +728,62 @@ local function refreshStatus()
     StatusDot.BackgroundColor3 = any and Color3.fromRGB(80, 200, 120) or Color3.fromRGB(255, 80, 100)
     HeaderIcon.BackgroundColor3 = any and Color3.fromRGB(80, 200, 120) or Color3.fromRGB(120, 120, 130)
 end
+
 local function setVersionVisual()
     if AntiBatVersion == "V1" then
         AntiBatV1.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
         AntiBatV1.TextColor3 = Color3.fromRGB(255, 255, 255)
-        AntiBatV2.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        AntiBatV2.TextColor3 = Color3.fromRGB(205, 205, 210)
+        AntiBatV2.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        AntiBatV2.TextColor3 = Color3.fromRGB(200, 200, 200)
     else
         AntiBatV2.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
         AntiBatV2.TextColor3 = Color3.fromRGB(255, 255, 255)
-        AntiBatV1.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        AntiBatV1.TextColor3 = Color3.fromRGB(205, 205, 210)
+        AntiBatV1.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        AntiBatV1.TextColor3 = Color3.fromRGB(200, 200, 200)
     end
 end
-AntiBatClick.MouseButton1Click:Connect(function()
+
+-- DIRECT BUTTON CONNECTIONS - toggles themselves are clickable
+ToggleBg.MouseButton1Click:Connect(function()
     setAntiBat(not AntiBatEnabled)
     setToggleVisual(ToggleBg, ToggleDot, AntiBatEnabled)
     refreshStatus()
 end)
+
 AntiBatV1.MouseButton1Click:Connect(function()
     AntiBatVersion = "V1"
     setVersionVisual()
     if AntiBatEnabled then startAntiBat() end
     saveConfig()
 end)
+
 AntiBatV2.MouseButton1Click:Connect(function()
     AntiBatVersion = "V2"
     setVersionVisual()
     if AntiBatEnabled then startAntiBat() end
     saveConfig()
 end)
-AntiTpBatClick.MouseButton1Click:Connect(function()
+
+AntiTpToggleBg.MouseButton1Click:Connect(function()
     local ok = setHookAnti(not HookAntiEnabled)
     setToggleVisual(AntiTpToggleBg, AntiTpToggleDot, HookAntiEnabled)
     refreshStatus()
 end)
-InfJumpClick.MouseButton1Click:Connect(function()
+
+InfToggleBg.MouseButton1Click:Connect(function()
     InfJumpHoldEnabled = not InfJumpHoldEnabled
     setToggleVisual(InfToggleBg, InfToggleDot, InfJumpHoldEnabled)
     saveConfig()
 end)
+
 BgBtn.MouseButton1Click:Connect(function()
     BackgroundPicker.Visible = not BackgroundPicker.Visible
 end)
+
 Close.MouseButton1Click:Connect(function()
     BackgroundPicker.Visible = false
 end)
+
 local minimized = false
 MinBtn.MouseButton1Click:Connect(function()
     minimized = not minimized
@@ -932,6 +798,7 @@ MinBtn.MouseButton1Click:Connect(function()
         MinBtn.Text = "-"
     end
 end)
+
 do
     local dragging, startPos, startInput
     Header.InputBegan:Connect(function(input)
@@ -952,6 +819,7 @@ do
         end
     end)
 end
+
 setVersionVisual()
 setToggleVisual(ToggleBg, ToggleDot, AntiBatEnabled)
 setToggleVisual(AntiTpToggleBg, AntiTpToggleDot, HookAntiEnabled)
@@ -959,6 +827,7 @@ setToggleVisual(InfToggleBg, InfToggleDot, InfJumpHoldEnabled)
 refreshStatus()
 if AntiBatEnabled then startAntiBat() end
 if HookAntiEnabled then setHookAnti(true) end
+
 runtime.destroy = function()
     runtime.alive = false
     stopAntiBat()
