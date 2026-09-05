@@ -119,39 +119,47 @@ local function setAntiBat(on)
     if AntiBatEnabled then startAntiBat() else stopAntiBat() end
     saveConfig()
 end
--- FIXED: Hold Inf Jump now only on Jump button / Space, not any touch on screen
+-- FIXED: Hold Inf Jump ONLY on Space / JumpButton, and drops when you release
+local activeJumpTouch = nil
+local function getJumpButton()
+    local tg = PlayerGui:FindFirstChild("TouchGui")
+    if tg then
+        local tf = tg:FindFirstChild("TouchControlFrame")
+        if tf then return tf:FindFirstChild("JumpButton") end
+    end
+    return nil
+end
+local function isTouchOnJumpButton(input)
+    local btn = getJumpButton()
+    if not btn then return false end
+    local pos = btn.AbsolutePosition
+    local size = btn.AbsoluteSize
+    local p = input.Position
+    return p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y
+end
+
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.Space then
         IsJumpingHold = true
+    elseif input.UserInputType == Enum.UserInputType.Touch then
+        if isTouchOnJumpButton(input) then
+            activeJumpTouch = input
+            IsJumpingHold = true
+        end
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.Space then
         IsJumpingHold = false
-    end
-end)
--- Mobile: JumpRequest fires only when you tap the Jump button
-UserInputService.JumpRequest:Connect(function()
-    if InfJumpHoldEnabled then
-        IsJumpingHold = true
-    end
-end)
--- Auto-reset when you land / stop jumping (works for both PC and mobile)
-RunService.Heartbeat:Connect(function()
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        local state = hum:GetState()
-        if state ~= Enum.HumanoidStateType.Jumping and state ~= Enum.HumanoidStateType.Freefall then
-            if not UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                -- on mobile, reset shortly after jump starts, will be set true again if holding jump button
-                if IsJumpingHold then
-                    -- keep it true only while Space is held, on mobile it will auto-reset when you leave Freefall
-                    if state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.Landed then
-                        IsJumpingHold = false
-                    end
-                end
+    elseif input.UserInputType == Enum.UserInputType.Touch then
+        if activeJumpTouch and input == activeJumpTouch then
+            IsJumpingHold = false
+            activeJumpTouch = nil
+        elseif not activeJumpTouch then
+            -- if we didn't track (old executor), still stop if touch was on jump button area
+            if isTouchOnJumpButton(input) then
+                IsJumpingHold = false
             end
         end
     end
