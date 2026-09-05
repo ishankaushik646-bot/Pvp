@@ -119,23 +119,23 @@ local function setAntiBat(on)
     if AntiBatEnabled then startAntiBat() else stopAntiBat() end
     saveConfig()
 end
--- ========== HOLD INFINITE JUMP (REPLACED LOGIC) ==========
--- Keep touch hold tracking for mobile
+-- ========== HOLD INFINITE JUMP (FIXED - NO SCREEN TAP JUMP) ==========
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if input.KeyCode == Enum.KeyCode.Space or input.UserInputType == Enum.UserInputType.Touch then
+    if input.KeyCode == Enum.KeyCode.Space then
         IsJumpingHold = true
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Space or input.UserInputType == Enum.UserInputType.Touch then
+    if input.KeyCode == Enum.KeyCode.Space then
         IsJumpingHold = false
     end
 end)
 
--- New: Instant jump on JumpRequest (more responsive than old heartbeat-only)
+-- Instant jump only when JumpRequest fires (Space or mobile Jump button)
 UserInputService.JumpRequest:Connect(function()
     if not InfJumpHoldEnabled then return end
+    -- Don't trigger if typing / UI focused
     local char = LocalPlayer.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -151,14 +151,13 @@ RunService.Heartbeat:Connect(function()
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
     
-    -- Hold jump to keep jumping (Space hold / Touch hold / Humanoid.Jump)
     local hum = char:FindFirstChildOfClass("Humanoid")
+    -- FIXED: Only Space key OR Roblox Jump button (mobile), NOT any touch
     local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or IsJumpingHold or (hum and hum.Jump == true)
     if jumpHeld and root.Velocity.Y < 30 then
         root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
     end
     
-    -- Fall speed limit (from your new logic)
     if root.Velocity.Y < -120 then
         root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
     end
@@ -547,6 +546,7 @@ AntiBatRight.Size = UDim2.new(0, 150, 1, 0)
 AntiBatRight.AnchorPoint = Vector2.new(1, 0.5)
 AntiBatRight.Position = UDim2.new(1, -8, 0.5, 0)
 AntiBatRight.BackgroundTransparency = 1
+AntiBatRight.ZIndex = 5
 AntiBatRight.Parent = AntiBatRow
 
 local AntiBatV1 = Instance.new("TextButton")
@@ -598,12 +598,61 @@ ToggleDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 ToggleDot.Parent = ToggleBg
 Instance.new("UICorner", ToggleDot).CornerRadius = UDim.new(0, 999)
 
+local AntiBatV1 = Instance.new("TextButton")
+AntiBatV1.Name = "AntiBatV1"
+AntiBatV1.ZIndex = 20
+AntiBatV1.Position = UDim2.new(0, 0, 0.5, -10)
+AntiBatV1.Size = UDim2.new(0, 32, 0, 20)
+AntiBatV1.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+AntiBatV1.BackgroundTransparency = 0.1
+AntiBatV1.Text = "V1"
+AntiBatV1.TextColor3 = Color3.fromRGB(255, 255, 255)
+AntiBatV1.TextSize = 10
+AntiBatV1.Font = Enum.Font.GothamBold
+AntiBatV1.AutoButtonColor = false
+AntiBatV1.Parent = AntiBatRight
+Instance.new("UICorner", AntiBatV1).CornerRadius = UDim.new(0, 5)
+
+local AntiBatV2 = Instance.new("TextButton")
+AntiBatV2.Name = "AntiBatV2"
+AntiBatV2.ZIndex = 20
+AntiBatV2.Position = UDim2.new(0, 36, 0.5, -10)
+AntiBatV2.Size = UDim2.new(0, 32, 0, 20)
+AntiBatV2.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+AntiBatV2.BackgroundTransparency = 0.1
+AntiBatV2.Text = "V2"
+AntiBatV2.TextColor3 = Color3.fromRGB(205, 205, 210)
+AntiBatV2.TextSize = 10
+AntiBatV2.Font = Enum.Font.GothamBold
+AntiBatV2.AutoButtonColor = false
+AntiBatV2.Parent = AntiBatRight
+Instance.new("UICorner", AntiBatV2).CornerRadius = UDim.new(0, 5)
+
+local ToggleBg = Instance.new("Frame")
+ToggleBg.Name = "ToggleBg"
+ToggleBg.ZIndex = 6
+ToggleBg.AnchorPoint = Vector2.new(1, 0.5)
+ToggleBg.Position = UDim2.new(1, 0, 0.5, 0)
+ToggleBg.Size = UDim2.new(0, 44, 0, 22)
+ToggleBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ToggleBg.Parent = AntiBatRight
+Instance.new("UICorner", ToggleBg).CornerRadius = UDim.new(0, 11)
+
+local ToggleDot = Instance.new("Frame")
+ToggleDot.Name = "ToggleDot"
+ToggleDot.ZIndex = 7
+ToggleDot.Position = UDim2.new(0, 3, 0.5, -8)
+ToggleDot.Size = UDim2.new(0, 16, 0, 16)
+ToggleDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ToggleDot.Parent = ToggleBg
+Instance.new("UICorner", ToggleDot).CornerRadius = UDim.new(0, 999)
+
 local AntiBatClick = Instance.new("TextButton")
 AntiBatClick.Name = "AntiBatClick"
-AntiBatClick.ZIndex = 10
+AntiBatClick.ZIndex = 30
 AntiBatClick.AnchorPoint = Vector2.new(1, 0.5)
 AntiBatClick.Position = UDim2.new(1, 0, 0.5, 0)
-AntiBatClick.Size = UDim2.new(0, 44, 1, 0)
+AntiBatClick.Size = UDim2.new(0, 44, 0, 32)
 AntiBatClick.BackgroundTransparency = 1
 AntiBatClick.Text = ""
 AntiBatClick.Parent = AntiBatRight
@@ -635,6 +684,7 @@ AntiTpBatLabel.Parent = AntiTpBatRow
 local AntiTpToggleBg = Instance.new("Frame")
 AntiTpToggleBg.Name = "AntiTpToggleBg"
 AntiTpToggleBg.ZIndex = 6
+AntiTpToggleBg.Active = false
 AntiTpToggleBg.AnchorPoint = Vector2.new(1, 0.5)
 AntiTpToggleBg.Position = UDim2.new(1, -8, 0.5, 0)
 AntiTpToggleBg.Size = UDim2.new(0, 44, 0, 22)
@@ -653,10 +703,10 @@ Instance.new("UICorner", AntiTpToggleDot).CornerRadius = UDim.new(0, 999)
 
 local AntiTpBatClick = Instance.new("TextButton")
 AntiTpBatClick.Name = "AntiTpBatClick"
-AntiTpBatClick.ZIndex = 10
+AntiTpBatClick.ZIndex = 30
 AntiTpBatClick.AnchorPoint = Vector2.new(1, 0.5)
 AntiTpBatClick.Position = UDim2.new(1, -8, 0.5, 0)
-AntiTpBatClick.Size = UDim2.new(0, 44, 1, 0)
+AntiTpBatClick.Size = UDim2.new(0, 60, 1, 0)
 AntiTpBatClick.BackgroundTransparency = 1
 AntiTpBatClick.Text = ""
 AntiTpBatClick.Parent = AntiTpBatRow
@@ -688,6 +738,7 @@ InfJumpLabel.Parent = InfJumpRow
 local InfToggleBg = Instance.new("Frame")
 InfToggleBg.Name = "InfToggleBg"
 InfToggleBg.ZIndex = 6
+InfToggleBg.Active = false
 InfToggleBg.AnchorPoint = Vector2.new(1, 0.5)
 InfToggleBg.Position = UDim2.new(1, -8, 0.5, 0)
 InfToggleBg.Size = UDim2.new(0, 44, 0, 22)
@@ -706,10 +757,10 @@ Instance.new("UICorner", InfToggleDot).CornerRadius = UDim.new(0, 999)
 
 local InfJumpClick = Instance.new("TextButton")
 InfJumpClick.Name = "InfJumpClick"
-InfJumpClick.ZIndex = 10
+InfJumpClick.ZIndex = 30
 InfJumpClick.AnchorPoint = Vector2.new(1, 0.5)
 InfJumpClick.Position = UDim2.new(1, -8, 0.5, 0)
-InfJumpClick.Size = UDim2.new(0, 44, 1, 0)
+InfJumpClick.Size = UDim2.new(0, 60, 1, 0)
 InfJumpClick.BackgroundTransparency = 1
 InfJumpClick.Text = ""
 InfJumpClick.Parent = InfJumpRow
