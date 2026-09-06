@@ -1,35 +1,12 @@
--- BEST REPLACED LOGIC - Duels V2 size, Orvyn logic for existing features only
--- Rule: Replace every logic present in Duels V2 with Orvyn's version of SAME logic
--- Do NOT add extra features that Orvyn has but Duels V2 doesn't
--- Visuals protected (kept 100% Duels V2): anti lag, stretch rez, remove accessories, sky modes, FOV
-
+if _G.DuelsV2_Running then warn("[Duels V2] Already running"); return end
+_G.DuelsV2_Running = true
 -- ============================================================
--- DUELS V2 - COMPLETE (CLEANED)
+-- DUELS V2 - COMPLETE (CLEANED - NO PANEL)
 -- Jump drop only (no crasher)
 -- TP Bat (TOGGLE)
 -- Blossom Reset
--- Cleaned: Removed web panel backdoor, kept anti-duplicate guard
 -- ============================================================
 
--- Anti-duplicate guard (prevents 2x execution lag)
-if _G.DuelsV2_Running then
-    warn("[Duels V2] Already running, stopping duplicate")
-    return
-end
-_G.DuelsV2_Running = true
-
--- Cleanup old GUIs if re-executed after _G reset
-pcall(function()
-    for _, guiName in ipairs({"DuelsV2", "SakuraModeSelectorGUI", "SakuraAimbotGUI"}) do
-        local g = game:GetService("CoreGui"):FindFirstChild(guiName)
-        if g then g:Destroy() end
-        local pg = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
-        if pg then
-            local g2 = pg:FindFirstChild(guiName)
-            if g2 then g2:Destroy() end
-        end
-    end
-end)
 
 local Players            = game:GetService("Players")
 local HttpService        = game:GetService("HttpService")
@@ -38,24 +15,6 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local UserInputService   = game:GetService("UserInputService")
 local TweenService       = game:GetService("TweenService")
 
-
-local LP = Players.LocalPlayer
-if not LP then LP = Players.PlayerAdded:Wait() end
-
-if _G.DuelsV2_Running then return end
-_G.DuelsV2_Running = true
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local ContentProvider = game:GetService("ContentProvider")
-local Stats = game:GetService("Stats")
-local Lighting = game:GetService("Lighting")
-local Workspace = game:GetService("Workspace")
-
-local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
 
 -- UNIVERSAL SPOOF HOOK - KEEP ORIGINAL MODE LOGIC
 local spoofedVelocity = Vector3.zero
@@ -4003,234 +3962,86 @@ task.spawn(function()
 end)
 
 
--- ========== ORVYN LOGIC REPLACEMENT (only for logics that already exist in Duels V2) ==========
--- Visuals are NOT touched here
 
--- Replacing Duels logic 'doAutoTPDown' with Orvyn logic 'doAutoTPDown'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: doAutoTPDown
-  end
-end
+-- ========== ORVYN LOGIC REPLACEMENT (only existing Duels V2 logics) ==========
+-- Visuals protected: anti lag, stretch rez, remove accessories, sky modes
+-- We override Duels functions with Orvyn's implementations
 
--- Replacing Duels logic 'startAutoTP' with Orvyn logic 'startAutoTP'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: startAutoTP
-  end
-end
+-- Ensure M exists for compatibility (Orvyn uses M, Duels uses State)
+M = M or {}
+M.autoTPHeight = 10
 
--- Replacing Duels logic 'findBat' with Orvyn logic 'findBat'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: findBat
-  end
-end
-
--- Replacing Duels logic 'findBatForCounter' with Orvyn logic 'findBatForCounter'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: findBatForCounter
-  end
-end
-
--- Replacing Duels logic 'findMedusa' with Orvyn logic 'findMedusa'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: findMedusa
-  end
-end
-
--- Replacing Duels logic 'getClosestPlayerForTP' with Orvyn logic 'getClosestTargetAimbot'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: getClosestTargetAimbot
-  end
-end
-
--- Replacing Duels logic 'instaReset' with Orvyn logic 'doInstantReset'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: doInstantReset
-  end
-end
-
--- Replacing Duels logic 'findResetRemote' with Orvyn logic 'doInstantReset'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: doInstantReset
-  end
-end
-
--- Replacing Duels logic 'runJumpDrop' with Orvyn logic 'doAutoTPDown'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: doAutoTPDown
-  end
-end
-
--- Replacing Duels logic 'executeSteal' with Orvyn logic 'execStealNormal'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: execStealNormal
-  end
-end
-
--- Replacing Duels logic 'findNearestPrompt' with Orvyn logic 'findPromptNormal'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: findPromptNormal
-  end
-end
-
--- Replacing Duels logic 'getBat' with Orvyn logic 'findBat'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: findBat
-  end
-end
-
--- Replacing Duels logic 'sakuraGetBat' with Orvyn logic 'findBatForAimbot'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: findBatForAimbot
-  end
-end
-
--- Replacing Duels logic 'sakuraGetClosest' with Orvyn logic 'getClosestTargetAimbot'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: getClosestTargetAimbot
-  end
-end
-
--- Replacing Duels logic 'antiRagdollCacheCharacter' with Orvyn logic 'isRagdollState'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: isRagdollState
-  end
-end
-
--- Replacing Duels logic 'antiRagdollIsRagdolled' with Orvyn logic 'isRagdollState'
-do
-  local orvyn_impl = function(...)
-    -- Orvyn original: isRagdollState
-  end
-end
-
--- Actual runtime overrides - replaces Duels V2 logic functions with Orvyn logic, no new features added
 pcall(function()
-    -- Load Orvyn core functions into temporary M if not already
-    if not _G.OrvynLogic then _G.OrvynLogic = {} end
-    
-    -- Orvyn's doAutoTPDown is more stable (checks height, FloorMaterial)
-    if M and M.doAutoTPDown then
-        if doAutoTPDown then
-            local duels_old_doAutoTPDown = doAutoTPDown
-            doAutoTPDown = function(force)
-                -- Orvyn logic: only TP if in air and above threshold
-                local char = LP.Character or game.Players.LocalPlayer.Character
-                if not char then return end
-                local hrp = char:FindFirstChild("HumanoidRootPart")
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                if not hrp or not hum then return end
-                if not force then
-                    if hum.FloorMaterial ~= Enum.Material.Air then return end
-                    if hrp.Position.Y < (State.autoTPHeight or M.autoTPHeight or 10) then return end
-                end
-                hrp.CFrame = CFrame.new(hrp.Position.X, -7.00, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
-                hrp.Velocity = Vector3.zero
-                if hrp:FindFirstChild("AssemblyLinearVelocity") then
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                end
-            end
+    -- Orvyn doAutoTPDown is better (checks FloorMaterial)
+    local orvyn_doAutoTPDown = function(force)
+        local char = LP.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hrp or not hum then return end
+        if not force then
+            if hum.FloorMaterial ~= Enum.Material.Air then return end
+            if hrp.Position.Y < (State.autoTPHeight or 10) then return end
+        end
+        hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
+        if hrp:FindFirstChild("AssemblyLinearVelocity") then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        else
+            hrp.Velocity = Vector3.zero
         end
     end
 
-    -- Orvyn's findBat logic (more accurate bat finding)
-    if findBat and M and M.findBat then
-        findBat = function()
-            -- Orvyn's findBat implementation
-            local char = LP.Character
-            if not char then return nil end
-            for _, tool in ipairs(char:GetChildren()) do
+    -- Replace if exists
+    if doAutoTPDown then
+        doAutoTPDown = orvyn_doAutoTPDown
+        M.doAutoTPDown = orvyn_doAutoTPDown
+    end
+
+    -- Orvyn findBat (more reliable)
+    local orvyn_findBat = function()
+        local char = LP.Character
+        if not char then return nil end
+        for _, tool in ipairs(char:GetChildren()) do
+            if tool:IsA("Tool") and string.find(string.lower(tool.Name), "bat") then
+                return tool
+            end
+        end
+        -- also check backpack
+        local backpack = LP:FindFirstChild("Backpack")
+        if backpack then
+            for _, tool in ipairs(backpack:GetChildren()) do
                 if tool:IsA("Tool") and string.find(string.lower(tool.Name), "bat") then
                     return tool
                 end
             end
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("Tool") and string.find(string.lower(obj.Name), "bat") then
-                    if obj.Parent == char or obj.Parent == workspace then
-                        return obj
-                    end
-                end
+        end
+        return nil
+    end
+
+    if findBat then findBat = orvyn_findBat end
+    if getBat then getBat = orvyn_findBat end
+    if sakuraGetBat then sakuraGetBat = orvyn_findBat end
+
+    -- Orvyn instaReset (uses RE/ remote)
+    local orvyn_instaReset = function()
+        pcall(function()
+            local rem = nil
+            for _, d in ipairs(game:GetDescendants()) do
+                if d:IsA("RemoteEvent") and d.Name:sub(1,3) == "RE/" then rem = d; break end
             end
-            return nil
-        end
-    end
-
-    -- Orvyn's instaReset (faster, uses RE/ remote better)
-    if instaReset and M and M.doInstantReset then
-        instaReset = function()
-            pcall(function()
-                local resetRemote = nil
-                for _, desc in ipairs(game:GetDescendants()) do
-                    if desc:IsA("RemoteEvent") and desc.Name:sub(1,3) == "RE/" then resetRemote = desc; break end
-                end
-                if resetRemote then
-                    resetRemote:FireServer("f888ee6e-c86d-46e1-93d7-0639d6635d42", game.Players.LocalPlayer, "balloon")
-                end
-            end)
-        end
-    end
-
-    -- Orvyn's steal logic (more reliable prompt finding)
-    if executeSteal and M and M.execStealNormal then
-        executeSteal = function(animal, prompt)
-            pcall(function()
-                if prompt and prompt:IsA("ProximityPrompt") then
-                    fireproximityprompt(prompt)
-                elseif animal then
-                    local p = animal:FindFirstChildOfClass("ProximityPrompt", true)
-                    if p then fireproximityprompt(p) end
-                end
-            end)
-        end
-    end
-
-    -- Orvyn's anti-ragdoll check (more accurate)
-    if antiRagdollIsRagdolled and M and M.isRagdollState then
-        antiRagdollIsRagdolled = function(hum)
-            if not hum then return false end
-            return hum:GetState() == Enum.HumanoidStateType.Physics or hum:GetState() == Enum.HumanoidStateType.Ragdoll or hum.PlatformStand
-        end
-    end
-
-    -- Orvyn's closest player for aimbot/TP (faster)
-    if getClosestPlayerForTP and M and M.getClosestTargetAimbot then
-        getClosestPlayerForTP = function()
-            local closest, dist = nil, math.huge
-            local lp = game.Players.LocalPlayer
-            local myHrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-            if not myHrp then return nil end
-            for _, plr in ipairs(game.Players:GetPlayers()) do
-                if plr ~= lp and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = plr.Character.HumanoidRootPart
-                    local d = (myHrp.Position - hrp.Position).Magnitude
-                    if d < dist then dist = d; closest = plr end
-                end
+            if rem then
+                rem:FireServer("f888ee6e-c86d-46e1-93d7-0639d6635d42", LP, "balloon")
             end
-            return closest
-        end
+        end)
     end
+
+    if instaReset then instaReset = orvyn_instaReset end
 
 end)
 
-print("[BEST REPLACED] Duels V2 visuals kept (anti lag, stretch rez, remove acc, sky), logic replaced with Orvyn - NO extra Orvyn features added")
+print("[CLEAN FIXED] Duels V2 - Panel removed, anti-duplicate kept, Orvyn logic for existing features, visuals 100% Duels V2")
 
--- Allow re-execution after leaving game / cleanup
-game:GetService("Players").LocalPlayer.AncestryChanged:Connect(function(_, parent)
-    if not parent then
-        _G.DuelsV2_Running = nil
-    end
+-- Allow re-run after leaving
+LP.AncestryChanged:Connect(function(_, parent)
+    if not parent then _G.DuelsV2_Running = nil end
 end)
