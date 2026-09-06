@@ -3241,21 +3241,6 @@ end
     _G._customFontStart = function() if _G._VezyFontEnabled then return end; if not _G._fontSetup() then return end; _G._VezyFontEnabled=true; for _,v in pairs(game:GetDescendants()) do _G._fontChangeIt(v) end; _G._VezyFontConn=game.DescendantAdded:Connect(function(obj) if _G._VezyFontEnabled then _G._fontChangeIt(obj) end end) end
     _G._customFontStop = function() _G._VezyFontEnabled=false; if _G._VezyFontConn then _G._VezyFontConn:Disconnect(); _G._VezyFontConn=nil end; for obj,origFont in pairs(_G._VezyFontOriginals) do pcall(function() if obj and obj.Parent then obj.FontFace=origFont end end) end; _G._VezyFontOriginals={} end
 
-
-    -- ANTI-DROP: Prevent brainrot tool from being dropped by server
-    RunService.Heartbeat:Connect(function()
-        local char = LP.Character
-        if not char then return end
-        for _, tool in ipairs(char:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name:lower():find("brainrot") then
-                tool.CanBeDropped = false
-                -- keep handle massless to avoid physics drop
-                local handle = tool:FindFirstChild("Handle")
-                if handle then handle.Massless = true end
-            end
-        end
-    end)
-
     _G._RemoveAccOn=false; _G._RemoveAccConn=nil; _G._removedAccessories={}
     _G._removeAccDo = function() if not _G._RemoveAccOn then return end; local char=LP.Character; if not char then return end; for _,obj in ipairs(char:GetDescendants()) do if obj:IsA("Accessory") or obj:IsA("Hat") then if not _G._removedAccessories[obj] then _G._removedAccessories[obj]=true; pcall(function() obj:Destroy() end) end end end end
     _G._removeAccStart = function() if _G._RemoveAccOn then return end; _G._RemoveAccOn=true; _G._removeAccDo(); _G._RemoveAccConn=LP.CharacterAdded:Connect(function() task.wait(0.5); if _G._RemoveAccOn then _G._removeAccDo() end end) end
@@ -3268,13 +3253,8 @@ end
         for _,p in ipairs(Players:GetPlayers()) do if p~=LP and p.Character then for _,part in ipairs(p.Character:GetChildren()) do if part:IsA("BasePart") then part.CanCollide=false end end end end
     end)
 
-    RunService.RenderStepped:Connect(function(dt)
+    RunService.RenderStepped:Connect(function()
         if not (h and hrp) then return end; if State._tpInProgress then return end
-        local st = h:GetState()
-        if h.PlatformStand or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown then
-            State.lastMoveDir = Vector3.new(0,0,0)
-            return
-        end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
             local md=h.MoveDirection
             local spd
@@ -3283,38 +3263,11 @@ end
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                -- ORVYN velocity method but spoof server as 20
-                local serverSpeed = 20
-                local realSpeed = spd
-                if realSpeed > serverSpeed then
-                    local extra = realSpeed - serverSpeed
-                    -- move extra with CFrame (hidden from server)
-                    local extraMove = Vector3.new(md.X, 0, md.Z).Unit * extra * dt
-                    hrp.CFrame = hrp.CFrame + extraMove
-                    -- server sees only 20
-                    hrp.Velocity = Vector3.new(md.X*serverSpeed, hrp.Velocity.Y, md.Z*serverSpeed)
-                    hrp.AssemblyLinearVelocity = Vector3.new(md.X*serverSpeed, hrp.AssemblyLinearVelocity.Y, md.Z*serverSpeed)
-                else
-                    -- if speed <=20 just use normal orvyn method
-                    hrp.Velocity=Vector3.new(md.X*realSpeed, hrp.Velocity.Y, md.Z*realSpeed)
-                end
+                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd)
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then
-                    local md2 = State.lastMoveDir
-                    local serverSpeed = 20
-                    local realSpeed = spd
-                    if realSpeed > serverSpeed then
-                        local extra = realSpeed - serverSpeed
-                        local extraMove = Vector3.new(md2.X, 0, md2.Z).Unit * extra * dt
-                        hrp.CFrame = hrp.CFrame + extraMove
-                        hrp.Velocity = Vector3.new(md2.X*serverSpeed, hrp.Velocity.Y, md2.Z*serverSpeed)
-                        hrp.AssemblyLinearVelocity = Vector3.new(md2.X*serverSpeed, hrp.AssemblyLinearVelocity.Y, md2.Z*serverSpeed)
-                    else
-                        hrp.Velocity=Vector3.new(md2.X*realSpeed, hrp.Velocity.Y, md2.Z*realSpeed)
-                    end
-                end
+                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end
             end
         end
         pcall(function()
