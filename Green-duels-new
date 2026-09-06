@@ -596,6 +596,11 @@ M.carrySpeedActive = false
 M.laggerModeEnabled = false
 
 M.antiRagdollEnabled = false
+M.antiDieEnabled = false
+M.antiFlingEnabled = false
+M._antiDieConn = nil
+M._antiDieLoop = nil
+M._antiFlingConn = nil
 M.infJumpEnabled = false
 M.infJumpMode = "manual"
 M.medusaCounterEnabled = false
@@ -1894,15 +1899,17 @@ function M.stopNormalSteal()
 end
 
 -- ============================================================
--- SEMI AUTO-STEAL (unchanged)
+
+-- ============================================================
+-- SEMI AUTO-STEAL - REPLACED WITH DUELS V2 WEEKLY AUTO GRAB
 -- ============================================================
 M.Semi = M.Semi or {}
 M.Semi.HoldMin = 1.3
 M.Semi.HoldMax = 2.6
 M.Semi.EntryDelay = 0.3
 M.Semi.Cooldown = 0.05
-M.Semi.StealRange = 9
-M.Semi.PrimeRange = 80
+M.Semi.StealRange = 9 -- HalfFireRange (must be close to fire)
+M.Semi.PrimeRange = 62 -- SemiRadius (search radius)
 M.Semi.allAnimalsCache = {}
 M.Semi.PromptMemoryCache = {}
 M.Semi.InternalStealCache = {}
@@ -1918,234 +1925,121 @@ M.Semi.StealState = {
     failedSteals = 0,
 }
 M.Semi.plots = workspace:FindFirstChild("Plots") or workspace:WaitForChild("Plots", 3)
-M.Semi.AnimalsData = nil
-M.Semi.initialized = false
+M.Semi.HalfFireRange = 10
+M.Semi.SemiRadius = 62
 
-function M.initSemiSync()
-    if M.Semi.initialized then return end
-    local ok, err = pcall(function()
-    local RS = game:GetService("ReplicatedStorage")
-    local Packages = RS:FindFirstChild("Packages") or RS:WaitForChild("Packages", 3)
-    if not Packages then return end
-    local Datas = RS:FindFirstChild("Datas") or RS:WaitForChild("Datas", 3)
-    if not Datas then return end
-    local animalsMod = Datas:FindFirstChild("Animals")
-    if animalsMod then
-        local okReq, data = pcall(require, animalsMod)
-        if okReq then M.Semi.AnimalsData = data end
-    end
-
-    local folder = Packages:FindFirstChild("Synchronizer") or Packages:WaitForChild("Synchronizer", 3)
-    if not folder then return end
-    M.Semi.syncRemotes = {
-        channelFolder = folder:FindFirstChild("Channel") or folder:WaitForChild("Channel", 2),
-        routeRemote = folder:FindFirstChild("CommunicationRoute") or folder:WaitForChild("CommunicationRoute", 2),
-        requestData = folder:FindFirstChild("RequestData"),
-    }
-
-    local function splitSyncPath(path)
-        if typeof(path) == "table" then return path end
-        local out = {}
-        for part in string.gmatch(tostring(path), "[^%.]+") do
-            table.insert(out, tonumber(part) or part)
-        end
-        return out
-    end
-
-    local function resolveSyncPath(path, root)
-        local current = root
-        local parent = nil
-        local key = nil
-        for _, part in ipairs(splitSyncPath(path)) do
-            parent = current
-            key = part
-            current = current and current[part] or nil
-        end
-        return current, parent, key
-    end
-
-    local function applyPlotSyncDiff(channelName, packet)
-        local cache = M.Semi.plotAnimalSync.caches[channelName]
-        if typeof(cache) ~= "table" then return end
-        local path, action, a, b = packet[1], packet[2], packet[3], packet[4]
-        local current, parent, key = resolveSyncPath(path, cache)
-        if action == "Changed" then
-            if parent ~= nil then parent[key] = a end
-        elseif action == "ArrayInsert" then
-            if current ~= nil then table.insert(current, b, a) end
-        elseif action == "ArrayRemoved" then
-            if current ~= nil then table.remove(current, b) end
-        elseif action == "DictionaryInsert" then
-            if current ~= nil then current[b] = a end
-        elseif action == "DictionaryRemoved" then
-            if current ~= nil then current[b] = nil end
-        end
-    end
-
-    local function attachPlotChannel(remote)
-        if M.Semi.plotAnimalSync.connections[remote] then return end
-        local channelName = tostring(remote.Name)
-        if not M.Semi.plots or not M.Semi.plots:FindFirstChild(channelName) then return end
-        if M.Semi.syncRemotes.requestData and M.Semi.plotAnimalSync.caches[channelName] == nil then
-            local ok, data = pcall(function()
-                return M.Semi.syncRemotes.requestData:InvokeServer(channelName)
-            end)
-            if ok and typeof(data) == "table" then
-                M.Semi.plotAnimalSync.caches[channelName] = data
-            else
-                M.Semi.plotAnimalSync.caches[channelName] = {}
-            end
-        elseif M.Semi.plotAnimalSync.caches[channelName] == nil then
-            M.Semi.plotAnimalSync.caches[channelName] = {}
-        end
-        M.Semi.plotAnimalSync.connections[remote] = remote.OnClientEvent:Connect(function(queue)
-            for _, packet in ipairs(queue) do
-                applyPlotSyncDiff(channelName, packet)
-            end
-        end)
-    end
-
-    local function detachPlotChannel(channelName)
-        for remote, conn in pairs(M.Semi.plotAnimalSync.connections) do
-            if tostring(remote.Name) == tostring(channelName) then
-                conn:Disconnect()
-                M.Semi.plotAnimalSync.connections[remote] = nil
-                M.Semi.plotAnimalSync.caches[tostring(channelName)] = nil
-                break
-            end
-        end
-    end
-
-    if M.Semi.syncRemotes.channelFolder then
-        for _, child in ipairs(M.Semi.syncRemotes.channelFolder:GetChildren()) do
-            if child:IsA("RemoteEvent") then attachPlotChannel(child) end
-        end
-        M.Semi.syncRemotes.channelFolder.ChildAdded:Connect(function(child)
-            if child:IsA("RemoteEvent") then attachPlotChannel(child) end
-        end)
-    end
-    if M.Semi.syncRemotes.routeRemote then
-        M.Semi.syncRemotes.routeRemote.OnClientEvent:Connect(function(actions)
-            for _, action in ipairs(actions) do
-                local kind, channelName = action[1], tostring(action[2])
-                if not M.Semi.plots or not M.Semi.plots:FindFirstChild(channelName) then continue end
-                if kind == "ListenerAdded" then
-                    local remote = M.Semi.syncRemotes.channelFolder and M.Semi.syncRemotes.channelFolder:FindFirstChild(channelName)
-                    if remote and remote:IsA("RemoteEvent") then attachPlotChannel(remote) end
-                elseif kind == "ListenerRemoved" then
-                    detachPlotChannel(channelName)
-                end
-            end
-        end)
-    end
-    M.Semi.initialized = true
-    end) -- end pcall
-    if not ok then
-        warn("[ORVYN HUB] Semi sync init skipped (wrong game or missing services):", err)
-    end
-end
-
-function M.getPlotChannelData(plotName)
-    return M.Semi.plotAnimalSync.caches[plotName]
-end
-
-function M.getPlotOwner(plot)
-    local sign = plot:FindFirstChild("PlotSign")
-    local frame = sign and sign:FindFirstChild("SurfaceGui") and sign.SurfaceGui:FindFirstChild("Frame")
-    local label = frame and frame:FindFirstChild("TextLabel")
-    if not label or label.Text == "Empty Base" then return nil end
-    return label.Text:gsub("'s [Bb]ase$", ""):gsub("%s+$", "")
-end
-
-function M.isMyBaseAnimalSemi(animalData)
-    if not animalData or not animalData.plot then return false end
-    local plot = M.Semi.plots:FindFirstChild(animalData.plot)
-    if not plot then return false end
-    return M.getPlotOwner(plot) == player.DisplayName
-end
-
-function M.findProximityPromptForAnimalSemi(animalData)
-    if not animalData then return nil end
-    local cached = M.Semi.PromptMemoryCache[animalData.uid]
-    if cached and cached.Parent then return cached end
-    local plot = M.Semi.plots:FindFirstChild(animalData.plot)
-    if not plot then return nil end
-    local podiums = plot:FindFirstChild("AnimalPodiums")
-    if not podiums then return nil end
-    local podium = podiums:FindFirstChild(animalData.slot)
-    if not podium then return nil end
-    local base = podium:FindFirstChild("Base")
-    if not base then return nil end
-    local spawn = base:FindFirstChild("Spawn")
-    if not spawn then return nil end
-    local attach = spawn:FindFirstChild("PromptAttachment")
-    if not attach then return nil end
-    for _, p in ipairs(attach:GetChildren()) do
-        if p:IsA("ProximityPrompt") then
-            M.Semi.PromptMemoryCache[animalData.uid] = p
-            return p
-        end
+-- Duels V2 style helpers
+function M.Semi.getHRP()
+    local char = player.Character
+    if char then
+        return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
     end
     return nil
 end
 
-function M.getAnimalPositionSemi(animalData)
-    local plot = M.Semi.plots:FindFirstChild(animalData.plot)
-    if not plot then return nil end
-    local podiums = plot:FindFirstChild("AnimalPodiums")
-    if not podiums then return nil end
-    local podium = podiums:FindFirstChild(animalData.slot)
-    if not podium then return nil end
-    return podium:GetPivot().Position
+function M.Semi.isMyPlot(plotName)
+    local plots = workspace:FindFirstChild("Plots")
+    if not plots then return false end
+    local plot = plots:FindFirstChild(plotName)
+    if not plot then return false end
+    local sign = plot:FindFirstChild("PlotSign")
+    if sign then
+        local yb = sign:FindFirstChild("YourBase")
+        if yb and yb:IsA("BillboardGui") then return yb.Enabled == true end
+    end
+    return false
 end
 
-function M.distToAnimalSemi(animalData)
-    local char = player.Character
-    if not char then return math.huge end
-    local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso")
+function M.Semi.getPromptDist(prompt)
+    local hrp = M.Semi.getHRP()
     if not hrp then return math.huge end
-    local pos = M.getAnimalPositionSemi(animalData)
-    if not pos then return math.huge end
-    return (hrp.Position - pos).Magnitude
+    local part = prompt.Parent
+    if part and part:IsA("Attachment") then part = part.Parent end
+    if part and part:IsA("BasePart") then
+        return (part.Position - hrp.Position).Magnitude
+    end
+    local ok, pos = pcall(function() return prompt.Parent and prompt.Parent.WorldPosition end)
+    if ok and pos then return (pos - hrp.Position).Magnitude end
+    return math.huge
 end
 
-function M.pickClosestSemi()
-    local char = player.Character
-    if not char then return nil end
-    local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso")
+function M.Semi.findNearestPrompt()
+    local hrp = M.Semi.getHRP()
     if not hrp then return nil end
-    local best, bestDist = nil, math.huge
-    for _, animalData in ipairs(M.Semi.allAnimalsCache) do
-        if M.isMyBaseAnimalSemi(animalData) then continue end
-        local pos = M.getAnimalPositionSemi(animalData)
-        if not pos then continue end
-        local dist = (hrp.Position - pos).Magnitude
-        if dist > M.Semi.PrimeRange then continue end
-        if dist < bestDist then
-            bestDist = dist
-            best = animalData
+    local plots = workspace:FindFirstChild("Plots")
+    if not plots then return nil end
+    local bestPrompt, bestDist = nil, math.huge
+    local radius = M.Semi.PrimeRange or M.Semi.SemiRadius or 62
+    for _, plot in ipairs(plots:GetChildren()) do
+        if plot:IsA("Model") and not M.Semi.isMyPlot(plot.Name) then
+            local pods = plot:FindFirstChild("AnimalPodiums")
+            if pods then
+                for _, pod in ipairs(pods:GetChildren()) do
+                    local base = pod:FindFirstChild("Base")
+                    if base then
+                        local spawn = base:FindFirstChild("Spawn")
+                        if spawn then
+                            local dist = (spawn.Position - hrp.Position).Magnitude
+                            if dist <= radius and dist < bestDist then
+                                local att = spawn:FindFirstChild("PromptAttachment")
+                                if att then
+                                    for _, pr in ipairs(att:GetChildren()) do
+                                        if pr:IsA("ProximityPrompt") and pr.ActionText and pr.ActionText:find("Steal") then
+                                            bestPrompt, bestDist = pr, dist
+                                        end
+                                    end
+                                end
+                                if not bestPrompt then
+                                    for _, pr in ipairs(spawn:GetDescendants()) do
+                                        if pr:IsA("ProximityPrompt") and pr.ActionText and pr.ActionText:find("Steal") then
+                                            bestPrompt, bestDist = pr, dist
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
-    return best
+    return bestPrompt
+end
+
+-- Compatibility wrappers used by old Orvyn code
+function M.initSemiSync() end
+function M.scanAllPlotsSemi() return 0 end
+function M.getPlotChannelData() return nil end
+function M.getPlotOwner() return nil end
+function M.isMyBaseAnimalSemi() return false end
+function M.findProximityPromptForAnimalSemi() return M.Semi.findNearestPrompt() end
+function M.getAnimalPositionSemi() return nil end
+function M.pickClosestSemi()
+    -- For compatibility, return dummy that holds prompt
+    local prompt = M.Semi.findNearestPrompt()
+    if prompt then
+        return {uid = prompt:GetFullName(), name = "Animal", prompt = prompt}
+    end
+    return nil
+end
+function M.distToAnimalSemi()
+    return 0
 end
 
 function M.buildStealCallbacksSemi(prompt)
     if M.Semi.InternalStealCache[prompt] then return end
-    local data = { holdCallbacks = {}, triggerCallbacks = {}, ready = true }
+    local data = {holdCallbacks = {}, triggerCallbacks = {}, ready = true}
     local ok1, conns1 = pcall(getconnections, prompt.PromptButtonHoldBegan)
     if ok1 and type(conns1) == "table" then
-        for _, conn in ipairs(conns1) do
-            if type(conn.Function) == "function" then
-                table.insert(data.holdCallbacks, conn.Function)
-            end
+        for _, c in ipairs(conns1) do
+            if c.Function then table.insert(data.holdCallbacks, c.Function) end
         end
     end
     local ok2, conns2 = pcall(getconnections, prompt.Triggered)
     if ok2 and type(conns2) == "table" then
-        for _, conn in ipairs(conns2) do
-            if type(conn.Function) == "function" then
-                table.insert(data.triggerCallbacks, conn.Function)
-            end
+        for _, c in ipairs(conns2) do
+            if c.Function then table.insert(data.triggerCallbacks, c.Function) end
         end
     end
     if #data.holdCallbacks > 0 or #data.triggerCallbacks > 0 then
@@ -2157,31 +2051,30 @@ function M.executeStealAsyncSemi(prompt, animalData)
     local data = M.Semi.InternalStealCache[prompt]
     if not data or not data.ready then return false end
     data.ready = false
-    local label = animalData.name or "Animal"
+    local label = (animalData and animalData.name) or "Animal"
     M.Semi.StealState.active = true
     M.Semi.StealState.startTime = tick()
     M.Semi.StealState.phase = "holding"
     M.Semi.StealState.label = label
     M.isStealing = true
     M.stealStartTime = tick()
-    M.updateStealProgress(0)
+    if M.updateStealProgress then M.updateStealProgress(0) end
 
     task.spawn(function()
         for _, fn in ipairs(data.holdCallbacks) do task.spawn(fn) end
         task.wait(M.Semi.HoldMin)
         M.Semi.StealState.phase = "waitingRange"
-        local alreadyInRange = M.distToAnimalSemi(animalData) <= M.Semi.StealRange
+        local alreadyInRange = M.Semi.getPromptDist(prompt) <= M.Semi.StealRange
         local fired = false
-        local lastProgress = 0
         while true do
             local elapsed = tick() - M.Semi.StealState.startTime
             if elapsed > M.Semi.HoldMax then break end
             if not prompt.Parent then break end
             local prog = math.clamp(elapsed / M.Semi.HoldMax * 0.9, 0, 0.9)
-            M.updateStealProgress(prog)
-            if M.distToAnimalSemi(animalData) <= M.Semi.StealRange then
+            if M.updateStealProgress then M.updateStealProgress(prog) end
+            if M.Semi.getPromptDist(prompt) <= M.Semi.StealRange then
                 if not alreadyInRange then task.wait(M.Semi.EntryDelay) end
-                M.updateStealProgress(1)
+                if M.updateStealProgress then M.updateStealProgress(1) end
                 for _, fn in ipairs(data.triggerCallbacks) do task.spawn(fn) end
                 fired = true
                 break
@@ -2189,18 +2082,18 @@ function M.executeStealAsyncSemi(prompt, animalData)
             task.wait()
         end
         if fired then
-            M.Semi.StealState.totalSteals = M.Semi.StealState.totalSteals + 1
+            M.Semi.StealState.totalSteals += 1
             M.Semi.StealState.lastResult = "Stole " .. label
         else
-            M.Semi.StealState.failedSteals = M.Semi.StealState.failedSteals + 1
+            M.Semi.StealState.failedSteals += 1
             M.Semi.StealState.lastResult = "Missed window: " .. label
         end
         M.Semi.StealState.active = false
         M.Semi.StealState.phase = "idle"
         M.Semi.StealState.lastResultTime = tick()
-        task.wait(0.05)
+        task.wait(M.Semi.Cooldown or 0.05)
         M.isStealing = false
-        M.updateStealProgress(0)
+        if M.updateStealProgress then M.updateStealProgress(0) end
         data.ready = true
     end)
     return true
@@ -2213,46 +2106,19 @@ function M.attemptStealSemi(prompt, animalData)
     return M.executeStealAsyncSemi(prompt, animalData)
 end
 
-function M.scanAllPlotsSemi()
-    if not M.Semi.plots then return 0 end
-    local newCache = {}
-    for _, plot in ipairs(M.Semi.plots:GetChildren()) do
-        local cache = M.getPlotChannelData(plot.Name)
-        if not cache then continue end
-        local animalList = cache.AnimalList
-        if typeof(animalList) ~= "table" then continue end
-        for slot, animalData in pairs(animalList) do
-            if type(animalData) == "table" then
-                local animalName = animalData.Index
-                local animalInfo = M.Semi.AnimalsData and M.Semi.AnimalsData[animalName]
-                if not animalInfo then continue end
-                table.insert(newCache, {
-                    name = animalInfo.DisplayName or animalName,
-                    plot = plot.Name,
-                    slot = tostring(slot),
-                    uid = plot.Name .. "_" .. tostring(slot),
-                })
-            end
-        end
-    end
-    M.Semi.allAnimalsCache = newCache
-    return #newCache
-end
-
 function M.startSemiSteal()
     if M.Semi.stealConnection then return end
-    M.initSemiSync()
-    M.scanAllPlotsSemi()
+    M.Semi.InternalStealCache = {}
     M.Semi.stealConnection = RunService.Heartbeat:Connect(function()
         if not M.Steal.AutoStealEnabled or M.stealMode ~= "Semi" or M.isStealing then return end
         if M.Semi.StealState.active then return end
-        local target = M.pickClosestSemi()
-        if not target then return end
-        local prompt = M.Semi.PromptMemoryCache[target.uid]
-        if not prompt or not prompt.Parent then
-            prompt = M.findProximityPromptForAnimalSemi(target)
+        local prompt = M.Semi.findNearestPrompt()
+        if not prompt then return end
+        M.buildStealCallbacksSemi(prompt)
+        local cache = M.Semi.InternalStealCache[prompt]
+        if cache then
+            M.attemptStealSemi(prompt, {name = "Animal"})
         end
-        if prompt then M.attemptStealSemi(prompt, target) end
     end)
 end
 
@@ -2262,33 +2128,10 @@ function M.stopSemiSteal()
         M.Semi.stealConnection = nil
     end
     M.isStealing = false
-    M.updateStealProgress(0)
+    if M.updateStealProgress then M.updateStealProgress(0) end
 end
 
-function M.startAutoSteal()
-    if M.statusGui then M.statusGui.Enabled = true end
-    if M.stealMode == "Normal" then
-        M.startNormalSteal()
-    else
-        M.startSemiSteal()
-    end
-end
 
-function M.stopAutoSteal()
-    if M.statusGui then M.statusGui.Enabled = true end
-    if M.stealMode == "Normal" then
-        M.stopNormalSteal()
-    else
-        M.stopSemiSteal()
-    end
-    M.isStealing = false
-    M.updateStealProgress(0)
-end
-
-function M.setStealRadius(radius)
-    M.Steal.StealRadius = radius
-    M.updateStatusRadius()
-end
 
 -- ============================================================
 -- OTHER CORE FUNCTIONS (unchanged)
@@ -3011,6 +2854,72 @@ function M.cursedInstaReset()
     doInstantReset()  -- uses the new logic
 end
 
+-- ============================================================
+-- ANTI DIE - FROM DUELS V2
+-- ============================================================
+function M.startAntiDie()
+    if M._antiDieConn then return end
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        task.spawn(function() task.wait(0.5) if M.antiDieEnabled then M.startAntiDie() end end)
+        return
+    end
+    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
+    M._antiDieConn = hum.StateChanged:Connect(function(_, new)
+        if not M.antiDieEnabled then return end
+        if new == Enum.HumanoidStateType.Dead then
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            if hum.Health < 10 then hum.Health = hum.MaxHealth end
+        end
+    end)
+    M._antiDieLoop = task.spawn(function()
+        while M.antiDieEnabled do
+            local c = player.Character
+            local h = c and c:FindFirstChildOfClass("Humanoid")
+            local hrp = c and c:FindFirstChild("HumanoidRootPart")
+            if h and h.Health < h.MaxHealth * 0.35 then
+                h.Health = h.MaxHealth
+            end
+            if hrp and not M.dropActive and hrp.Position.Y < -100 then
+                hrp.CFrame = CFrame.new(0,25,0)
+                hrp.AssemblyLinearVelocity = Vector3.zero
+            end
+            task.wait(0.5)
+        end
+    end)
+end
+
+function M.stopAntiDie()
+    if M._antiDieConn then M._antiDieConn:Disconnect(); M._antiDieConn=nil end
+    if M._antiDieLoop then task.cancel(M._antiDieLoop); M._antiDieLoop=nil end
+    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if hum then pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end) end
+end
+
+-- ============================================================
+-- ANTI FLING - FROM DUELS V2
+-- ============================================================
+function M.startAntiFling()
+    if M._antiFlingConn then return end
+    M._antiFlingConn = RunService.Heartbeat:Connect(function()
+        if not M.antiFlingEnabled then return end
+        if M.dropActive then return end
+        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        if hrp.AssemblyLinearVelocity.Magnitude > 160 then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end
+    end)
+end
+
+function M.stopAntiFling()
+    if M._antiFlingConn then M._antiFlingConn:Disconnect(); M._antiFlingConn=nil end
+end
+
+
+
 function M.setupDeathReset()
     -- Remove old connection if any
     if deathResetConn then
@@ -3365,109 +3274,90 @@ function M.isRagdollState(hum)
 end
 
 -- ============================================================
--- DROP BRAINROT
 -- ============================================================
+-- DROP BRAINROT - REPLACED WITH DUELS V2 SAFE JUMP DROP
+-- ============================================================
+M.DROP_ASCEND_DURATION = 0.22
+M.DROP_ASCEND_SPEED = 160
+M._dropConn = nil
+M.dropActive = false
 M._wfConns = {}
 
-function M.runDrop()
+function M.runJumpDrop()
     if M.dropActive then return end
-
-    if M.dropMode == "Jump" then
-        local char = player.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-
-        M.dropActive = true
-        local t0 = tick()
-        local dc
-        dc = RunService.Heartbeat:Connect(function()
-            local r = char and char:FindFirstChild("HumanoidRootPart")
-            if not r then
-                dc:Disconnect()
-                M.dropActive = false
-                return
-            end
-
-            if tick() - t0 >= M.DROP_ASCEND_DURATION then
-                dc:Disconnect()
-                local rp = RaycastParams.new()
-                rp.FilterDescendantsInstances = {char}
-                rp.FilterType = Enum.RaycastFilterType.Exclude
-                local rr = workspace:Raycast(r.Position, Vector3.new(0, -2000, 0), rp)
-                if rr then
-                    local hum2 = char:FindFirstChildOfClass("Humanoid")
-                    local off = (hum2 and hum2.HipHeight or 2) + (r.Size.Y / 2)
-                    r.CFrame = CFrame.new(r.Position.X, rr.Position.Y + off, r.Position.Z)
-                    r.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                end
-                M.dropActive = false
-                return
-            end
-
-            r.AssemblyLinearVelocity = Vector3.new(
-                r.AssemblyLinearVelocity.X,
-                M.DROP_ASCEND_SPEED,
-                r.AssemblyLinearVelocity.Z
-            )
-        end)
-    else
-        if M.autoBatEnabled then
-            M.autoBatEnabled = false
-            if M.autoBatSetVisual then M.autoBatSetVisual(false) end
-            M.stopBatAimbot()
+    local char = player.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    M.dropActive = true
+    if M.mobBtnRefs.drop then M.mobBtnRefs.drop(true) end
+    if M.setDropBrainrotVisual then M.setDropBrainrotVisual(true) end
+    local t0 = tick()
+    if M._dropConn then M._dropConn:Disconnect() end
+    M._dropConn = RunService.Heartbeat:Connect(function()
+        local c = player.Character
+        local r = c and c:FindFirstChild("HumanoidRootPart")
+        if not r then
+            if M._dropConn then M._dropConn:Disconnect(); M._dropConn=nil end
+            M.dropActive=false
+            if M.mobBtnRefs.drop then M.mobBtnRefs.drop(false) end
+            if M.setDropBrainrotVisual then M.setDropBrainrotVisual(false) end
+            return
         end
-
-        M.dropActive = true
-
-        local colConn = RunService.Stepped:Connect(function()
-            if not M.dropActive then return end
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= player and p.Character then
-                    for _, part in ipairs(p.Character:GetChildren()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                        end
-                    end
+        if not M.dropActive then
+            if M._dropConn then M._dropConn:Disconnect(); M._dropConn=nil end
+            if M.mobBtnRefs.drop then M.mobBtnRefs.drop(false) end
+            if M.setDropBrainrotVisual then M.setDropBrainrotVisual(false) end
+            return
+        end
+        if tick()-t0 >= M.DROP_ASCEND_DURATION then
+            if M._dropConn then M._dropConn:Disconnect(); M._dropConn=nil end
+            pcall(function()
+                local rp = RaycastParams.new()
+                rp.FilterDescendantsInstances = {c}
+                rp.FilterType = Enum.RaycastFilterType.Exclude
+                local rr = workspace:Raycast(r.Position, Vector3.new(0, -3000, 0), rp)
+                if rr then
+                    local hum = c:FindFirstChildOfClass("Humanoid")
+                    local off = ((hum and hum.HipHeight) or 2) + (r.Size.Y/2)
+                    local oldVel = r.AssemblyLinearVelocity
+                    r.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                    r.CFrame = CFrame.new(r.Position.X, rr.Position.Y + off + 0.15, r.Position.Z)
+                    if hum then hum:ChangeState(Enum.HumanoidStateType.Landed) end
+                    r:ApplyImpulse(Vector3.new(0, -r.AssemblyMass * math.max(oldVel.Y,0) * 0.05, 0))
                 end
-            end
-        end)
-        table.insert(M._wfConns, colConn)
-
-        local flingThread = coroutine.create(function()
-            while M.dropActive do
-                RunService.Heartbeat:Wait()
-                local c = player.Character
-                local root = c and c:FindFirstChild("HumanoidRootPart")
-                if not root then break end
-
-                local vel = root.Velocity
-                root.Velocity = vel * 10000 + Vector3.new(0, 10000, 0)
-
-                RunService.RenderStepped:Wait()
-                if root and root.Parent then root.Velocity = vel end
-
-                RunService.Stepped:Wait()
-                if root and root.Parent then root.Velocity = vel + Vector3.new(0, 0.1, 0) end
-            end
-        end)
-
-        table.insert(M._wfConns, flingThread)
-        coroutine.resume(flingThread)
-
-        task.delay(0.1, function()
-            M.dropActive = false
-            for _, c in ipairs(M._wfConns) do
-                if typeof(c) == "RBXScriptConnection" then
-                    c:Disconnect()
-                elseif type(c) == "thread" then
-                    pcall(coroutine.close, c)
-                end
-            end
-            M._wfConns = {}
-        end)
-    end
+            end)
+            M.dropActive=false
+            if M.mobBtnRefs.drop then M.mobBtnRefs.drop(false) end
+            if M.setDropBrainrotVisual then M.setDropBrainrotVisual(false) end
+            return
+        end
+        local mass = r.AssemblyMass
+        local current = r.AssemblyLinearVelocity
+        local targetY = math.clamp(M.DROP_ASCEND_SPEED, 80, 120)
+        if current.Y < targetY then
+            r:ApplyImpulse(Vector3.new(0, (targetY - current.Y) * mass, 0))
+        end
+    end)
 end
+
+function M.runDrop()
+    -- Only Jump Drop now (Duels V2 safe)
+    M.runJumpDrop()
+end
+
+function M.stopDrop()
+    M.dropActive=false
+    if M._dropConn then M._dropConn:Disconnect(); M._dropConn=nil end
+    if M.mobBtnRefs.drop then M.mobBtnRefs.drop(false) end
+    if M.setDropBrainrotVisual then M.setDropBrainrotVisual(false) end
+    for _, c in ipairs(M._wfConns) do
+        if typeof(c)=="RBXScriptConnection" then c:Disconnect()
+        elseif type(c)=="thread" then pcall(coroutine.close, c) end
+    end
+    M._wfConns={}
+end
+
 
 -- ============================================================
 -- NUKE OPTIMIZER
@@ -4042,6 +3932,8 @@ local function loadOrvynConfig()
         if d.removeAcc~=nil then M.removeAccEnabled=d.removeAcc end
         if d.playerESPEnabled~=nil then M.playerESPEnabled=d.playerESPEnabled end
         if d.antiRagdoll~=nil then M.antiRagdollEnabled=d.antiRagdoll end
+        if d.antiDieEnabled~=nil then M.antiDieEnabled=d.antiDieEnabled end
+        if d.antiFlingEnabled~=nil then M.antiFlingEnabled=d.antiFlingEnabled end
         if d.autoStealEnabled~=nil then M.Steal.AutoStealEnabled=d.autoStealEnabled end
         if d.infiniteJump~=nil then M.infJumpEnabled=d.infiniteJump end
         if d.medusaCounter~=nil then M.medusaCounterEnabled=d.medusaCounter end
@@ -4086,6 +3978,7 @@ local function loadOrvynConfig()
         if d.bodyLockKey then lk(M.KB.BodyLock,d.bodyLockKey) end
         if type(d.mainGuiPos)=="table" then M.mainGuiPos=d.mainGuiPos end
         if type(d.hubBtnPos)=="table" then M.hubBtnPos=d.hubBtnPos end
+        if d.mobileButtonsLocked~=nil then M.mobileButtonsLocked=d.mobileButtonsLocked==true end
     end
 end
 
@@ -4116,6 +4009,8 @@ local function saveOrvynConfig()
         nukeOptimizer=M.nukeOn, removeAcc=M.removeAccEnabled,
         playerESPEnabled=M.playerESPEnabled,
         autoStealEnabled=M.Steal.AutoStealEnabled,
+        antiDieEnabled=M.antiDieEnabled,
+        antiFlingEnabled=M.antiFlingEnabled,
         antiRagdoll=M.antiRagdollEnabled, infiniteJump=M.infJumpEnabled,
         medusaCounter=M.medusaCounterEnabled, batCounter=M.batCounterEnabled,
         unwalkEnabled=M.unwalkEnabled, antiLag=M.antiLagEnabled,
@@ -4143,6 +4038,7 @@ local function saveOrvynConfig()
         bodyLockKey=ks(M.KB.BodyLock),
         mainGuiPos=M.mainGuiPos,
         hubBtnPos=M.hubBtnPos,
+        mobileButtonsLocked=M.mobileButtonsLocked,
     }
     pcall(function() writefile(ORVYN_CONFIG_NAME, HS:JSONEncode(cfg)) end)
 end
@@ -5114,7 +5010,20 @@ function M.buildGui()
     end)
     M.setMedusaVisual = setMedusa
 
-    -- Medusa Reset toggle (uses new implementation)
+    -- Medusa Reset toggle (uses
+    local _, setAntiDie = createToggle("Anti Die", M.antiDieEnabled, function(on)
+        M.antiDieEnabled = on
+        if on then M.startAntiDie() else M.stopAntiDie() end
+        saveOrvynConfig()
+    end)
+    M.setAntiDieVisual = setAntiDie
+    local _, setAntiFling = createToggle("Anti Fling", M.antiFlingEnabled, function(on)
+        M.antiFlingEnabled = on
+        if on then M.startAntiFling() else M.stopAntiFling() end
+        saveOrvynConfig()
+    end)
+    M.setAntiFlingVisual = setAntiFling
+ new implementation)
     local _, setMedReset = createToggle("Medusa Reset", M.medusaResetEnabled, function(on)
         M.medusaResetEnabled = on
         if on then M.startMedusaReset() else M.stopMedusaReset() end
@@ -5739,7 +5648,16 @@ do
     local player = Players.LocalPlayer
     local UIS = game:GetService("UserInputService")
     
-    M.mobileButtonsLocked = false -- force unlocked for drag test, will be saved via settings
+    -- Load saved lock state if exists, else default false (now saved properly)
+    if M.mobileButtonsLocked == nil then M.mobileButtonsLocked = false end
+    if isfile and isfile("OrvynConfig.json") then
+        pcall(function()
+            local _cfg = HS:JSONDecode(readfile("OrvynConfig.json"))
+            if _cfg.mobileButtonsLocked ~= nil then
+                M.mobileButtonsLocked = _cfg.mobileButtonsLocked==true
+            end
+        end)
+    end
     if isfile and isfile("OrvynConfig.json") then
         pcall(function()
             local cfg = HS:JSONDecode(readfile("OrvynConfig.json"))
@@ -6157,6 +6075,11 @@ function M.resetAllSettings()
     M.carrySpeedActive = false
     M.laggerModeEnabled = false
     M.antiRagdollEnabled = false
+M.antiDieEnabled = false
+M.antiFlingEnabled = false
+M._antiDieConn = nil
+M._antiDieLoop = nil
+M._antiFlingConn = nil
     M.infJumpEnabled = false
     M.infJumpMode = "manual"
     M.medusaCounterEnabled = false
