@@ -639,7 +639,7 @@ M.laggerModePillRef = nil
 M.carryModePillRef = nil
 M.autoSwitchSpeedEnabled = false
 M.mobBtnTransparencyEnabled = false
-M.perButtonDragEnabled = true -- independent drag enabled
+M.perButtonDragEnabled = false
 M.antiKickEnabled = false
 M.brainrotDetected = false
 M.activeBatBillboard = nil
@@ -3789,7 +3789,6 @@ function M.buildMobileButtons()
     local dragInfo = {dragging = false, start = nil, startPos = nil}
     panel.InputBegan:Connect(function(input)
         if M.uiLocked or M.mobileButtonsLocked then return end
-        if M.perButtonDragEnabled then return end -- if per-button drag enabled, don't drag panel
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragInfo.dragging = true
             dragInfo.start = input.Position
@@ -3798,7 +3797,6 @@ function M.buildMobileButtons()
     end)
     panel.InputChanged:Connect(function(input)
         if dragInfo.dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            if M.mobileButtonsLocked then dragInfo.dragging = false; return end
             local delta = input.Position - dragInfo.start
             panel.Position = UDim2.new(dragInfo.startPos.X.Scale, dragInfo.startPos.X.Offset + delta.X,
                                         dragInfo.startPos.Y.Scale, dragInfo.startPos.Y.Offset + delta.Y)
@@ -3808,7 +3806,7 @@ function M.buildMobileButtons()
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             if dragInfo.dragging then
                 dragInfo.dragging = false
-                M.saveBtnPositions()
+                M.saveBtnPositions()  -- saves all buttons including bypass
             end
         end
     end)
@@ -3852,41 +3850,6 @@ function M.buildMobileButtons()
         btn.Parent = panel
 
         Instance.new("UICorner", btn).CornerRadius = UDim.new(0, CORNER_R)
-        
-        -- Independent button drag (when unlocked)
-        do
-            local btnDragging = false
-            local btnDragStart, btnStartPos
-            local btnMoved = false
-            btn.InputBegan:Connect(function(input)
-                if M.mobileButtonsLocked then return end
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    btnDragging = true
-                    btnDragStart = input.Position
-                    btnStartPos = btn.Position
-                    btnMoved = false
-                end
-            end)
-            btn.InputChanged:Connect(function(input)
-                if btnDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    if M.mobileButtonsLocked then btnDragging = false; return end
-                    local delta = input.Position - btnDragStart
-                    if delta.Magnitude > 4 then btnMoved = true end
-                    btn.Position = UDim2.new(btnStartPos.X.Scale, btnStartPos.X.Offset + delta.X, btnStartPos.Y.Scale, btnStartPos.Y.Offset + delta.Y)
-                end
-            end)
-            btn.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    if btnDragging then
-                        btnDragging = false
-                        if btnMoved then
-                            M.saveBtnPositions()
-                            btnMoved = false
-                        end
-                    end
-                end
-            end)
-        end
         btn.TextStrokeTransparency = 1
 
         local isOn = false
@@ -5697,91 +5660,7 @@ pcall(function()
 end)
 
 
-
--- Simple mobile lock toggle + settings toggle
-do
-    -- Ensure locked var exists
-    M.mobileButtonsLocked = M.mobileButtonsLocked or false
-    
-    -- Override saveBtnPositions to also save panel
-    local _origSave = M.saveBtnPositions
-    function M.saveBtnPositions()
-        if not writefile then return end
-        if not M.mobGuiRef then return end
-        local out = {}
-        local panel = M.mobGuiRef:FindFirstChild("MobPanel")
-        if panel then
-            out["_panel"] = {xo=panel.Position.X.Offset, yo=panel.Position.Y.Offset}
-        end
-        for _, child in ipairs(M.mobGuiRef:GetDescendants()) do
-            if child:IsA("TextButton") and child:GetAttribute("BtnKey") then
-                local key = child:GetAttribute("BtnKey")
-                out[key] = {xo=child.Position.X.Offset, yo=child.Position.Y.Offset}
-            end
-        end
-        pcall(function() writefile(M.MOB_POS_FILE, HS:JSONEncode(out)) end)
-    end
-    
-    -- Add toggle in settings after 1 sec
-    task.spawn(function()
-        task.wait(2)
-        pcall(function()
-            local main = M.mainFrame
-            if not main then return end
-            local scroll = main:FindFirstChildWhichIsA("ScrollingFrame")
-            if not scroll then return end
-            -- Check if lock toggle already added
-            if scroll:FindFirstChild("LockMobileToggle") then return end
-            
-            local row = Instance.new("Frame")
-            row.Name = "LockMobileToggle"
-            row.Size = UDim2.new(1, 0, 0, 50)
-            row.BackgroundTransparency = 1
-            row.LayoutOrder = 9999
-            row.Parent = scroll
-            
-            local lbl = Instance.new("TextLabel", row)
-            lbl.Size = UDim2.new(0, 220, 1, 0)
-            lbl.Position = UDim2.new(0, 20, 0, 0)
-            lbl.BackgroundTransparency = 1
-            lbl.Text = "Lock Mobile Buttons"
-            lbl.TextColor3 = Color3.fromRGB(255,255,255)
-            lbl.Font = Enum.Font.GothamBold
-            lbl.TextSize = 14
-            lbl.TextXAlignment = Enum.TextXAlignment.Left
-            
-            local toggleBg = Instance.new("Frame", row)
-            toggleBg.Size = UDim2.new(0, 40, 0, 22)
-            toggleBg.Position = UDim2.new(1, -60, 0.5, -11)
-            toggleBg.BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45)
-            toggleBg.BorderSizePixel = 0
-            Instance.new("UICorner", toggleBg).CornerRadius = UDim.new(1, 0)
-            
-            local circle = Instance.new("Frame", toggleBg)
-            circle.Size = UDim2.new(0, 16, 0, 16)
-            circle.Position = M.mobileButtonsLocked and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-            circle.BackgroundColor3 = Color3.fromRGB(10,10,15)
-            circle.BorderSizePixel = 0
-            Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
-            
-            local clickArea = Instance.new("TextButton", row)
-            clickArea.Size = UDim2.new(1,0,1,0)
-            clickArea.BackgroundTransparency = 1
-            clickArea.Text = ""
-            clickArea.MouseButton1Click:Connect(function()
-                M.mobileButtonsLocked = not M.mobileButtonsLocked
-                game:GetService("TweenService"):Create(toggleBg, TweenInfo.new(0.25), {BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45)}):Play()
-                game:GetService("TweenService"):Create(circle, TweenInfo.new(0.25, Enum.EasingStyle.Back), {Position = M.mobileButtonsLocked and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)}):Play()
-                pcall(function() if saveOrvynConfig then saveOrvynConfig() end end)
-            end)
-        end)
-    end)
-end
-
-
-
--- DUELS V2 SKIN WRAPPER
- - keeps original build but restyles to Duels
+-- DUELS V2 SKIN WRAPPER - keeps original build but restyles to Duels
 do
     local _origBuild = M.buildGui
     function M.buildGui()
