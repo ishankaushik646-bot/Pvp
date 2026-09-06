@@ -3241,6 +3241,21 @@ end
     _G._customFontStart = function() if _G._VezyFontEnabled then return end; if not _G._fontSetup() then return end; _G._VezyFontEnabled=true; for _,v in pairs(game:GetDescendants()) do _G._fontChangeIt(v) end; _G._VezyFontConn=game.DescendantAdded:Connect(function(obj) if _G._VezyFontEnabled then _G._fontChangeIt(obj) end end) end
     _G._customFontStop = function() _G._VezyFontEnabled=false; if _G._VezyFontConn then _G._VezyFontConn:Disconnect(); _G._VezyFontConn=nil end; for obj,origFont in pairs(_G._VezyFontOriginals) do pcall(function() if obj and obj.Parent then obj.FontFace=origFont end end) end; _G._VezyFontOriginals={} end
 
+
+    -- ANTI-DROP: Prevent brainrot tool from being dropped by server
+    RunService.Heartbeat:Connect(function()
+        local char = LP.Character
+        if not char then return end
+        for _, tool in ipairs(char:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:lower():find("brainrot") then
+                tool.CanBeDropped = false
+                -- keep handle massless to avoid physics drop
+                local handle = tool:FindFirstChild("Handle")
+                if handle then handle.Massless = true end
+            end
+        end
+    end)
+
     _G._RemoveAccOn=false; _G._RemoveAccConn=nil; _G._removedAccessories={}
     _G._removeAccDo = function() if not _G._RemoveAccOn then return end; local char=LP.Character; if not char then return end; for _,obj in ipairs(char:GetDescendants()) do if obj:IsA("Accessory") or obj:IsA("Hat") then if not _G._removedAccessories[obj] then _G._removedAccessories[obj]=true; pcall(function() obj:Destroy() end) end end end end
     _G._removeAccStart = function() if _G._RemoveAccOn then return end; _G._RemoveAccOn=true; _G._removeAccDo(); _G._RemoveAccConn=LP.CharacterAdded:Connect(function() task.wait(0.5); if _G._RemoveAccOn then _G._removeAccDo() end end) end
@@ -3268,28 +3283,36 @@ end
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                -- CFrame move at real speed (35+)
-                local moveDir = Vector3.new(md.X, 0, md.Z)
-                if moveDir.Magnitude > 0 then
-                    moveDir = moveDir.Unit * spd * dt
-                    hrp.CFrame = hrp.CFrame + moveDir
-                    -- SPOOF: set velocity to 16 so server thinks you're legit, not 0
-                    local spoof = Vector3.new(md.X * 16, hrp.Velocity.Y, md.Z * 16)
-                    hrp.Velocity = spoof
-                    hrp.AssemblyLinearVelocity = Vector3.new(md.X * 16, hrp.AssemblyLinearVelocity.Y, md.Z * 16)
-                    -- DO NOT touch AssemblyAngularVelocity
+                -- ORVYN velocity method but spoof server as 20
+                local serverSpeed = 20
+                local realSpeed = spd
+                if realSpeed > serverSpeed then
+                    local extra = realSpeed - serverSpeed
+                    -- move extra with CFrame (hidden from server)
+                    local extraMove = Vector3.new(md.X, 0, md.Z).Unit * extra * dt
+                    hrp.CFrame = hrp.CFrame + extraMove
+                    -- server sees only 20
+                    hrp.Velocity = Vector3.new(md.X*serverSpeed, hrp.Velocity.Y, md.Z*serverSpeed)
+                    hrp.AssemblyLinearVelocity = Vector3.new(md.X*serverSpeed, hrp.AssemblyLinearVelocity.Y, md.Z*serverSpeed)
+                else
+                    -- if speed <=20 just use normal orvyn method
+                    hrp.Velocity=Vector3.new(md.X*realSpeed, hrp.Velocity.Y, md.Z*realSpeed)
                 end
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
                 if anyHeld then
-                    local moveDir = Vector3.new(State.lastMoveDir.X, 0, State.lastMoveDir.Z)
-                    if moveDir.Magnitude > 0 then
-                        moveDir = moveDir.Unit * spd * dt
-                        hrp.CFrame = hrp.CFrame + moveDir
-                        local spoof = Vector3.new(State.lastMoveDir.X * 16, hrp.Velocity.Y, State.lastMoveDir.Z * 16)
-                        hrp.Velocity = spoof
-                        hrp.AssemblyLinearVelocity = Vector3.new(State.lastMoveDir.X * 16, hrp.AssemblyLinearVelocity.Y, State.lastMoveDir.Z * 16)
+                    local md2 = State.lastMoveDir
+                    local serverSpeed = 20
+                    local realSpeed = spd
+                    if realSpeed > serverSpeed then
+                        local extra = realSpeed - serverSpeed
+                        local extraMove = Vector3.new(md2.X, 0, md2.Z).Unit * extra * dt
+                        hrp.CFrame = hrp.CFrame + extraMove
+                        hrp.Velocity = Vector3.new(md2.X*serverSpeed, hrp.Velocity.Y, md2.Z*serverSpeed)
+                        hrp.AssemblyLinearVelocity = Vector3.new(md2.X*serverSpeed, hrp.AssemblyLinearVelocity.Y, md2.Z*serverSpeed)
+                    else
+                        hrp.Velocity=Vector3.new(md2.X*realSpeed, hrp.Velocity.Y, md2.Z*realSpeed)
                     end
                 end
             end
