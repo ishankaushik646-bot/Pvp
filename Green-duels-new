@@ -42,11 +42,9 @@ local Workspace = game:GetService("Workspace")
 
 local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
 
--- [ORVYN LOGIC - SPOOF REMOVED]
-
-
 -- ============================================================
 -- FIX: Missing variables
+-- [ORVYN LOGIC - SPOOF REMOVED TO FIX KICK]
 -- ============================================================
 local DROP_TYPES = {
     JUMP = "jump",
@@ -492,15 +490,16 @@ end
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
 local function applyImpulseForVelocity(hrp, desiredVelocity)
+    -- ORVYN PURE - No spoof, direct Velocity like Orvyn hub
     if not hrp or not desiredVelocity then return end
     hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
 end
 
--- ============================================================
+-- ==================================================================================================================
 -- STATE
 -- ============================================================
 local State = {
-    normalSpeed=60, carrySpeed=30, laggerSpeed=15, laggerCarrySpeed=24.5,
+    normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
     speedToggled=false,
     laggerMode=0,
     infJumpEnabled=true, antiRagdollEnabled=false,
@@ -1151,7 +1150,6 @@ startAntiDie = function()
             end
             if hrp and not dropActive and hrp.Position.Y < -100 then
                 hrp.CFrame = CFrame.new(0,25,0)
-                
             end
             task.wait(0.5)
         end
@@ -1174,10 +1172,9 @@ startAntiFling = function()
         if dropActive then return end
         local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-        if hrp.Velocity.Magnitude > 160 then
-            hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
+        if hrp.AssemblyLinearVelocity.Magnitude > 160 then
+            hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-            
         end
     end)
 end
@@ -2451,9 +2448,6 @@ toggleSetters["antiRagdoll"] = setAntiRag
     -- ============================================================
     local function applyImpulseForVelocity(hrp, desiredVelocity)
     if not hrp or not desiredVelocity then return end
-    hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
-end
-
     stopAutoLeft = function()
         if alConn then alConn:Disconnect(); alConn = nil end; alPhase = 1
         local char = LP.Character; if char then local hum2 = char:FindFirstChildOfClass("Humanoid"); if hum2 then pcall(function() hum2:Move(Vector3.zero, false) end) end end
@@ -3256,51 +3250,26 @@ end
     RunService.RenderStepped:Connect(function()
         if not (h and hrp) then return end; if State._tpInProgress then return end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
+            -- ORVYN PURE LOGIC START
             local md=h.MoveDirection
             local spd
-            if State.laggerMode==1 then spd=State.laggerSpeed
-            elseif State.laggerMode==2 then spd=State.laggerCarrySpeed
-            else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
+            -- Exact Orvyn getActiveMoveSpeed logic mapped to Duels State:
+            -- if laggerMode 2 => lagger+carry, if 1 => lagger only, if 0+speedToggled => carry, else normal
+            if State.laggerMode==2 then spd=State.laggerCarrySpeed
+            elseif State.laggerMode==1 then spd=State.laggerSpeed
+            elseif State.speedToggled then spd=State.carrySpeed
+            else spd=State.normalSpeed end
+            
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                -- TRUE 30+ CARRY BYPASS FOR DUELS (Orvyn can do 30+ in base game, Duels drops at 28.9, so we use CFrame trick)
-                do
-                    local holding = false
-                    local charCheck = LP.Character
-                    if charCheck then
-                        for _, t in pairs(charCheck:GetChildren()) do
-                            if t:IsA("Tool") and t.Name:lower():find("brainrot") then holding=true break end
-                        end
-                    end
-                    if holding and spd > 28.8 then
-                        -- Move via CFrame at true speed, but spoof Velocity to 28.7 so Duels anti-cheat doesn't drop
-                        hrp.CFrame = hrp.CFrame + Vector3.new(md.X * spd * 0.016, 0, md.Z * spd * 0.016)
-                        hrp.Velocity = Vector3.new(md.X * 28.7, hrp.Velocity.Y, md.Z * 28.7)
-                        hrp.AssemblyLinearVelocity = Vector3.new(md.X * 28.7, hrp.AssemblyLinearVelocity.Y, md.Z * 28.7)
-                    else
-                        hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd)
-                    end
-                end
+                -- Orvyn direct Velocity, keeps Y
+                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd)
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then
-                    do
-                        local holding = false
-                        local charCheck = LP.Character
-                        if charCheck then
-                            for _, t in pairs(charCheck:GetChildren()) do
-                                if t:IsA("Tool") and t.Name:lower():find("brainrot") then holding=true break end
-                            end
-                        end
-                        if holding and spd > 28.8 then
-                            hrp.CFrame = hrp.CFrame + Vector3.new(State.lastMoveDir.X * spd * 0.016, 0, State.lastMoveDir.Z * spd * 0.016)
-                            hrp.Velocity = Vector3.new(State.lastMoveDir.X * 28.7, hrp.Velocity.Y, State.lastMoveDir.Z * 28.7)
-                        else
-                            hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd)
-                        end
-                    end
-                end
+                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end
+            end
+            -- ORVYN PURE LOGIC END
             end
         end
         pcall(function()
