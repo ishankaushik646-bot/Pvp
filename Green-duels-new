@@ -2693,7 +2693,7 @@ end
                 if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
                 yVel=math.clamp(yVel,-70,110)
                 local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
-                root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+                root.Velocity = Vector3.new(desiredVel.X, root.Velocity.Y, desiredVel.Z); root.AssemblyLinearVelocity = Vector3.new(desiredVel.X, root.AssemblyLinearVelocity.Y, desiredVel.Z) -- ORVYN SPEED
                 local speed3=targetVel.Magnitude
                 local predictTime=math.clamp(speed3/150,0.05,0.2)
                 local predictedPos=targetPos+targetVel*predictTime
@@ -2735,7 +2735,7 @@ end
                     if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
                     yVel=math.clamp(yVel,-70,110)
                     local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
-                    hrp.AssemblyLinearVelocity=hrp.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+                    hrp.Velocity = Vector3.new(desiredVel.X, hrp.Velocity.Y, desiredVel.Z); hrp.AssemblyLinearVelocity = Vector3.new(desiredVel.X, hrp.AssemblyLinearVelocity.Y, desiredVel.Z) -- ORVYN SPEED
                     local toTarget=targetPos-myPos
                     if toTarget.Magnitude>0.1 then
                         local goalCF=CFrame.lookAt(myPos,targetPos)
