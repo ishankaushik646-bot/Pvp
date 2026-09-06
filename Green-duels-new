@@ -4357,30 +4357,17 @@ end
 
 function M.buildGui()
     M.clearPersistentConns()
-
-    for _,n in ipairs({"OrvynDuels","Orvyn_Menu","OrvynHubGUI","DuelsV2","GreenHUBIntro","OrvynHubGUI"}) do
+    for _,n in ipairs({"OrvynDuels","Orvyn_Menu","OrvynHubGUI","DuelsV2","GreenHUBIntro"}) do
         local cg=game:GetService("CoreGui")
-        local old=cg:FindFirstChild(n); if old then old:Destroy() end
+        local old=cg:FindFirstChild(n); if old then pcall(function() old:Destroy() end) end
         local pg=player:FindFirstChild("PlayerGui")
-        if pg then local o=pg:FindFirstChild(n); if o then o:Destroy() end end
+        if pg then local o=pg:FindFirstChild(n); if o then pcall(function() o:Destroy() end) end end
     end
 
-    -- Build status UI (steal bar) - keep Orvyn logic
     M.buildStatusUI()
 
-    -- ============================================================
-    -- DUELS V2 GUI SHELL but ORVYN LOGIC
-    -- ============================================================
-    local C = {
-        winBg=Color3.fromRGB(0,0,0), winBg2=Color3.fromRGB(6,6,6), winBorder=Color3.fromRGB(30,132,73),
-        sidebarBg=Color3.fromRGB(0,0,0), sidebarDiv=Color3.fromRGB(18,44,28),
-        topBg=Color3.fromRGB(4,8,5), topTitle=Color3.fromRGB(230,245,235), topSub=Color3.fromRGB(95,150,115),
-        topBtn=Color3.fromRGB(45,100,65), topBtnHov=Color3.fromRGB(70,140,92), topDivider=Color3.fromRGB(18,44,28),
-        sectionTxt=Color3.fromRGB(46,160,90), rowLabel=Color3.fromRGB(225,240,230),
-        accent=Color3.fromRGB(0,210,210), accentGreen=Color3.fromRGB(30,132,73),
-    }
-
-    local function mkCorner(p,r) local c=Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 6); return c end
+    -- Duels V2 style constants
+    local function mkCorner(p,r) local c=Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 8); return c end
     local function mkStroke(p,col,th) local s=Instance.new("UIStroke",p); s.Color=col; s.Thickness=th or 1; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; return s end
 
     local gui = Instance.new("ScreenGui")
@@ -4391,12 +4378,13 @@ function M.buildGui()
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.Parent = player:WaitForChild("PlayerGui")
     M.gui = gui
-    local uiScaleObj=Instance.new("UIScale",gui); uiScaleObj.Scale = M.uiScale or 1
-    M.uiScaleRef = uiScaleObj
+    local uiScale = Instance.new("UIScale", gui)
+    uiScale.Scale = M.uiScale or 1
+    M.uiScaleRef = uiScale
 
-    local function makeDraggable(frame,handle)
-        local src=handle or frame
-        local dragging,dragInput,dragStart,startPos=false,nil,nil,nil
+    local function makeDraggable(frame, handle)
+        local src = handle or frame
+        local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
         src.InputBegan:Connect(function(inp)
             if M.uiLocked then return end
             if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
@@ -4415,604 +4403,290 @@ function M.buildGui()
         end)
     end
 
-    local WIN_W = 400
-    local WIN_H = 540
+    local WIN_W, WIN_H = 400, 560
     local TITLE_H = 48
     local mainOuter = Instance.new("Frame", gui)
     mainOuter.Name = "MainOuter"
     mainOuter.Size = UDim2.new(0, WIN_W, 0, WIN_H)
     mainOuter.Position = UDim2.new(0.5, -WIN_W/2, 0.5, -WIN_H/2)
-    mainOuter.BackgroundTransparency = 1; mainOuter.BorderSizePixel = 0; mainOuter.ClipsDescendants = true
-    mkCorner(mainOuter, 20); makeDraggable(mainOuter)
+    mainOuter.BackgroundTransparency = 1
+    mainOuter.BorderSizePixel = 0
+    mainOuter.ClipsDescendants = true
+    mkCorner(mainOuter, 20)
+    makeDraggable(mainOuter)
 
     local bgFill = Instance.new("Frame", mainOuter)
-    bgFill.Name = "BgFill"; bgFill.Size = UDim2.new(1,0,1,0)
-    bgFill.BackgroundColor3 = Color3.fromRGB(8,14,10); bgFill.BorderSizePixel = 0; bgFill.ZIndex = 0
+    bgFill.Size = UDim2.new(1,0,1,0)
+    bgFill.BackgroundColor3 = Color3.fromRGB(8,14,10)
+    bgFill.BorderSizePixel=0
     mkCorner(bgFill, 20)
-    local mainGrad = Instance.new("UIGradient", bgFill)
-    mainGrad.Color = ColorSequence.new({
+    local grad = Instance.new("UIGradient", bgFill)
+    grad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(14,26,18)),
         ColorSequenceKeypoint.new(0.5, Color3.fromRGB(8,16,11)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(4,8,6))
     })
-    mainGrad.Rotation = 90
-    local mainStroke = Instance.new("UIStroke", mainOuter)
-    mainStroke.Thickness = 1.4; mainStroke.Color = C.accent; mainStroke.Transparency = 0.2
-    local mainStrokeGrad = Instance.new("UIGradient", mainStroke)
-    mainStrokeGrad.Color = ColorSequence.new({
+    grad.Rotation = 90
+
+    local stroke = Instance.new("UIStroke", mainOuter)
+    stroke.Thickness = 1.4
+    stroke.Color = Color3.fromRGB(0,210,210)
+    stroke.Transparency = 0.2
+    local strokeGrad = Instance.new("UIGradient", stroke)
+    strokeGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(0,210,210)),
         ColorSequenceKeypoint.new(0.5, Color3.fromRGB(30,132,73)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(0,210,210))
     })
-    task.spawn(function() while mainOuter.Parent do mainStrokeGrad.Rotation = (mainStrokeGrad.Rotation+0.4)%360; RunService.RenderStepped:Wait() end end)
+    task.spawn(function() while mainOuter.Parent do strokeGrad.Rotation = (strokeGrad.Rotation+0.4)%360; RunService.RenderStepped:Wait() end end)
 
     M.mainFrame = mainOuter
 
-    -- Brand badge top-left like Duels but ORVYN
-    local brandBadge = Instance.new("TextButton")
-    brandBadge.Name = "OrvynBadge"
-    brandBadge.Size = UDim2.new(0, 120, 0, 30)
+    -- Floating badge
+    local brandBadge = Instance.new("TextButton", gui)
+    brandBadge.Size = UDim2.new(0, 122, 0, 30)
     brandBadge.Position = UDim2.new(0, 14, 0, 14)
-    brandBadge.BackgroundColor3 = Color3.fromRGB(8, 14, 10)
-    brandBadge.BackgroundTransparency = 0.1
-    brandBadge.BorderSizePixel = 0
+    brandBadge.BackgroundColor3 = Color3.fromRGB(8,14,10)
     brandBadge.Text = "ORVYN HUB"
-    brandBadge.TextColor3 = C.accent
+    brandBadge.TextColor3 = Color3.fromRGB(0,210,210)
     brandBadge.Font = Enum.Font.GothamBlack
     brandBadge.TextSize = 13
-    brandBadge.AutoButtonColor = false
-    brandBadge.ZIndex = 50
-    brandBadge.Parent = gui
-    mkCorner(brandBadge, 10)
-    mkStroke(brandBadge, C.accent, 1.2).Transparency = 0.35
+    brandBadge.AutoButtonColor=false
+    mkCorner(brandBadge,10)
+    mkStroke(brandBadge, Color3.fromRGB(0,210,210),1.2).Transparency=0.35
+    brandBadge.ZIndex=50
 
     -- Title bar
     local titleBar = Instance.new("Frame", mainOuter)
-    titleBar.Size = UDim2.new(1,0,0,TITLE_H); titleBar.BackgroundTransparency = 1; titleBar.BorderSizePixel = 0; titleBar.ZIndex = 5
+    titleBar.Size = UDim2.new(1,0,0,TITLE_H)
+    titleBar.BackgroundTransparency=1
+    titleBar.ZIndex=5
 
     local avatarBg = Instance.new("Frame", titleBar)
-    avatarBg.Size = UDim2.new(0,32,0,32); avatarBg.Position = UDim2.new(0,12,0.5,-16)
-    avatarBg.BackgroundColor3 = Color3.fromRGB(8,14,10); avatarBg.BorderSizePixel = 0; avatarBg.ZIndex = 6
-    mkCorner(avatarBg,16); mkStroke(avatarBg, C.accent, 1.5).Transparency = 0.25
+    avatarBg.Size = UDim2.new(0,32,0,32); avatarBg.Position=UDim2.new(0,12,0.5,-16)
+    avatarBg.BackgroundColor3=Color3.fromRGB(8,14,10); mkCorner(avatarBg,16); mkStroke(avatarBg, Color3.fromRGB(0,210,210),1.2).Transparency=0.3
     local avatarImg = Instance.new("ImageLabel", avatarBg)
-    avatarImg.Size = UDim2.new(1,-4,1,-4); avatarImg.Position = UDim2.new(0,2,0,2)
-    avatarImg.BackgroundTransparency = 1; avatarImg.Image = ""; avatarImg.ScaleType = Enum.ScaleType.Crop
-    avatarImg.ZIndex = 7; mkCorner(avatarImg,14)
+    avatarImg.Size=UDim2.new(1,-4,1,-4); avatarImg.Position=UDim2.new(0,2,0,2); avatarImg.BackgroundTransparency=1; mkCorner(avatarImg,14)
     task.spawn(function()
         local ok,thumb = pcall(function() return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
-        if ok and thumb then avatarImg.Image = thumb end
+        if ok and thumb then avatarImg.Image=thumb end
     end)
 
     local titleLbl = Instance.new("TextLabel", titleBar)
-    titleLbl.Size = UDim2.new(0,160,0,16); titleLbl.Position = UDim2.new(0,50,0,8)
-    titleLbl.BackgroundTransparency = 1; titleLbl.Text = "ORVYN HUB"
-    titleLbl.TextColor3 = Color3.fromRGB(230,245,235); titleLbl.Font = Enum.Font.GothamBlack; titleLbl.TextSize = 14
-    titleLbl.TextXAlignment = Enum.TextXAlignment.Left; titleLbl.ZIndex = 6
-
-    local subTitleLbl = Instance.new("TextLabel", titleBar)
-    subTitleLbl.Size = UDim2.new(0,160,0,11); subTitleLbl.Position = UDim2.new(0,50,0,26)
-    subTitleLbl.BackgroundTransparency = 1; subTitleLbl.Text = "duels v2 style • orvyn logic"
-    subTitleLbl.TextColor3 = Color3.fromRGB(0,210,210); subTitleLbl.Font = Enum.Font.GothamMedium; subTitleLbl.TextSize = 10
-    subTitleLbl.TextXAlignment = Enum.TextXAlignment.Left; subTitleLbl.ZIndex = 6
+    titleLbl.Size=UDim2.new(0,160,0,16); titleLbl.Position=UDim2.new(0,50,0,8); titleLbl.BackgroundTransparency=1
+    titleLbl.Text="ORVYN HUB"; titleLbl.TextColor3=Color3.fromRGB(230,245,235); titleLbl.Font=Enum.Font.GothamBlack; titleLbl.TextSize=14; titleLbl.TextXAlignment=Enum.TextXAlignment.Left
+    local subLbl = Instance.new("TextLabel", titleBar)
+    subLbl.Size=UDim2.new(0,160,0,11); subLbl.Position=UDim2.new(0,50,0,26); subLbl.BackgroundTransparency=1
+    subLbl.Text="duels v2 • orvyn logic"; subLbl.TextColor3=Color3.fromRGB(0,210,210); subLbl.Font=Enum.Font.GothamMedium; subLbl.TextSize=10; subLbl.TextXAlignment=Enum.TextXAlignment.Left
 
     local closeBtn = Instance.new("TextButton", titleBar)
-    closeBtn.Size = UDim2.new(0,26,0,26); closeBtn.Position = UDim2.new(1,-36,0.5,-13)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(8,14,10); closeBtn.BorderSizePixel = 0
-    closeBtn.Text = "×"; closeBtn.TextColor3 = Color3.fromRGB(45,100,65); closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 18
-    closeBtn.ZIndex = 7; mkCorner(closeBtn,6); mkStroke(closeBtn, Color3.fromRGB(28,60,40),1)
-    closeBtn.MouseEnter:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.1), {TextColor3=Color3.fromRGB(220,80,80)}):Play() end)
-    closeBtn.MouseLeave:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.1), {TextColor3=Color3.fromRGB(45,100,65)}):Play() end)
-    closeBtn.MouseButton1Click:Connect(function()
-        mainOuter.Visible = false
-    end)
+    closeBtn.Size=UDim2.new(0,26,0,26); closeBtn.Position=UDim2.new(1,-36,0.5,-13); closeBtn.BackgroundColor3=Color3.fromRGB(8,14,10); closeBtn.Text="×"; closeBtn.TextColor3=Color3.fromRGB(120,180,140); closeBtn.Font=Enum.Font.GothamBlack; closeBtn.TextSize=18; mkCorner(closeBtn,6)
+    closeBtn.MouseButton1Click:Connect(function() mainOuter.Visible=false end)
+    local miniBtn = Instance.new("TextButton", titleBar)
+    miniBtn.Size=UDim2.new(0,26,0,26); miniBtn.Position=UDim2.new(1,-68,0.5,-13); miniBtn.BackgroundColor3=Color3.fromRGB(8,14,10); miniBtn.Text="−"; miniBtn.TextColor3=Color3.fromRGB(0,210,210); miniBtn.Font=Enum.Font.GothamBlack; miniBtn.TextSize=18; mkCorner(miniBtn,6)
+    miniBtn.MouseButton1Click:Connect(function() mainOuter.Visible=false end)
+    local lockBtn = Instance.new("TextButton", titleBar)
+    lockBtn.Size=UDim2.new(0,26,0,26); lockBtn.Position=UDim2.new(1,-100,0.5,-13); lockBtn.BackgroundColor3=Color3.fromRGB(8,14,10); lockBtn.Text="🔓"; lockBtn.TextColor3=Color3.fromRGB(255,170,0); mkCorner(lockBtn,6)
+    local locked=false
+    lockBtn.Activated:Connect(function() locked=not locked; lockBtn.Text=locked and "🔒" or "🔓"; M.uiLocked=locked end)
 
-    local minimizeButton = Instance.new("TextButton", titleBar)
-    minimizeButton.Size = UDim2.new(0,26,0,26); minimizeButton.Position = UDim2.new(1,-68,0.5,-13)
-    minimizeButton.BackgroundColor3 = Color3.fromRGB(8,14,10); minimizeButton.BorderSizePixel = 0
-    minimizeButton.Text = "−"; minimizeButton.TextColor3 = C.accent; minimizeButton.Font = Enum.Font.GothamBlack; minimizeButton.TextSize = 18
-    minimizeButton.ZIndex = 7; mkCorner(minimizeButton,6); mkStroke(minimizeButton, Color3.fromRGB(28,60,40),1)
-    minimizeButton.MouseButton1Click:Connect(function() mainOuter.Visible = false end)
+    local div1 = Instance.new("Frame", mainOuter)
+    div1.Size=UDim2.new(1,0,0,1); div1.Position=UDim2.new(0,0,0,TITLE_H); div1.BackgroundColor3=Color3.fromRGB(18,44,28); div1.BorderSizePixel=0
 
-    local lockButton = Instance.new("TextButton", titleBar)
-    lockButton.Size = UDim2.new(0,26,0,26); lockButton.Position = UDim2.new(1,-100,0.5,-13)
-    lockButton.BackgroundColor3 = Color3.fromRGB(8,14,10); lockButton.BorderSizePixel = 0
-    lockButton.Text = "🔓"; lockButton.TextColor3 = Color3.fromRGB(255,170,0); lockButton.Font = Enum.Font.Gotham; lockButton.TextSize = 14
-    lockButton.ZIndex = 7; mkCorner(lockButton,6); mkStroke(lockButton, Color3.fromRGB(28,60,40),1)
-    local locked = false
-    lockButton.Activated:Connect(function()
-        locked = not locked
-        lockButton.Text = locked and "🔒" or "🔓"
-        M.uiLocked = locked
-    end)
-
-    local titleDiv = Instance.new("Frame", mainOuter)
-    titleDiv.Size = UDim2.new(1,0,0,1); titleDiv.Position = UDim2.new(0,0,0,TITLE_H)
-    titleDiv.BackgroundColor3 = Color3.fromRGB(18,44,28); titleDiv.BorderSizePixel = 0; titleDiv.ZIndex = 5
-
-    -- TAB BAR (Duels v2 style)
-    local TAB_H = 38
+    local TAB_H=38
     local tabBar = Instance.new("Frame", mainOuter)
-    tabBar.Size = UDim2.new(1,0,0,TAB_H); tabBar.Position = UDim2.new(0,0,0,TITLE_H+1)
-    tabBar.BackgroundColor3 = Color3.fromRGB(0,0,0); tabBar.BackgroundTransparency = 0.3; tabBar.BorderSizePixel=0; tabBar.ZIndex=4
-
+    tabBar.Size=UDim2.new(1,0,0,TAB_H); tabBar.Position=UDim2.new(0,0,0,TITLE_H+1); tabBar.BackgroundColor3=Color3.fromRGB(0,0,0); tabBar.BackgroundTransparency=0.3; tabBar.BorderSizePixel=0
     local tabScroll = Instance.new("ScrollingFrame", tabBar)
-    tabScroll.Size = UDim2.new(1,0,1,0); tabScroll.BackgroundTransparency=1; tabScroll.BorderSizePixel=0
-    tabScroll.ScrollBarThickness=0; tabScroll.ScrollingDirection=Enum.ScrollingDirection.X
-    tabScroll.CanvasSize=UDim2.new(0,0,0,0); tabScroll.AutomaticCanvasSize=Enum.AutomaticSize.X
-    tabScroll.ZIndex=5
-    local tabList = Instance.new("UIListLayout", tabScroll)
-    tabList.FillDirection=Enum.FillDirection.Horizontal; tabList.Padding=UDim.new(0,2)
-    tabList.SortOrder=Enum.SortOrder.LayoutOrder; tabList.VerticalAlignment=Enum.VerticalAlignment.Center
-    local tabPad = Instance.new("UIPadding", tabScroll)
-    tabPad.PaddingLeft=UDim.new(0,8); tabPad.PaddingRight=UDim.new(0,8)
+    tabScroll.Size=UDim2.new(1,0,1,0); tabScroll.BackgroundTransparency=1; tabScroll.ScrollBarThickness=0; tabScroll.AutomaticCanvasSize=Enum.AutomaticSize.X; tabScroll.ScrollingDirection=Enum.ScrollingDirection.X
+    local tabList = Instance.new("UIListLayout", tabScroll); tabList.FillDirection=Enum.FillDirection.Horizontal; tabList.Padding=UDim.new(0,4); tabList.VerticalAlignment=Enum.VerticalAlignment.Center
+    local tabPad = Instance.new("UIPadding", tabScroll); tabPad.PaddingLeft=UDim.new(0,8); tabPad.PaddingRight=UDim.new(0,8)
 
     local CONTENT_Y = TITLE_H+1+TAB_H
     local contentBg = Instance.new("Frame", mainOuter)
-    contentBg.Size = UDim2.new(1,0,1,-CONTENT_Y); contentBg.Position = UDim2.new(0,0,0,CONTENT_Y)
-    contentBg.BackgroundTransparency = 1; contentBg.BorderSizePixel = 0; contentBg.ClipsDescendants = true; contentBg.ZIndex = 2
-
+    contentBg.Size=UDim2.new(1,0,1,-CONTENT_Y); contentBg.Position=UDim2.new(0,0,0,CONTENT_Y); contentBg.BackgroundTransparency=1; contentBg.ClipsDescendants=true
     local mainScroll = Instance.new("ScrollingFrame", contentBg)
-    mainScroll.Name = "MainScroll"; mainScroll.Size = UDim2.new(1,0,1,0)
-    mainScroll.BackgroundTransparency = 1; mainScroll.BorderSizePixel = 0
-    mainScroll.ScrollBarThickness = 3; mainScroll.ScrollBarImageColor3 = C.accent
-    mainScroll.ScrollBarImageTransparency = 0.4; mainScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    mainScroll.CanvasSize = UDim2.new(0,0,0,0); mainScroll.ScrollingDirection = Enum.ScrollingDirection.Y
-    mainScroll.ZIndex = 3
-    local mainLL = Instance.new("UIListLayout", mainScroll)
-    mainLL.SortOrder = Enum.SortOrder.LayoutOrder; mainLL.Padding = UDim.new(0,4)
-    mainLL.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    local mainPad = Instance.new("UIPadding", mainScroll)
-    mainPad.PaddingLeft = UDim.new(0,8); mainPad.PaddingRight = UDim.new(0,8)
-    mainPad.PaddingTop = UDim.new(0,6); mainPad.PaddingBottom = UDim.new(0,12)
+    mainScroll.Size=UDim2.new(1,0,1,0); mainScroll.BackgroundTransparency=1; mainScroll.ScrollBarThickness=3; mainScroll.ScrollBarImageColor3=Color3.fromRGB(0,210,210); mainScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+    local mainLL = Instance.new("UIListLayout", mainScroll); mainLL.Padding=UDim.new(0,4); mainLL.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    local mainPad = Instance.new("UIPadding", mainScroll); mainPad.PaddingLeft=UDim.new(0,8); mainPad.PaddingRight=UDim.new(0,8); mainPad.PaddingTop=UDim.new(0,6); mainPad.PaddingBottom=UDim.new(0,12)
 
-    -- Pages system
-    local TABS = {"Speed", "Combat", "Steal", "Motion", "Visual", "Settings"}
-    local tabPages = {}
-    local tabButtons = {}
-    local currentPage = nil
-    local lo = 0
+    local TABS = {"Speed","Combat","Steal","Motion","Visual","Settings"}
+    local tabPages={}, tabButtons={}
+    local currentPage, lo= nil,0
     local function LO() lo+=1; return lo end
 
-    local function buildPage(tabName, buildFn)
-        local page = Instance.new("Frame", mainScroll)
-        page.Name = tabName; page.Size = UDim2.new(1,0,0,0); page.AutomaticSize = Enum.AutomaticSize.Y
-        page.BackgroundTransparency = 1; page.BorderSizePixel = 0; page.LayoutOrder = 0; page.Visible=false
-        local ll = Instance.new("UIListLayout", page); ll.SortOrder = Enum.SortOrder.LayoutOrder
-        ll.Padding = UDim.new(0,4); ll.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        tabPages[tabName] = page
-        currentPage = page; lo = 0; buildFn(); currentPage = nil
-        return page
+    local function buildPage(name, fn)
+        local page=Instance.new("Frame", mainScroll)
+        page.Name=name; page.Size=UDim2.new(1,0,0,0); page.AutomaticSize=Enum.AutomaticSize.Y; page.BackgroundTransparency=1; page.Visible=false
+        local ll=Instance.new("UIListLayout", page); ll.Padding=UDim.new(0,4); ll.HorizontalAlignment=Enum.HorizontalAlignment.Center
+        tabPages[name]=page; currentPage=page; lo=0; fn(); currentPage=nil; return page
     end
-
-    local function makeGap(px) local f=Instance.new("Frame",currentPage); f.Size=UDim2.new(1,0,0,px or 6); f.BackgroundTransparency=1; f.BorderSizePixel=0; f.LayoutOrder=LO() end
-    local function makeSectionHeader(label)
-        local wrap = Instance.new("Frame", currentPage)
-        wrap.Size = UDim2.new(1,0,0,28); wrap.BackgroundTransparency=1; wrap.BorderSizePixel=0; wrap.LayoutOrder=LO()
-        local dot = Instance.new("Frame", wrap); dot.Size = UDim2.new(0,4,0,4); dot.Position = UDim2.new(0,14,0.5,-2)
-        dot.BackgroundColor3 = C.accent; dot.BorderSizePixel=0; mkCorner(dot,2)
-        local lbl = Instance.new("TextLabel", wrap); lbl.Size = UDim2.new(1,-34,1,0); lbl.Position = UDim2.new(0,24,0,0)
-        lbl.BackgroundTransparency=1; lbl.Text = label and label:upper() or ""
-        lbl.TextColor3 = C.accent; lbl.Font = Enum.Font.GothamBold; lbl.TextSize=10
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
+    local function makeGap(px) local f=Instance.new("Frame", currentPage); f.Size=UDim2.new(1,0,0,px or 6); f.BackgroundTransparency=1; f.LayoutOrder=LO() end
+    local function makeSectionHeader(txt)
+        local wrap=Instance.new("Frame", currentPage); wrap.Size=UDim2.new(1,0,0,28); wrap.BackgroundTransparency=1; wrap.LayoutOrder=LO()
+        local dot=Instance.new("Frame", wrap); dot.Size=UDim2.new(0,4,0,4); dot.Position=UDim2.new(0,14,0.5,-2); dot.BackgroundColor3=Color3.fromRGB(0,210,210); mkCorner(dot,2)
+        local lbl=Instance.new("TextLabel", wrap); lbl.Size=UDim2.new(1,-34,1,0); lbl.Position=UDim2.new(0,24,0,0); lbl.BackgroundTransparency=1; lbl.Text=txt:upper(); lbl.TextColor3=Color3.fromRGB(0,210,210); lbl.Font=Enum.Font.GothamBold; lbl.TextSize=10; lbl.TextXAlignment=Enum.TextXAlignment.Left
     end
-
-    local function makeInputRow(label, default, onChange)
-        local row = Instance.new("Frame", currentPage)
-        row.Size = UDim2.new(1,-16,0,42); row.BackgroundColor3 = Color3.fromRGB(14,22,16)
-        row.BorderSizePixel=0; row.LayoutOrder=LO(); mkCorner(row,12)
-        local rowStroke = mkStroke(row, Color3.fromRGB(34,76,46),1); rowStroke.Transparency = 0.5
-        row.MouseEnter:Connect(function()
-            TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(18,30,22)}):Play()
-            TweenService:Create(rowStroke,TweenInfo.new(0.1),{Transparency=0.2}):Play()
-        end)
-        row.MouseLeave:Connect(function()
-            TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(14,22,16)}):Play()
-            TweenService:Create(rowStroke,TweenInfo.new(0.1),{Transparency=0.5}):Play()
-        end)
-        local lbl = Instance.new("TextLabel", row)
-        lbl.Size = UDim2.new(1,-100,1,0); lbl.Position = UDim2.new(0,14,0,0)
-        lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230)
-        lbl.Font = Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
-        local boxWrap = Instance.new("Frame", row)
-        boxWrap.Size = UDim2.new(0,70,0,28); boxWrap.Position = UDim2.new(1,-82,0.5,-14)
-        boxWrap.BackgroundColor3 = Color3.fromRGB(4,8,6); boxWrap.BorderSizePixel=0
-        mkCorner(boxWrap,8); local bs = mkStroke(boxWrap, Color3.fromRGB(34,76,46),1); bs.Transparency=0.3
-        local box = Instance.new("TextBox", boxWrap)
-        box.Size = UDim2.new(1,-8,1,0); box.Position = UDim2.new(0,4,0,0)
-        box.BackgroundTransparency=1; box.Text = tostring(default)
-        box.TextColor3 = Color3.fromRGB(240,255,245); box.Font = Enum.Font.GothamBlack
-        box.TextSize=13; box.ClearTextOnFocus=false; box.ZIndex=8; box.TextXAlignment=Enum.TextXAlignment.Center
-        box.Focused:Connect(function() TweenService:Create(bs,TweenInfo.new(0.15),{Color=C.accent,Transparency=0}):Play() end)
-        box.FocusLost:Connect(function()
-            TweenService:Create(bs,TweenInfo.new(0.15),{Color=Color3.fromRGB(34,76,46),Transparency=0.3}):Play()
-            if onChange then
-                local n = tonumber(box.Text)
-                if n then onChange(n)
-                else box.Text = tostring(default) end
-            end
-        end)
+    local function makeInputRow(label, def, cb)
+        local row=Instance.new("Frame", currentPage); row.Size=UDim2.new(1,-16,0,42); row.BackgroundColor3=Color3.fromRGB(14,22,16); row.LayoutOrder=LO(); mkCorner(row,12); mkStroke(row, Color3.fromRGB(34,76,46),1).Transparency=0.5
+        local lbl=Instance.new("TextLabel", row); lbl.Size=UDim2.new(1,-100,1,0); lbl.Position=UDim2.new(0,14,0,0); lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230); lbl.Font=Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
+        local wrap=Instance.new("Frame", row); wrap.Size=UDim2.new(0,70,0,28); wrap.Position=UDim2.new(1,-82,0.5,-14); wrap.BackgroundColor3=Color3.fromRGB(4,8,6); mkCorner(wrap,8); local bs=mkStroke(wrap, Color3.fromRGB(34,76,46),1)
+        local box=Instance.new("TextBox", wrap); box.Size=UDim2.new(1,-8,1,0); box.Position=UDim2.new(0,4,0,0); box.BackgroundTransparency=1; box.Text=tostring(def); box.TextColor3=Color3.fromRGB(240,255,245); box.Font=Enum.Font.GothamBlack; box.TextSize=13; box.TextXAlignment=Enum.TextXAlignment.Center
+        box.Focused:Connect(function() bs.Color=Color3.fromRGB(0,210,210) end)
+        box.FocusLost:Connect(function() bs.Color=Color3.fromRGB(34,76,46); local n=tonumber(box.Text); if n and cb then cb(n); saveOrvynConfig() else box.Text=tostring(def) end end)
         return box,row
     end
-
-    local function makeToggleRow(label, defaultOn, onToggle)
-        local row = Instance.new("Frame", currentPage)
-        row.Size = UDim2.new(1,-16,0,42); row.BackgroundColor3 = Color3.fromRGB(14,22,16)
-        row.BorderSizePixel=0; row.LayoutOrder=LO(); mkCorner(row,12)
-        local rowStroke = mkStroke(row, Color3.fromRGB(34,76,46),1); rowStroke.Transparency = 0.5
-        row.MouseEnter:Connect(function()
-            TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(18,30,22)}):Play()
-            TweenService:Create(rowStroke,TweenInfo.new(0.1),{Transparency=0.2}):Play()
-        end)
-        row.MouseLeave:Connect(function()
-            TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(14,22,16)}):Play()
-            TweenService:Create(rowStroke,TweenInfo.new(0.1),{Transparency=0.5}):Play()
-        end)
-        local lbl = Instance.new("TextLabel", row)
-        lbl.Size = UDim2.new(1,-70,1,0); lbl.Position = UDim2.new(0,14,0,0)
-        lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230)
-        lbl.Font = Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
-        local pillBg = Instance.new("Frame", row)
-        pillBg.Size = UDim2.new(0,44,0,22); pillBg.Position = UDim2.new(1,-58,0.5,-11)
-        pillBg.BackgroundColor3 = defaultOn and C.accent or Color3.fromRGB(30,36,32)
-        pillBg.BorderSizePixel=0; pillBg.ZIndex=7; mkCorner(pillBg,11)
-        local dot = Instance.new("Frame", pillBg)
-        dot.Size = UDim2.new(0,16,0,16); dot.Position = defaultOn and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)
-        dot.BackgroundColor3 = Color3.fromRGB(255,255,255); dot.BorderSizePixel=0; dot.ZIndex=8; mkCorner(dot,8)
-        local isOn = defaultOn or false
-        local function setV(on)
-            isOn = on
-            TweenService:Create(pillBg, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
-                BackgroundColor3 = on and C.accent or Color3.fromRGB(30,36,32)
-            }):Play()
-            TweenService:Create(dot, TweenInfo.new(0.18, Enum.EasingStyle.Back), {
-                Position = on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)
-            }):Play()
-        end
-        local function toggle()
-            isOn = not isOn; setV(isOn)
-            if onToggle then pcall(onToggle, isOn) end
-            saveOrvynConfig()
-        end
-        local clk = Instance.new("TextButton", row); clk.Size = UDim2.new(1,-64,1,0); clk.BackgroundTransparency=1; clk.Text=""; clk.ZIndex=5; clk.BorderSizePixel=0; clk.MouseButton1Click:Connect(toggle)
-        local pClk = Instance.new("TextButton", pillBg); pClk.Size = UDim2.new(1,0,1,0); pClk.BackgroundTransparency=1; pClk.Text=""; pClk.ZIndex=9; pClk.BorderSizePixel=0; pClk.MouseButton1Click:Connect(toggle)
-        return setV, function() return isOn end
+    local function makeToggleRow(label, def, cb)
+        local row=Instance.new("Frame", currentPage); row.Size=UDim2.new(1,-16,0,42); row.BackgroundColor3=Color3.fromRGB(14,22,16); row.LayoutOrder=LO(); mkCorner(row,12); mkStroke(row, Color3.fromRGB(34,76,46),1).Transparency=0.5
+        local lbl=Instance.new("TextLabel", row); lbl.Size=UDim2.new(1,-70,1,0); lbl.Position=UDim2.new(0,14,0,0); lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230); lbl.Font=Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
+        local pill=Instance.new("Frame", row); pill.Size=UDim2.new(0,44,0,22); pill.Position=UDim2.new(1,-58,0.5,-11); pill.BackgroundColor3=def and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,36,32); mkCorner(pill,11)
+        local dot=Instance.new("Frame", pill); dot.Size=UDim2.new(0,16,0,16); dot.Position=def and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8); dot.BackgroundColor3=Color3.new(1,1,1); mkCorner(dot,8)
+        local isOn=def or false
+        local function setV(on) isOn=on; TweenService:Create(pill, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {BackgroundColor3=on and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,36,32)}):Play(); TweenService:Create(dot, TweenInfo.new(0.18, Enum.EasingStyle.Back), {Position=on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)}):Play() end
+        local function toggle() isOn=not isOn; setV(isOn); if cb then pcall(cb,isOn) end; saveOrvynConfig() end
+        local clk=Instance.new("TextButton", row); clk.Size=UDim2.new(1,-64,1,0); clk.BackgroundTransparency=1; clk.Text=""; clk.MouseButton1Click:Connect(toggle)
+        local pClk=Instance.new("TextButton", pill); pClk.Size=UDim2.new(1,0,1,0); pClk.BackgroundTransparency=1; pClk.Text=""; pClk.MouseButton1Click:Connect(toggle)
+        return setV
     end
-
-    local function makeChoiceRow(label, options, defaultIdx, onChanged)
-        local row = Instance.new("Frame", currentPage)
-        row.Size = UDim2.new(1,-16,0,42); row.BackgroundColor3 = Color3.fromRGB(14,22,16)
-        row.BorderSizePixel=0; row.LayoutOrder=LO(); mkCorner(row,12)
-        local rowStroke = mkStroke(row, Color3.fromRGB(34,76,46),1); rowStroke.Transparency = 0.5
-        local lbl = Instance.new("TextLabel", row)
-        lbl.Size = UDim2.new(1,-100,1,0); lbl.Position = UDim2.new(0,14,0,0)
-        lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230)
-        lbl.Font = Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
-        local idx = defaultIdx or 1
-        local btn = Instance.new("TextButton", row)
-        btn.Size = UDim2.new(0,84,0,28); btn.Position = UDim2.new(1,-96,0.5,-14)
-        btn.BackgroundColor3 = C.accent; btn.BorderSizePixel=0; btn.Text = options[idx]
-        btn.TextColor3 = Color3.fromRGB(10,10,15); btn.Font = Enum.Font.GothamBold; btn.TextSize=11
-        btn.AutoButtonColor=false; mkCorner(btn,8)
-        btn.MouseButton1Click:Connect(function()
-            idx = idx % #options + 1
-            btn.Text = options[idx]
-            if onChanged then onChanged(options[idx]) end
-            saveOrvynConfig()
-        end)
-        local function setUI(v)
-            for i,o in ipairs(options) do if o==v then idx=i; btn.Text=o; break end end
-        end
-        return row, function() return options[idx] end, setUI
+    local function makeChoiceRow(label, opts, defIdx, cb)
+        local row=Instance.new("Frame", currentPage); row.Size=UDim2.new(1,-16,0,42); row.BackgroundColor3=Color3.fromRGB(14,22,16); row.LayoutOrder=LO(); mkCorner(row,12); mkStroke(row, Color3.fromRGB(34,76,46),1).Transparency=0.5
+        local lbl=Instance.new("TextLabel", row); lbl.Size=UDim2.new(1,-100,1,0); lbl.Position=UDim2.new(0,14,0,0); lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230); lbl.Font=Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
+        local idx=defIdx or 1
+        local btn=Instance.new("TextButton", row); btn.Size=UDim2.new(0,84,0,28); btn.Position=UDim2.new(1,-96,0.5,-14); btn.BackgroundColor3=Color3.fromRGB(0,210,210); btn.Text=opts[idx]; btn.TextColor3=Color3.fromRGB(10,10,15); btn.Font=Enum.Font.GothamBold; btn.TextSize=11; mkCorner(btn,8)
+        btn.MouseButton1Click:Connect(function() idx=idx%#opts+1; btn.Text=opts[idx]; if cb then cb(opts[idx]) end; saveOrvynConfig() end)
+        local function setUI(v) for i,o in ipairs(opts) do if o==v then idx=i; btn.Text=o; break end end end
+        return row, nil, setUI
     end
-
-    local function makeButtonRow(label, btnText, onClick, color)
-        local row = Instance.new("Frame", currentPage)
-        row.Size = UDim2.new(1,-16,0,42); row.BackgroundColor3 = Color3.fromRGB(14,22,16)
-        row.BorderSizePixel=0; row.LayoutOrder=LO(); mkCorner(row,12)
-        mkStroke(row, Color3.fromRGB(34,76,46),1).Transparency = 0.5
-        local lbl = Instance.new("TextLabel", row)
-        lbl.Size = UDim2.new(1,-100,1,0); lbl.Position = UDim2.new(0,14,0,0)
-        lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230)
-        lbl.Font = Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
-        local btn = Instance.new("TextButton", row)
-        btn.Size = UDim2.new(0,72,0,28); btn.Position = UDim2.new(1,-84,0.5,-14)
-        btn.BackgroundColor3 = color or Color3.fromRGB(45,45,58); btn.BorderSizePixel=0; btn.Text = btnText
-        btn.TextColor3 = Color3.fromRGB(255,255,255); btn.Font = Enum.Font.GothamBold; btn.TextSize=11
-        btn.AutoButtonColor=false; mkCorner(btn,8)
-        btn.MouseButton1Click:Connect(function() if onClick then onClick() end end)
+    local function makeButtonRow(label, txt, fn, col)
+        local row=Instance.new("Frame", currentPage); row.Size=UDim2.new(1,-16,0,42); row.BackgroundColor3=Color3.fromRGB(14,22,16); row.LayoutOrder=LO(); mkCorner(row,12); mkStroke(row, Color3.fromRGB(34,76,46),1).Transparency=0.5
+        local lbl=Instance.new("TextLabel", row); lbl.Size=UDim2.new(1,-100,1,0); lbl.Position=UDim2.new(0,14,0,0); lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230); lbl.Font=Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
+        local btn=Instance.new("TextButton", row); btn.Size=UDim2.new(0,72,0,28); btn.Position=UDim2.new(1,-84,0.5,-14); btn.BackgroundColor3=col or Color3.fromRGB(45,45,58); btn.Text=txt; btn.TextColor3=Color3.new(1,1,1); btn.Font=Enum.Font.GothamBold; btn.TextSize=11; mkCorner(btn,8)
+        btn.MouseButton1Click:Connect(function() if fn then fn() end end)
         return btn
     end
-
-    local function makeKeybindRow(label, kbEntry)
-        local row = Instance.new("Frame", currentPage)
-        row.Size = UDim2.new(1,-16,0,42); row.BackgroundColor3 = Color3.fromRGB(14,22,16)
-        row.BorderSizePixel=0; row.LayoutOrder=LO(); mkCorner(row,12)
-        mkStroke(row, Color3.fromRGB(34,76,46),1).Transparency = 0.5
-        local lbl = Instance.new("TextLabel", row)
-        lbl.Size = UDim2.new(1,-80,1,0); lbl.Position = UDim2.new(0,14,0,0)
-        lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230)
-        lbl.Font = Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
-        local btn = Instance.new("TextButton", row)
-        btn.Size = UDim2.new(0,60,0,26); btn.Position = UDim2.new(1,-72,0.5,-13)
-        btn.BackgroundColor3 = Color3.fromRGB(25,25,40); btn.BorderSizePixel=0
-        btn.Text = (kbEntry.kb and kbEntry.kb.Name) or (kbEntry.gp and kbEntry.gp.Name) or "..."
-        btn.TextColor3 = Color3.fromRGB(180,180,185); btn.Font = Enum.Font.GothamBold; btn.TextSize=11
-        btn.AutoButtonColor=false; mkCorner(btn,6)
-        M.keybindButtons = M.keybindButtons or {}
-        M.keybindButtons[kbEntry] = btn
-        btn.MouseButton1Click:Connect(function()
-            M._activeKBBtn = btn
-            btn.Text = "..."
-            btn.TextColor3 = Color3.fromRGB(255,90,90)
-            M._anyKeyListening = true
-        end)
+    local function makeKeybindRow(label, entry)
+        local row=Instance.new("Frame", currentPage); row.Size=UDim2.new(1,-16,0,42); row.BackgroundColor3=Color3.fromRGB(14,22,16); row.LayoutOrder=LO(); mkCorner(row,12)
+        local lbl=Instance.new("TextLabel", row); lbl.Size=UDim2.new(1,-80,1,0); lbl.Position=UDim2.new(0,14,0,0); lbl.BackgroundTransparency=1; lbl.Text=label; lbl.TextColor3=Color3.fromRGB(225,240,230); lbl.Font=Enum.Font.GothamBold; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
+        local btn=Instance.new("TextButton", row); btn.Size=UDim2.new(0,60,0,26); btn.Position=UDim2.new(1,-72,0.5,-13); btn.BackgroundColor3=Color3.fromRGB(25,25,40); btn.Text=(entry.kb and entry.kb.Name) or (entry.gp and entry.gp.Name) or "..."; btn.TextColor3=Color3.fromRGB(180,180,185); btn.Font=Enum.Font.GothamBold; btn.TextSize=11; mkCorner(btn,6)
+        M.keybindButtons = M.keybindButtons or {}; M.keybindButtons[entry]=btn
+        btn.MouseButton1Click:Connect(function() M._activeKBBtn=btn; btn.Text="..."; btn.TextColor3=Color3.fromRGB(255,90,90); M._anyKeyListening=true end)
         return row
     end
 
-    -- ================= SPEED TAB =================
+    -- SPEED
     buildPage("Speed", function()
         makeGap(2); makeSectionHeader("Normal & Carry"); makeGap(2)
-        local _, nsBox = makeInputRow("Normal Speed", M.NS, function(v) M.NS = v; end)
-        local _, csBox = makeInputRow("Carry Speed", M.CS, function(v) M.CS = v; end)
-        M.normalBox = nsBox; M.carryBox = csBox
-        makeGap(4)
-        local carryBtn = makeButtonRow("Carry Mode", M.carrySpeedActive and "Carry On" or "Carry Off", function()
+        local _, nsBox = makeInputRow("Normal Speed", M.NS, function(v) M.NS=v end); M.normalBox=nsBox
+        local _, csBox = makeInputRow("Carry Speed", M.CS, function(v) M.CS=v end); M.carryBox=csBox
+        makeGap(2)
+        local function refreshCarryBtn()
+            if M.carryModeBtn then M.carryModeBtn.Text = M.carrySpeedActive and "Carry On" or "Carry Off" end
+        end
+        M.carryModeBtn = makeButtonRow("Carry Mode", M.carrySpeedActive and "Carry On" or "Carry Off", function()
             M.carrySpeedActive = not M.carrySpeedActive
+            refreshCarryBtn()
+            M.refreshSpeedModeLabel()
+            if M.mobBtnRefs.carrySpeed then M.mobBtnRefs.carrySpeed(M.carrySpeedActive) end
             saveOrvynConfig()
-            M.buildGui()
-        end, C.accent)
-        M.carryModeBtn = carryBtn
+        end, Color3.fromRGB(0,210,210))
 
         makeGap(8); makeSectionHeader("Lagger"); makeGap(2)
-        makeInputRow("Lagger Normal", M.LAGGER_SPEED, function(v) M.LAGGER_SPEED = v; end)
-        makeInputRow("Lagger Carry", M.LAGGER_CARRY_SPEED, function(v) M.LAGGER_CARRY_SPEED = v; end)
-        makeButtonRow("Lagger Mode", M.laggerModeEnabled and "Lag On" or "Lag Off", function()
+        makeInputRow("Lagger Normal", M.LAGGER_SPEED, function(v) M.LAGGER_SPEED=v end)
+        makeInputRow("Lagger Carry", M.LAGGER_CARRY_SPEED, function(v) M.LAGGER_CARRY_SPEED=v end)
+        local function refreshLagBtn()
+            if M.laggerModeBtn then M.laggerModeBtn.Text = M.laggerModeEnabled and "Lag On" or "Lag Off" end
+        end
+        M.laggerModeBtn = makeButtonRow("Lagger Mode", M.laggerModeEnabled and "Lag On" or "Lag Off", function()
             M.laggerModeEnabled = not M.laggerModeEnabled
+            refreshLagBtn()
+            M.refreshSpeedModeLabel()
+            if M.mobBtnRefs.lagger then M.mobBtnRefs.lagger(M.laggerModeEnabled) end
             saveOrvynConfig()
-            M.buildGui()
-        end, C.accent)
+        end, Color3.fromRGB(0,210,210))
     end)
 
-    -- ================= COMBAT TAB =================
+    -- COMBAT
     buildPage("Combat", function()
         makeGap(2); makeSectionHeader("Aimbot"); makeGap(2)
-        local _, getBat = makeToggleRow("Bat Aimbot", M.autoBatEnabled, function(on)
-            if on then M.queueAutoBatStart() else M.stopBatAimbot() end
-        end)
-        M.autoBatSetVisual = getBat
-
-        local _, getBatCounter = makeToggleRow("Bat Counter", M.batCounterEnabled, function(on)
-            M.batCounterEnabled = on
-            if on then M.startBatCounter() else M.stopBatCounter() end
-        end)
-        M.setBatCounterVisual = getBatCounter
-
-        local _, getBypass = makeToggleRow("Bypass Aimbot", M.bypassAimbotEnabled, function(on)
-            M.bypassAimbotEnabled = on
-            if on then M.startBypassAimbot() else M.stopBypassAimbot() end
-        end)
-        M.setBypassVisual = getBypass
-
-        makeChoiceRow("Bypass Mode", {"Normal","TP Bat"}, M.bypassAimbotMode == "TPBat" and 2 or 1, function(v)
-            M.bypassAimbotMode = (v == "TP Bat") and "TPBat" or "Normal"
-            if M.bypassAimbotEnabled then M.stopBypassAimbot(); M.startBypassAimbot() end
-        end)
-
+        local sBat = makeToggleRow("Bat Aimbot", M.autoBatEnabled, function(on) if on then M.queueAutoBatStart() else M.stopBatAimbot() end end); M.autoBatSetVisual=sBat
+        local sBatC = makeToggleRow("Bat Counter", M.batCounterEnabled, function(on) M.batCounterEnabled=on; if on then M.startBatCounter() else M.stopBatCounter() end end); M.setBatCounterVisual=sBatC
+        local sBypass = makeToggleRow("Bypass Aimbot", M.bypassAimbotEnabled, function(on) M.bypassAimbotEnabled=on; if on then M.startBypassAimbot() else M.stopBypassAimbot() end end); M.setBypassVisual=sBypass
+        makeChoiceRow("Bypass Mode", {"Normal","TP Bat"}, M.bypassAimbotMode=="TPBat" and 2 or 1, function(v) M.bypassAimbotMode=(v=="TP Bat") and "TPBat" or "Normal"; if M.bypassAimbotEnabled then M.stopBypassAimbot(); M.startBypassAimbot() end end)
         makeGap(6); makeSectionHeader("Defense"); makeGap(2)
-        local _, getAntiRag = makeToggleRow("Anti Ragdoll", M.antiRagdollEnabled, function(on)
-            M.antiRagdollEnabled = on
-            if on then M.startAntiRagdoll() else M.stopAntiRagdoll() end
-        end)
-        M.setAntiRagVisual = getAntiRag
-
-        local _, getMedusa = makeToggleRow("Medusa Counter", M.medusaCounterEnabled, function(on)
-            M.medusaCounterEnabled = on
-            if on then M.setupMedusa(player.Character) else M.stopMedusaCounter() end
-        end)
-        M.setMedusaVisual = getMedusa
-
-        local _, getMedReset = makeToggleRow("Medusa Reset", M.medusaResetEnabled, function(on)
-            M.medusaResetEnabled = on
-            if on then M.startMedusaReset() else M.stopMedusaReset() end
-        end)
-        M.setMedusaResetVisual = getMedReset
-
-        local _, getSwing = makeToggleRow("Auto Swing", M.autoSwingEnabled, function(on) M.autoSwingEnabled = on end)
-        M.setAutoSwingVisual = getSwing
-
-        local _, getAutoReset = makeToggleRow("Auto Reset on Death", M.autoResetOnDeath, function(on)
-            M.autoResetOnDeath = on; M.setupDeathReset()
-        end)
-        M.setAutoResetOnDeath = getAutoReset
-
+        local sRag = makeToggleRow("Anti Ragdoll", M.antiRagdollEnabled, function(on) M.antiRagdollEnabled=on; if on then M.startAntiRagdoll() else M.stopAntiRagdoll() end end); M.setAntiRagVisual=sRag
+        local sMed = makeToggleRow("Medusa Counter", M.medusaCounterEnabled, function(on) M.medusaCounterEnabled=on; if on then M.setupMedusa(player.Character) else M.stopMedusaCounter() end end); M.setMedusaVisual=sMed
+        local sMedR = makeToggleRow("Medusa Reset", M.medusaResetEnabled, function(on) M.medusaResetEnabled=on; if on then M.startMedusaReset() else M.stopMedusaReset() end end); M.setMedusaResetVisual=sMedR
+        local sSwing = makeToggleRow("Auto Swing", M.autoSwingEnabled, function(on) M.autoSwingEnabled=on end); M.setAutoSwingVisual=sSwing
+        local sDeath = makeToggleRow("Auto Reset on Death", M.autoResetOnDeath, function(on) M.autoResetOnDeath=on; M.setupDeathReset() end); M.setAutoResetOnDeath=sDeath
         makeGap(6); makeSectionHeader("Lock"); makeGap(2)
-        local _, getBodyLock = makeToggleRow("Body Lock", M.bodyLockEnabled, function(on)
-            M.bodyLockEnabled = on
-            if on then M.startBodyLock() else M.stopBodyLock() end
-        end)
-        M.setBodyLockVisual = getBodyLock
-        makeInputRow("Lock Radius", M.bodyLockRadius, function(v) M.bodyLockRadius = v end)
+        local sBody = makeToggleRow("Body Lock", M.bodyLockEnabled, function(on) M.bodyLockEnabled=on; if on then M.startBodyLock() else M.stopBodyLock() end end); M.setBodyLockVisual=sBody
+        makeInputRow("Lock Radius", M.bodyLockRadius, function(v) M.bodyLockRadius=v end)
     end)
 
-    -- ================= STEAL TAB =================
+    -- STEAL
     buildPage("Steal", function()
         makeGap(2); makeSectionHeader("Auto Steal"); makeGap(2)
-        local _, getAutoSteal = makeToggleRow("Auto Steal", M.Steal.AutoStealEnabled, function(on)
-            M.Steal.AutoStealEnabled = on
-            if on then M.startAutoSteal() else M.stopAutoSteal() end
-        end)
-        M.setInstaGrab = getAutoSteal
-
-        makeChoiceRow("Steal Mode", {"Normal","Semi"}, M.stealMode == "Semi" and 2 or 1, function(newMode)
-            local oldMode = M.stealMode
-            M.stealMode = (newMode == "Semi") and "Semi" or "Normal"
-            if oldMode ~= M.stealMode and M.Steal.AutoStealEnabled then
-                M.stopAutoSteal(); M.startAutoSteal()
-            end
-        end)
-
-        makeInputRow("Steal Radius", M.Steal.StealRadius, function(v)
-            M.Steal.StealRadius = v; M.Semi.StealRange = v; M.setStealRadius(v); M.updateStatusRadius()
-        end)
-        makeInputRow("Steal Duration", M.Steal.StealDuration, function(v) M.Steal.StealDuration = v end)
-        makeInputRow("Steal Bar Size", M.stealBarSize, function(v) M.stealBarSize = v; M.buildStatusUI() end)
+        local sAuto = makeToggleRow("Auto Steal", M.Steal.AutoStealEnabled, function(on) M.Steal.AutoStealEnabled=on; if on then M.startAutoSteal() else M.stopAutoSteal() end end); M.setInstaGrab=sAuto
+        makeChoiceRow("Steal Mode", {"Normal","Semi"}, M.stealMode=="Semi" and 2 or 1, function(v) local old=M.stealMode; M.stealMode=(v=="Semi") and "Semi" or "Normal"; if old~=M.stealMode and M.Steal.AutoStealEnabled then M.stopAutoSteal(); M.startAutoSteal() end end)
+        makeInputRow("Steal Radius", M.Steal.StealRadius, function(v) M.Steal.StealRadius=v; M.Semi.StealRange=v; M.updateStatusRadius() end)
+        makeInputRow("Steal Duration", M.Steal.StealDuration, function(v) M.Steal.StealDuration=v end)
+        makeInputRow("Steal Bar Size", M.stealBarSize, function(v) M.stealBarSize=v; M.buildStatusUI() end)
     end)
 
-    -- ================= MOTION TAB =================
+    -- MOTION
     buildPage("Motion", function()
         makeGap(2); makeSectionHeader("Jump"); makeGap(2)
-        local _, getInf = makeToggleRow("Infinite Jump", M.infJumpEnabled, function(on)
-            M.infJumpEnabled = on
-            if on and M.infJumpMode == "manual" then M.startManualInfJumpLoop()
-            elseif on and M.infJumpMode == "hold" then M.startHoldInfJump()
-            else M.stopManualInfJumpLoop(); M.stopHoldInfJump() end
-        end)
-        M.setInfJumpVisual = getInf
-
-        makeChoiceRow("Jump Mode", {"Manual","Hold"}, M.infJumpMode == "hold" and 2 or 1, function(newMode)
-            local wasOn = M.infJumpEnabled
-            M.infJumpMode = (newMode == "Hold") and "hold" or "manual"
-            if wasOn then
-                M.stopManualInfJumpLoop(); M.stopHoldInfJump()
-                if M.infJumpMode == "manual" then M.startManualInfJumpLoop() else M.startHoldInfJump() end
-            end
-        end)
-
+        local sJump = makeToggleRow("Infinite Jump", M.infJumpEnabled, function(on) M.infJumpEnabled=on; if on and M.infJumpMode=="manual" then M.startManualInfJumpLoop() elseif on and M.infJumpMode=="hold" then M.startHoldInfJump() else M.stopManualInfJumpLoop(); M.stopHoldInfJump() end end); M.setInfJumpVisual=sJump
+        makeChoiceRow("Jump Mode", {"Manual","Hold"}, M.infJumpMode=="hold" and 2 or 1, function(v) local was=M.infJumpEnabled; M.infJumpMode=(v=="Hold") and "hold" or "manual"; if was then M.stopManualInfJumpLoop(); M.stopHoldInfJump(); if M.infJumpMode=="manual" then M.startManualInfJumpLoop() else M.startHoldInfJump() end end end)
         makeGap(6); makeSectionHeader("Auto Move"); makeGap(2)
-        local _, getAL = makeToggleRow("Auto Left", M.autoLeftEnabled, function(on)
-            if on then
-                if M.autoRightEnabled then M.autoRightEnabled = false; M.stopAutoRight() end
-                if M.autoBatEnabled then M.stopBatAimbot() end
-                M.autoLeftEnabled = true; M.startAutoLeft()
-            else M.autoLeftEnabled = false; M.stopAutoLeft() end
-        end)
-        M.autoLeftSetVisual = getAL
-
-        local _, getAR = makeToggleRow("Auto Right", M.autoRightEnabled, function(on)
-            if on then
-                if M.autoLeftEnabled then M.autoLeftEnabled = false; M.stopAutoLeft() end
-                if M.autoBatEnabled then M.stopBatAimbot() end
-                M.autoRightEnabled = true; M.startAutoRight()
-            else M.autoRightEnabled = false; M.stopAutoRight() end
-        end)
-        M.autoRightSetVisual = getAR
-
-        local _, getATP = makeToggleRow("Auto TP Down", M.autoTPEnabled, function(on)
-            M.autoTPEnabled = on
-            if on then M.startAutoTP() else M.stopAutoTP() end
-        end)
-        M.setAutoTPVisual = getATP
-        makeInputRow("TP Height", M.autoTPHeight, function(v) M.autoTPHeight = v end)
-
+        local sLeft = makeToggleRow("Auto Left", M.autoLeftEnabled, function(on) if on then if M.autoRightEnabled then M.autoRightEnabled=false; M.stopAutoRight() end; if M.autoBatEnabled then M.stopBatAimbot() end; M.autoLeftEnabled=true; M.startAutoLeft() else M.autoLeftEnabled=false; M.stopAutoLeft() end end); M.autoLeftSetVisual=sLeft
+        local sRight = makeToggleRow("Auto Right", M.autoRightEnabled, function(on) if on then if M.autoLeftEnabled then M.autoLeftEnabled=false; M.stopAutoLeft() end; if M.autoBatEnabled then M.stopBatAimbot() end; M.autoRightEnabled=true; M.startAutoRight() else M.autoRightEnabled=false; M.stopAutoRight() end end); M.autoRightSetVisual=sRight
+        local sTP = makeToggleRow("Auto TP Down", M.autoTPEnabled, function(on) M.autoTPEnabled=on; if on then M.startAutoTP() else M.stopAutoTP() end end); M.setAutoTPVisual=sTP
+        makeInputRow("TP Height", M.autoTPHeight, function(v) M.autoTPHeight=v end)
         makeGap(6); makeSectionHeader("Drop"); makeGap(2)
-        makeChoiceRow("Drop Mode", {"Jump","Stand"}, M.dropMode == "Stand" and 2 or 1, function(newMode) M.dropMode = (newMode == "Stand") and "Stand" or "Jump" end)
-
-        makeToggleRow("Unwalk", M.unwalkEnabled, function(on)
-            M.unwalkEnabled = on
-            if on then M.startUnwalk() else M.stopUnwalk() end
-        end)
+        makeChoiceRow("Drop Mode", {"Jump","Stand"}, M.dropMode=="Stand" and 2 or 1, function(v) M.dropMode=(v=="Stand") and "Stand" or "Jump" end)
+        makeToggleRow("Unwalk", M.unwalkEnabled, function(on) M.unwalkEnabled=on; if on then M.startUnwalk() else M.stopUnwalk() end end)
     end)
 
-    -- ================= VISUAL TAB =================
+    -- VISUAL
     buildPage("Visual", function()
         makeGap(2); makeSectionHeader("ESP"); makeGap(2)
-        makeToggleRow("Line ESP", M.lineESPEnabled, function(on) M.lineESPEnabled = on end)
-        makeToggleRow("Speed ESP", M.speedESPEnabled, function(on) M.speedESPEnabled = on end)
-
+        makeToggleRow("Line ESP", M.lineESPEnabled, function(on) M.lineESPEnabled=on end)
+        makeToggleRow("Speed ESP", M.speedESPEnabled, function(on) M.speedESPEnabled=on end)
         makeGap(6); makeSectionHeader("Sky & FOV"); makeGap(2)
-        -- Sky Theme selector as choice
-        local skyNames = M.SkyOrder or {"Off","Night","Aurora","Sunset"}
-        local curSkyIdx = 1
-        for i,t in ipairs(skyNames) do if t == M.currentSkyTheme then curSkyIdx=i; break end end
-        makeChoiceRow("Sky Theme", skyNames, curSkyIdx, function(v)
-            M.currentSkyTheme = v; M.CandyApplyCustomSky(v); saveOrvynConfig()
-        end)
-
-        local fovOptions = {"70","80","90","100","110","120"}
-        local curFovIdx = 2
-        for i,v in ipairs(fovOptions) do if tonumber(v)==M.fovValue then curFovIdx=i; break end end
-        makeChoiceRow("FOV", fovOptions, curFovIdx, function(v)
-            M.fovValue = tonumber(v) or 80; M.applyFOV(); saveOrvynConfig()
-        end)
-
+        local skyNames = M.SkyOrder or {"Off","Night","Aurora"}
+        local curSky=1; for i,t in ipairs(skyNames) do if t==M.currentSkyTheme then curSky=i; break end end
+        makeChoiceRow("Sky Theme", skyNames, curSky, function(v) M.currentSkyTheme=v; M.CandyApplyCustomSky(v); saveOrvynConfig() end)
+        local fovOpts={"70","80","90","100","110","120"}
+        local curFov=2; for i,v in ipairs(fovOpts) do if tonumber(v)==M.fovValue then curFov=i; break end end
+        makeChoiceRow("FOV", fovOpts, curFov, function(v) M.fovValue=tonumber(v) or 80; M.applyFOV(); saveOrvynConfig() end)
         makeGap(6); makeSectionHeader("Animations"); makeGap(2)
-        makeToggleRow("Animation Pack", M.animPackEnabled, function(on)
-            M.animPackEnabled = on
-            if on then M.applyAnimPack(M.animPack) else M.resetAnimations(player.Character) end
-        end)
-
-        local packNames = {}
-        for name in pairs(M.PACKS) do table.insert(packNames, name) end
-        table.sort(packNames)
-        local curPackIdx = 1
-        for i,v in ipairs(packNames) do if v == M.animPack then curPackIdx=i; break end end
-        makeChoiceRow("Select Pack", packNames, curPackIdx, function(v)
-            M.animPack = v
-            if M.animPackEnabled then M.applyAnimPack(v) end
-        end)
-
-        makeToggleRow("Headless", M.headlessEnabled, function(on)
-            M.headlessEnabled = on; M.applyHeadlessToChar(player.Character, on)
-        end)
-        makeToggleRow("Korblox", M.korbloxEnabled, function(on)
-            M.korbloxEnabled = on; M.applyKorbloxToChar(player.Character, on)
-        end)
+        makeToggleRow("Animation Pack", M.animPackEnabled, function(on) M.animPackEnabled=on; if on then M.applyAnimPack(M.animPack) else M.resetAnimations(player.Character) end end)
+        local packNames={}; for n in pairs(M.PACKS) do table.insert(packNames,n) end; table.sort(packNames)
+        local curPack=1; for i,v in ipairs(packNames) do if v==M.animPack then curPack=i; break end end
+        makeChoiceRow("Select Pack", packNames, curPack, function(v) M.animPack=v; if M.animPackEnabled then M.applyAnimPack(v) end end)
+        makeToggleRow("Headless", M.headlessEnabled, function(on) M.headlessEnabled=on; M.applyHeadlessToChar(player.Character,on) end)
+        makeToggleRow("Korblox", M.korbloxEnabled, function(on) M.korbloxEnabled=on; M.applyKorbloxToChar(player.Character,on) end)
     end)
 
-    -- ================= SETTINGS TAB =================
+    -- SETTINGS
     buildPage("Settings", function()
         makeGap(2); makeSectionHeader("Performance"); makeGap(2)
-        makeToggleRow("Anti-Lag", M.antiLagEnabled, function(on)
-            M.antiLagEnabled = on
-            if on then M.enableAntiLag() else M.disableAntiLag() end
-        end)
-        makeToggleRow("Stretch Rez", M.stretchRezEnabled, function(on)
-            M.stretchRezEnabled = on
-            if on then M.enableStretchRez() else M.disableStretchRez() end
-        end)
-        makeToggleRow("Nuke Optimizer", M.nukeOn, function(on)
-            M.nukeOn = on
-            if on then M.startNukeOptimizer() else M.stopNukeOptimizer() end
-        end)
-        makeToggleRow("Remove Accessories", M.removeAccEnabled, function(on)
-            M.removeAccEnabled = on
-            if on then M.startRemoveAcc() else M.stopRemoveAcc() end
-        end)
-        makeToggleRow("Anti-Kick", M.antiKickEnabled, function(on)
-            M.antiKickEnabled = on
-            if on then M.enableAntiKick() else M.disableAntiKick() end
-        end)
-
+        makeToggleRow("Anti-Lag", M.antiLagEnabled, function(on) M.antiLagEnabled=on; if on then M.enableAntiLag() else M.disableAntiLag() end end)
+        makeToggleRow("Stretch Rez", M.stretchRezEnabled, function(on) M.stretchRezEnabled=on; if on then M.enableStretchRez() else M.disableStretchRez() end end)
+        makeToggleRow("Nuke Optimizer", M.nukeOn, function(on) M.nukeOn=on; if on then M.startNukeOptimizer() else M.stopNukeOptimizer() end end)
+        makeToggleRow("Remove Accessories", M.removeAccEnabled, function(on) M.removeAccEnabled=on; if on then M.startRemoveAcc() else M.stopRemoveAcc() end end)
+        makeToggleRow("Anti-Kick", M.antiKickEnabled, function(on) M.antiKickEnabled=on; if on then M.enableAntiKick() else M.disableAntiKick() end end)
         makeGap(6); makeSectionHeader("Intro"); makeGap(2)
-        makeToggleRow("Intro Song", M.introSoundEnabled, function(on)
-            M.introSoundEnabled = on
-        end)
-        makeToggleRow("Intro GUI", M.introGUIEnabled, function(on) M.introGUIEnabled = on end)
-        makeChoiceRow("Intro Song Pick", {"Song 1","Song 2","Song 3"}, M.introSongChoice, function(v)
-            local map = {["Song 1"]=1, ["Song 2"]=2, ["Song 3"]=3}
-            M.introSongChoice = map[v] or 3
-        end)
-
+        makeToggleRow("Intro Song", M.introSoundEnabled, function(on) M.introSoundEnabled=on end)
+        makeToggleRow("Intro GUI", M.introGUIEnabled, function(on) M.introGUIEnabled=on end)
+        makeChoiceRow("Intro Song Pick", {"Song 1","Song 2","Song 3"}, M.introSongChoice, function(v) local map={["Song 1"]=1,["Song 2"]=2,["Song 3"]=3}; M.introSongChoice=map[v] or 3 end)
         makeGap(6); makeSectionHeader("Mobile & UI"); makeGap(2)
-        makeToggleRow("Mobile Buttons", M.mobileButtonsEnabled, function(on)
-            M.mobileButtonsEnabled = on
-            if on then M.buildMobileButtons() else M.destroyMobileButtons() end
-        end)
-        makeInputRow("Button Size", M.mobileButtonsSize, function(v)
-            M.mobileButtonsSize = v
-            if M.mobileButtonsEnabled then M.buildMobileButtons() end
-        end)
-        makeInputRow("Menu Scale", M.uiScale, function(v)
-            M.uiScale = v
-            if M.uiScaleRef then M.uiScaleRef.Scale = v end
-        end)
+        makeToggleRow("Mobile Buttons", M.mobileButtonsEnabled, function(on) M.mobileButtonsEnabled=on; if on then M.buildMobileButtons() else M.destroyMobileButtons() end end)
+        makeInputRow("Button Size", M.mobileButtonsSize, function(v) M.mobileButtonsSize=v; if M.mobileButtonsEnabled then M.buildMobileButtons() end end)
+        makeInputRow("Menu Scale", M.uiScale, function(v) M.uiScale=v; if M.uiScaleRef then M.uiScaleRef.Scale=v end end)
         makeButtonRow("Reset Mobile Pos", "RESET", function() M.resetMobilePositions() end, Color3.fromRGB(45,45,58))
-
         makeGap(6); makeSectionHeader("Keybinds"); makeGap(2)
-        -- Keybind capture logic reuse
-        M._anyKeyListening = false
-        M._activeKBBtn = nil
-        M.keybindButtons = M.keybindButtons or {}
+        M._anyKeyListening=false; M._activeKBBtn=nil; M.keybindButtons={}
         makeKeybindRow("Hide GUI", M.KB.GuiHide)
         makeKeybindRow("Carry Mode", M.KB.SpeedToggle)
         makeKeybindRow("Lagger Mode", M.KB.LaggerToggle)
@@ -5025,135 +4699,55 @@ function M.buildGui()
         makeKeybindRow("TP Down", M.KB.TPFloor)
         makeKeybindRow("Insta Reset", M.KB.InstaReset)
 
-        -- Global keybind listener
         if M._keybindCaptureConn then M._keybindCaptureConn:Disconnect() end
         M._keybindCaptureConn = UIS.InputBegan:Connect(function(input, gameProcessed)
             if M._anyKeyListening and M._activeKBBtn then
-                local kc = input.KeyCode
-                if kc == Enum.KeyCode.Escape then
-                    M._activeKBBtn.Text = "..."
-                    M._activeKBBtn.TextColor3 = Color3.fromRGB(180,180,185)
-                    M._activeKBBtn = nil
-                    M._anyKeyListening = false
-                    saveOrvynConfig()
-                    return
-                end
-                if input.UserInputType == Enum.UserInputType.Keyboard and kc ~= Enum.KeyCode.Unknown then
-                    for e,b in pairs(M.keybindButtons) do
-                        if b == M._activeKBBtn then
-                            e.kb = kc; e.gp = nil
-                            b.Text = kc.Name
-                            b.TextColor3 = Color3.fromRGB(180,180,185)
-                            break
-                        end
-                    end
-                    M._activeKBBtn = nil
-                    M._anyKeyListening = false
-                    saveOrvynConfig()
+                local kc=input.KeyCode
+                if kc==Enum.KeyCode.Escape then M._activeKBBtn.Text="..."; M._activeKBBtn=nil; M._anyKeyListening=false; saveOrvynConfig(); return end
+                if input.UserInputType==Enum.UserInputType.Keyboard and kc~=Enum.KeyCode.Unknown then
+                    for e,b in pairs(M.keybindButtons) do if b==M._activeKBBtn then e.kb=kc; e.gp=nil; b.Text=kc.Name; b.TextColor3=Color3.fromRGB(180,180,185); break end end
+                    M._activeKBBtn=nil; M._anyKeyListening=false; saveOrvynConfig()
                 end
                 return
             end
             if gameProcessed then return end
-            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-            local kc = input.KeyCode
-            local function kbMatch(entry, keycode)
-                if not entry then return false end
-                if entry.kb and entry.kb == keycode then return true end
-                if entry.gp and entry.gp == keycode then return true end
-                return false
-            end
-            if kbMatch(M.KB.LaggerToggle, kc) then M.toggleLaggerMode(); saveOrvynConfig() end
-            if kbMatch(M.KB.SpeedToggle, kc) then M.toggleCarryMode(); saveOrvynConfig() end
-            if kbMatch(M.KB.DropBrainrot, kc) then M.runDrop() end
-            if kbMatch(M.KB.TPFloor, kc) then M.runTPFloor() end
-            if kbMatch(M.KB.InstaReset, kc) then M.cursedInstaReset() end
-            if kbMatch(M.KB.AutoLeft, kc) then
-                M.autoLeftEnabled = not M.autoLeftEnabled
-                if M.autoLeftEnabled then
-                    if M.autoRightEnabled then M.autoRightEnabled = false; M.stopAutoRight() end
-                    if M.autoBatEnabled then M.stopBatAimbot() end
-                    M.startAutoLeft()
-                else M.stopAutoLeft() end
-                saveOrvynConfig()
-            end
-            if kbMatch(M.KB.AutoRight, kc) then
-                M.autoRightEnabled = not M.autoRightEnabled
-                if M.autoRightEnabled then
-                    if M.autoLeftEnabled then M.autoLeftEnabled = false; M.stopAutoLeft() end
-                    if M.autoBatEnabled then M.stopBatAimbot() end
-                    M.startAutoRight()
-                else M.stopAutoRight() end
-                saveOrvynConfig()
-            end
-            if kbMatch(M.KB.AutoBat, kc) then
-                if not M.autoBatEnabled then
-                    if M.autoLeftEnabled then M.autoLeftEnabled = false; M.stopAutoLeft() end
-                    if M.autoRightEnabled then M.autoRightEnabled = false; M.stopAutoRight() end
-                    M.queueAutoBatStart()
-                else M.stopBatAimbot() end
-                saveOrvynConfig()
-            end
-            if kbMatch(M.KB.BypassAimbot, kc) then
-                M.toggleBypassAimbot(); saveOrvynConfig()
-            end
-            if kbMatch(M.KB.BodyLock, kc) then
-                M.toggleBodyLock(); saveOrvynConfig()
-            end
-            if kbMatch(M.KB.GuiHide, kc) then
-                if M.mainFrame then M.mainFrame.Visible = not M.mainFrame.Visible end
-            end
+            if input.UserInputType~=Enum.UserInputType.Keyboard then return end
+            local kc=input.KeyCode
+            local function kbMatch(entry, keycode) if not entry then return false end; if entry.kb and entry.kb==keycode then return true end; if entry.gp and entry.gp==keycode then return true end; return false end
+            if kbMatch(M.KB.LaggerToggle,kc) then M.toggleLaggerMode(); saveOrvynConfig() end
+            if kbMatch(M.KB.SpeedToggle,kc) then M.toggleCarryMode(); saveOrvynConfig() end
+            if kbMatch(M.KB.DropBrainrot,kc) then M.runDrop() end
+            if kbMatch(M.KB.TPFloor,kc) then M.runTPFloor() end
+            if kbMatch(M.KB.InstaReset,kc) then M.cursedInstaReset() end
+            if kbMatch(M.KB.AutoLeft,kc) then M.autoLeftEnabled=not M.autoLeftEnabled; if M.autoLeftEnabled then if M.autoRightEnabled then M.autoRightEnabled=false; M.stopAutoRight() end; if M.autoBatEnabled then M.stopBatAimbot() end; M.startAutoLeft() else M.stopAutoLeft() end; saveOrvynConfig() end
+            if kbMatch(M.KB.AutoRight,kc) then M.autoRightEnabled=not M.autoRightEnabled; if M.autoRightEnabled then if M.autoLeftEnabled then M.autoLeftEnabled=false; M.stopAutoLeft() end; if M.autoBatEnabled then M.stopBatAimbot() end; M.startAutoRight() else M.stopAutoRight() end; saveOrvynConfig() end
+            if kbMatch(M.KB.AutoBat,kc) then if not M.autoBatEnabled then if M.autoLeftEnabled then M.autoLeftEnabled=false; M.stopAutoLeft() end; if M.autoRightEnabled then M.autoRightEnabled=false; M.stopAutoRight() end; M.queueAutoBatStart() else M.stopBatAimbot() end; saveOrvynConfig() end
+            if kbMatch(M.KB.BypassAimbot,kc) then M.toggleBypassAimbot(); saveOrvynConfig() end
+            if kbMatch(M.KB.BodyLock,kc) then M.toggleBodyLock(); saveOrvynConfig() end
+            if kbMatch(M.KB.GuiHide,kc) then if M.mainFrame then M.mainFrame.Visible=not M.mainFrame.Visible end end
         end)
 
         makeGap(8); makeSectionHeader("Danger"); makeGap(2)
         makeButtonRow("Reset All Settings", "RESET", function() M.resetAllSettings() end, Color3.fromRGB(80,14,14))
-
-        makeGap(4)
-        local themeRow = Instance.new("Frame", currentPage)
-        themeRow.Size = UDim2.new(1,-16,0,30); themeRow.BackgroundTransparency=1; themeRow.LayoutOrder=LO()
-        local themeLbl = Instance.new("TextLabel", themeRow)
-        themeLbl.Size = UDim2.new(1,0,1,0); themeLbl.BackgroundTransparency=1
-        themeLbl.Text = "Theme: ORVYN x DUELS V2"; themeLbl.TextColor3 = C.accent
-        themeLbl.Font = Enum.Font.GothamBold; themeLbl.TextSize=11; themeLbl.TextXAlignment=Enum.TextXAlignment.Center
     end)
 
-    -- Create tab buttons
     local function selectTab(name)
-        for tn,page in pairs(tabPages) do page.Visible = (tn==name) end
+        for tn,pg in pairs(tabPages) do pg.Visible=(tn==name) end
         for tn,btn in pairs(tabButtons) do
-            local active = (tn==name)
-            TweenService:Create(btn, TweenInfo.new(0.15), {
-                BackgroundColor3 = active and C.accent or Color3.fromRGB(8,14,10),
-                TextColor3 = active and Color3.fromRGB(10,10,15) or Color3.fromRGB(120,180,140)
-            }):Play()
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                TweenService:Create(stroke, TweenInfo.new(0.15), {Color = active and C.accent or Color3.fromRGB(28,60,40)}):Play()
-            end
+            local active=(tn==name)
+            TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3=active and Color3.fromRGB(0,210,210) or Color3.fromRGB(8,14,10), TextColor3=active and Color3.fromRGB(10,10,15) or Color3.fromRGB(120,180,140)}):Play()
         end
     end
-
-    for i, tabName in ipairs(TABS) do
-        local btn = Instance.new("TextButton", tabScroll)
-        btn.Size = UDim2.new(0,70,0,26); btn.LayoutOrder=i
-        btn.BackgroundColor3 = Color3.fromRGB(8,14,10); btn.BorderSizePixel=0
-        btn.Text = tabName:upper(); btn.TextColor3 = Color3.fromRGB(120,180,140)
-        btn.Font = Enum.Font.GothamBold; btn.TextSize=10; btn.AutoButtonColor=false
-        mkCorner(btn,8); mkStroke(btn, Color3.fromRGB(28,60,40),1)
+    for i,tabName in ipairs(TABS) do
+        local btn=Instance.new("TextButton", tabScroll)
+        btn.Size=UDim2.new(0,70,0,26); btn.LayoutOrder=i; btn.BackgroundColor3=Color3.fromRGB(8,14,10); btn.Text=tabName:upper(); btn.TextColor3=Color3.fromRGB(120,180,140); btn.Font=Enum.Font.GothamBold; btn.TextSize=10; mkCorner(btn,8); mkStroke(btn, Color3.fromRGB(28,60,40),1)
         btn.MouseButton1Click:Connect(function() selectTab(tabName) end)
         tabButtons[tabName]=btn
     end
-
-    -- Default tab
     selectTab("Speed")
-
-    -- Badge toggles menu
-    brandBadge.Activated:Connect(function() mainOuter.Visible = not mainOuter.Visible end)
-
-    -- Apply theme accents
-    M.applyStealBarTheme(C.accent)
-
-    -- Save config loop already exists outside, just keep refs
-    M.mainFrame = mainOuter
+    brandBadge.Activated:Connect(function() mainOuter.Visible=not mainOuter.Visible end)
+    M.applyStealBarTheme(Color3.fromRGB(0,210,210))
+    M.mainFrame=mainOuter
 end
 
 function M.applyStealBarTheme
