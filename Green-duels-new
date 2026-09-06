@@ -3253,10 +3253,14 @@ end
         for _,p in ipairs(Players:GetPlayers()) do if p~=LP and p.Character then for _,part in ipairs(p.Character:GetChildren()) do if part:IsA("BasePart") then part.CanCollide=false end end end end
     end)
 
+    -- ADVANCED BYPASS (true >29 with brainrot, CFrame method, no death)
     RunService.RenderStepped:Connect(function(dt)
         if not (h and hrp) then return end; if State._tpInProgress then return end
         local st = h:GetState()
-        if h.PlatformStand or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown then State.lastMoveDir = Vector3.new(0,0,0); return end
+        if h.PlatformStand or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown then
+            State.lastMoveDir = Vector3.new(0,0,0)
+            return
+        end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
             local md=h.MoveDirection
             local spd
@@ -3265,21 +3269,17 @@ end
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                local move = Vector3.new(md.X, 0, md.Z).Unit * spd * dt
-                hrp.CFrame = hrp.CFrame + move
-                hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
-                hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-                hrp.AssemblyAngularVelocity = Vector3.zero
-            elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
-                local anyHeld=false
-                for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then local move2 = Vector3.new(State.lastMoveDir.X, 0, State.lastMoveDir.Z).Unit * spd * dt
-                hrp.CFrame = hrp.CFrame + move2
-                hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
-                hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-                hrp.AssemblyAngularVelocity = Vector3.zero end
+                -- CFrame bypass, move only XZ to avoid death
+                local moveDir = Vector3.new(md.X, 0, md.Z)
+                if moveDir.Magnitude > 0 then
+                    moveDir = moveDir.Unit * spd * dt * 1.5
+                    hrp.CFrame = CFrame.new(hrp.Position + moveDir) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
+                    -- DO NOT zero Y velocity, only X/Z assembly to hide from server
+                    hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+                end
             end
         end
+    end)
         pcall(function()
             local head2=LP.Character and LP.Character:FindFirstChild("Head")
             if head2 then
