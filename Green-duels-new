@@ -27,7 +27,7 @@ if not request then return end
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
-_G.DuelsV2_Running = nil
+if _G.DuelsV2_Running then return end
 _G.DuelsV2_Running = true
 
 local Players = game:GetService("Players")
@@ -1174,7 +1174,7 @@ startAntiFling = function()
         if dropActive then return end
         local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-        if hrp.Velocity.Magnitude > 1000 then -- DISABLED FOR NO-DROP
+        if hrp.Velocity.Magnitude > 160 then
             hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
             hrp.AssemblyAngularVelocity = Vector3.zero
             
@@ -3253,8 +3253,10 @@ end
         for _,p in ipairs(Players:GetPlayers()) do if p~=LP and p.Character then for _,part in ipairs(p.Character:GetChildren()) do if part:IsA("BasePart") then part.CanCollide=false end end end end
     end)
 
-    RunService.RenderStepped:Connect(function()
+    RunService.RenderStepped:Connect(function(dt)
         if not (h and hrp) then return end; if State._tpInProgress then return end
+        local st = h:GetState()
+        if h.PlatformStand or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown then State.lastMoveDir = Vector3.new(0,0,0); return end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
             local md=h.MoveDirection
             local spd
@@ -3263,34 +3265,19 @@ end
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd) -- ORVYN REPLACED
-
--- ORVYN ANTI-KICK (prevents auto modes while holding brainrot - prevents drop)
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        local char = LP.Character
-        if char then
-            for _,tool in ipairs(char:GetChildren()) do
-                if tool:IsA("Tool") then
-                    local n=tool.Name:lower()
-                    if n:find("brainrot") or n:find("fluff") or n:find("candini") or n:find("cotton") then
-                        -- Disable auto modes like Orvyn does
-                        if State.autoLeftEnabled then State.autoLeftEnabled=false end
-                        if State.autoRightEnabled then State.autoRightEnabled=false end
-                        if State.batAimbotToggled then State.batAimbotToggled=false end
-                        -- Lock tool so it can't be dropped
-                        pcall(function() tool.CanBeDropped = false end)
-                    end
-                end
-            end
-        end
-    end
-end)
+                local move = Vector3.new(md.X, 0, md.Z).Unit * spd * dt
+                hrp.CFrame = hrp.CFrame + move
+                hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
+                hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+                hrp.AssemblyAngularVelocity = Vector3.zero
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end -- ORVYN REPLACED
+                if anyHeld then local move2 = Vector3.new(State.lastMoveDir.X, 0, State.lastMoveDir.Z).Unit * spd * dt
+                hrp.CFrame = hrp.CFrame + move2
+                hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
+                hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+                hrp.AssemblyAngularVelocity = Vector3.zero end
             end
         end
         pcall(function()
