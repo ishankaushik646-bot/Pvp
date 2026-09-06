@@ -1,12 +1,4 @@
-if _G.DuelsV2_Running then warn("[Duels V2] Already running"); return end
-_G.DuelsV2_Running = true
--- ============================================================
--- DUELS V2 - COMPLETE (CLEANED - NO PANEL)
--- Jump drop only (no crasher)
--- TP Bat (TOGGLE)
--- Blossom Reset
--- ============================================================
-
+-- DUELS V2 - CLEANED MINIMAL
 
 local Players            = game:GetService("Players")
 local HttpService        = game:GetService("HttpService")
@@ -15,6 +7,17 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local UserInputService   = game:GetService("UserInputService")
 local TweenService       = game:GetService("TweenService")
 
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local ContentProvider = game:GetService("ContentProvider")
+local Stats = game:GetService("Stats")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
 
 -- UNIVERSAL SPOOF HOOK - KEEP ORIGINAL MODE LOGIC
 local spoofedVelocity = Vector3.zero
@@ -3959,89 +3962,4 @@ task.spawn(function()
     end
     mkBtn("ORIGINAL","original")
     mkBtn("SAKURA","sakura")
-end)
-
-
-
--- ========== ORVYN LOGIC REPLACEMENT (only existing Duels V2 logics) ==========
--- Visuals protected: anti lag, stretch rez, remove accessories, sky modes
--- We override Duels functions with Orvyn's implementations
-
--- Ensure M exists for compatibility (Orvyn uses M, Duels uses State)
-M = M or {}
-M.autoTPHeight = 10
-
-pcall(function()
-    -- Orvyn doAutoTPDown is better (checks FloorMaterial)
-    local orvyn_doAutoTPDown = function(force)
-        local char = LP.Character
-        if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hrp or not hum then return end
-        if not force then
-            if hum.FloorMaterial ~= Enum.Material.Air then return end
-            if hrp.Position.Y < (State.autoTPHeight or 10) then return end
-        end
-        hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
-        if hrp:FindFirstChild("AssemblyLinearVelocity") then
-            hrp.AssemblyLinearVelocity = Vector3.zero
-        else
-            hrp.Velocity = Vector3.zero
-        end
-    end
-
-    -- Replace if exists
-    if doAutoTPDown then
-        doAutoTPDown = orvyn_doAutoTPDown
-        M.doAutoTPDown = orvyn_doAutoTPDown
-    end
-
-    -- Orvyn findBat (more reliable)
-    local orvyn_findBat = function()
-        local char = LP.Character
-        if not char then return nil end
-        for _, tool in ipairs(char:GetChildren()) do
-            if tool:IsA("Tool") and string.find(string.lower(tool.Name), "bat") then
-                return tool
-            end
-        end
-        -- also check backpack
-        local backpack = LP:FindFirstChild("Backpack")
-        if backpack then
-            for _, tool in ipairs(backpack:GetChildren()) do
-                if tool:IsA("Tool") and string.find(string.lower(tool.Name), "bat") then
-                    return tool
-                end
-            end
-        end
-        return nil
-    end
-
-    if findBat then findBat = orvyn_findBat end
-    if getBat then getBat = orvyn_findBat end
-    if sakuraGetBat then sakuraGetBat = orvyn_findBat end
-
-    -- Orvyn instaReset (uses RE/ remote)
-    local orvyn_instaReset = function()
-        pcall(function()
-            local rem = nil
-            for _, d in ipairs(game:GetDescendants()) do
-                if d:IsA("RemoteEvent") and d.Name:sub(1,3) == "RE/" then rem = d; break end
-            end
-            if rem then
-                rem:FireServer("f888ee6e-c86d-46e1-93d7-0639d6635d42", LP, "balloon")
-            end
-        end)
-    end
-
-    if instaReset then instaReset = orvyn_instaReset end
-
-end)
-
-print("[CLEAN FIXED] Duels V2 - Panel removed, anti-duplicate kept, Orvyn logic for existing features, visuals 100% Duels V2")
-
--- Allow re-run after leaving
-LP.AncestryChanged:Connect(function(_, parent)
-    if not parent then _G.DuelsV2_Running = nil end
 end)
