@@ -4377,6 +4377,8 @@ function M.buildGui()
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.Parent = player:WaitForChild("PlayerGui")
     M.gui = gui
+    M.mobBtnRefs = M.mobBtnRefs or {}
+    M.keybindButtons = M.keybindButtons or {}
     local uiScale = Instance.new("UIScale", gui)
     uiScale.Scale = M.uiScale or 1
     M.uiScaleRef = uiScale
@@ -4465,7 +4467,7 @@ function M.buildGui()
     local avatarImg = Instance.new("ImageLabel", avatarBg)
     avatarImg.Size=UDim2.new(1,-4,1,-4); avatarImg.Position=UDim2.new(0,2,0,2); avatarImg.BackgroundTransparency=1; mkCorner(avatarImg,14)
     task.spawn(function()
-        local ok,thumb = pcall(function() return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
+        local ok,thumb = pcall(function() local P = game:GetService("Players"); return P:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
         if ok and thumb then avatarImg.Image=thumb end
     end)
 
@@ -4630,7 +4632,7 @@ function M.buildGui()
         makeToggleRow("Line ESP", M.lineESPEnabled, function(on) M.lineESPEnabled=on end)
         makeToggleRow("Speed ESP", M.speedESPEnabled, function(on) M.speedESPEnabled=on end)
         makeGap(6); makeSectionHeader("Sky & FOV"); makeGap(2)
-        local skyNames = M.SkyOrder or {"Off","Night","Aurora"}
+        local skyNames = M.SkyOrder or (M.SkyOrder) or {"Off","Night","Aurora","Sunset"}
         local curSky=1; for i,t in ipairs(skyNames) do if t==M.currentSkyTheme then curSky=i; break end end
         makeChoiceRow("Sky Theme", skyNames, curSky, function(v) M.currentSkyTheme=v; M.CandyApplyCustomSky(v); saveOrvynConfig() end)
         local fovOpts={"70","80","90","100","110","120"}
@@ -4638,7 +4640,7 @@ function M.buildGui()
         makeChoiceRow("FOV", fovOpts, curFov, function(v) M.fovValue=tonumber(v) or 80; M.applyFOV(); saveOrvynConfig() end)
         makeGap(6); makeSectionHeader("Animations"); makeGap(2)
         makeToggleRow("Animation Pack", M.animPackEnabled, function(on) M.animPackEnabled=on; if on then M.applyAnimPack(M.animPack) else M.resetAnimations(player.Character) end end)
-        local packNames={}; for n in pairs(M.PACKS) do table.insert(packNames,n) end; table.sort(packNames)
+        local packNames={}; pcall(function() for n in pairs(M.PACKS or {}) do table.insert(packNames,n) end; table.sort(packNames) end)
         local curPack=1; for i,v in ipairs(packNames) do if v==M.animPack then curPack=i; break end end
         makeChoiceRow("Select Pack", packNames, curPack, function(v) M.animPack=v; if M.animPackEnabled then M.applyAnimPack(v) end end)
         makeToggleRow("Headless", M.headlessEnabled, function(on) M.headlessEnabled=on; M.applyHeadlessToChar(player.Character,on) end)
@@ -4657,7 +4659,7 @@ function M.buildGui()
         makeToggleRow("Intro GUI", M.introGUIEnabled, function(on) M.introGUIEnabled=on end)
         makeChoiceRow("Intro Song Pick", {"Song 1","Song 2","Song 3"}, M.introSongChoice, function(v) local map={["Song 1"]=1,["Song 2"]=2,["Song 3"]=3}; M.introSongChoice=map[v] or 3 end)
         makeGap(6); makeSectionHeader("Mobile & UI"); makeGap(2)
-        makeToggleRow("Mobile Buttons", M.mobileButtonsEnabled, function(on) M.mobileButtonsEnabled=on; if on then M.buildMobileButtons() else M.destroyMobileButtons() end end)
+        makeToggleRow("Mobile Buttons", M.mobileButtonsEnabled, function(on) M.mobileButtonsEnabled=on; if on then pcall(function() M.buildMobileButtons() end) else pcall(function() M.destroyMobileButtons() end) end end)
         makeInputRow("Button Size", M.mobileButtonsSize, function(v) M.mobileButtonsSize=v; if M.mobileButtonsEnabled then M.buildMobileButtons() end end)
         makeInputRow("Menu Scale", M.uiScale, function(v) M.uiScale=v; if M.uiScaleRef then M.uiScaleRef.Scale=v end end)
         makeButtonRow("Reset Mobile Pos", "RESET", function() M.resetMobilePositions() end, Color3.fromRGB(45,45,58))
