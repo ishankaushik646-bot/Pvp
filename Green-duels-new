@@ -3253,7 +3253,6 @@ end
         for _,p in ipairs(Players:GetPlayers()) do if p~=LP and p.Character then for _,part in ipairs(p.Character:GetChildren()) do if part:IsA("BasePart") then part.CanCollide=false end end end end
     end)
 
-    -- ADVANCED BYPASS (true >29 with brainrot, CFrame method, no death)
     RunService.RenderStepped:Connect(function(dt)
         if not (h and hrp) then return end; if State._tpInProgress then return end
         local st = h:GetState()
@@ -3269,17 +3268,32 @@ end
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                -- CFrame bypass, move only XZ to avoid death
+                -- CFrame move at real speed (35+)
                 local moveDir = Vector3.new(md.X, 0, md.Z)
                 if moveDir.Magnitude > 0 then
-                    moveDir = moveDir.Unit * spd * dt * 1.5
-                    hrp.CFrame = CFrame.new(hrp.Position + moveDir) * CFrame.Angles(0, select(2, hrp.CFrame:ToEulerAnglesYXZ()), 0)
-                    -- DO NOT zero Y velocity, only X/Z assembly to hide from server
-                    hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+                    moveDir = moveDir.Unit * spd * dt
+                    hrp.CFrame = hrp.CFrame + moveDir
+                    -- SPOOF: set velocity to 16 so server thinks you're legit, not 0
+                    local spoof = Vector3.new(md.X * 16, hrp.Velocity.Y, md.Z * 16)
+                    hrp.Velocity = spoof
+                    hrp.AssemblyLinearVelocity = Vector3.new(md.X * 16, hrp.AssemblyLinearVelocity.Y, md.Z * 16)
+                    -- DO NOT touch AssemblyAngularVelocity
+                end
+            elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
+                local anyHeld=false
+                for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
+                if anyHeld then
+                    local moveDir = Vector3.new(State.lastMoveDir.X, 0, State.lastMoveDir.Z)
+                    if moveDir.Magnitude > 0 then
+                        moveDir = moveDir.Unit * spd * dt
+                        hrp.CFrame = hrp.CFrame + moveDir
+                        local spoof = Vector3.new(State.lastMoveDir.X * 16, hrp.Velocity.Y, State.lastMoveDir.Z * 16)
+                        hrp.Velocity = spoof
+                        hrp.AssemblyLinearVelocity = Vector3.new(State.lastMoveDir.X * 16, hrp.AssemblyLinearVelocity.Y, State.lastMoveDir.Z * 16)
+                    end
                 end
             end
         end
-    end)
         pcall(function()
             local head2=LP.Character and LP.Character:FindFirstChild("Head")
             if head2 then
