@@ -799,6 +799,9 @@ M.removeAccEnabled = false
 M.removeAccConn = nil
 M.removedAccessories = {}
 M.uiScale = 1
+-- Draggable GUI positions (saved)
+M.mainGuiPos = nil -- will hold {xs, xo, ys, yo}
+M.hubBtnPos = nil
 M.menuBackground = "None"  -- None | Dark | Light Yagami | Death Note
 M.uiScaleSliderRef = nil
 M.uiScaleLabelRef = nil
@@ -4081,6 +4084,8 @@ local function loadOrvynConfig()
         if d.speedToggleKey then lk(M.KB.SpeedToggle,d.speedToggleKey) end
         if d.bypassAimbotKey then lk(M.KB.BypassAimbot,d.bypassAimbotKey) end
         if d.bodyLockKey then lk(M.KB.BodyLock,d.bodyLockKey) end
+        if type(d.mainGuiPos)=="table" then M.mainGuiPos=d.mainGuiPos end
+        if type(d.hubBtnPos)=="table" then M.hubBtnPos=d.hubBtnPos end
     end
 end
 
@@ -4136,6 +4141,8 @@ local function saveOrvynConfig()
         instaResetKey=ks(M.KB.InstaReset), guiHideKey=ks(M.KB.GuiHide),
         speedToggleKey=ks(M.KB.SpeedToggle), bypassAimbotKey=ks(M.KB.BypassAimbot),
         bodyLockKey=ks(M.KB.BodyLock),
+        mainGuiPos=M.mainGuiPos,
+        hubBtnPos=M.hubBtnPos,
     }
     pcall(function() writefile(ORVYN_CONFIG_NAME, HS:JSONEncode(cfg)) end)
 end
@@ -4375,11 +4382,17 @@ function M.buildGui()
     gui.Parent = player:WaitForChild("PlayerGui")
     M.mainFrame = gui
 
-    -- Floating ORVYN HUB badge (top-left, matches screenshot)
+    -- Floating ORVYN HUB badge (top-left, draggable + saved)
     local brandBadge = Instance.new("TextButton")
     brandBadge.Name = "OrvynBadge"
     brandBadge.Size = UDim2.new(0, 130, 0, 32)
-    brandBadge.Position = UDim2.new(0, 14, 0, 14)
+    if M.hubBtnPos and type(M.hubBtnPos) == "table" then
+        pcall(function()
+            brandBadge.Position = UDim2.new(M.hubBtnPos[1] or 0, M.hubBtnPos[2] or 14, M.hubBtnPos[3] or 0, M.hubBtnPos[4] or 14)
+        end)
+    else
+        brandBadge.Position = UDim2.new(0, 14, 0, 14)
+    end
     brandBadge.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
     brandBadge.BackgroundTransparency = 0.15
     brandBadge.BorderSizePixel = 0
@@ -4401,7 +4414,13 @@ function M.buildGui()
     local main = Instance.new("ImageLabel")
     main.Name = "Main"
     main.Size = UDim2.new(0, 380, 0, 560)
-    main.Position = UDim2.new(0, 10, 0.5, -180)
+    if M.mainGuiPos and type(M.mainGuiPos) == "table" then
+        pcall(function()
+            main.Position = UDim2.new(M.mainGuiPos[1] or 0, M.mainGuiPos[2] or 10, M.mainGuiPos[3] or 0.5, M.mainGuiPos[4] or -180)
+        end)
+    else
+        main.Position = UDim2.new(0, 10, 0.5, -180)
+    end
     main.BackgroundColor3 = Color3.fromRGB(8, 8, 14)
     main.BackgroundTransparency = 0.08
     main.Image = ""
@@ -4513,20 +4532,27 @@ function M.buildGui()
     layout.Padding = UDim.new(0, 0)
     layout.Parent = scroll
 
-    -- Dragging: allow dragging from anywhere on the main frame (except interactive elements)
+    -- Dragging: main menu draggable + save position
     local dragging = false
     local dragStart, startPos
+    local hasMovedMain = false
+    local function saveMainPos()
+        local p = main.Position
+        M.mainGuiPos = {p.X.Scale, p.X.Offset, p.Y.Scale, p.Y.Offset}
+        pcall(function() saveOrvynConfig() end)
+    end
     local function startDrag(input)
         if M.uiLocked then return end
-        -- Prevent drag if clicking on a button, textbox, or scroll
         local target = input.Parent
         local isInteractive = target:IsA("TextButton") or target:IsA("TextBox") or target:IsA("ScrollingFrame") or target:IsA("ImageButton")
         if isInteractive then return end
         dragging = true
+        hasMovedMain = false
         dragStart = input.Position
         startPos = main.Position
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
+                if dragging and hasMovedMain then saveMainPos() end
                 dragging = false
             end
         end)
@@ -4536,7 +4562,6 @@ function M.buildGui()
             startDrag(input)
         end
     end)
-    -- Also allow dragging from header (title bar)
     header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             startDrag(input)
@@ -4545,12 +4570,56 @@ function M.buildGui()
     UIS.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
+            if delta.Magnitude > 4 then hasMovedMain = true end
             main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if dragging and hasMovedMain then saveMainPos() end
+            dragging = false
+        end
+    end)
 
-    -- Top-left ORVYN HUB badge toggles the menu open/closed
+    -- ORVYN HUB badge: draggable + click to toggle (save position)
+    local badgeDragging = false
+    local badgeDragStart, badgeStartPos
+    local badgeHasMoved = false
+    local function saveBadgePos()
+        local p = brandBadge.Position
+        M.hubBtnPos = {p.X.Scale, p.X.Offset, p.Y.Scale, p.Y.Offset}
+        pcall(function() saveOrvynConfig() end)
+    end
+    brandBadge.InputBegan:Connect(function(input)
+        if M.uiLocked then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            badgeDragging = true
+            badgeHasMoved = false
+            badgeDragStart = input.Position
+            badgeStartPos = brandBadge.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    if badgeDragging and badgeHasMoved then saveBadgePos() end
+                    badgeDragging = false
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if badgeDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - badgeDragStart
+            if delta.Magnitude > 4 then badgeHasMoved = true end
+            brandBadge.Position = UDim2.new(badgeStartPos.X.Scale, badgeStartPos.X.Offset + delta.X, badgeStartPos.Y.Scale, badgeStartPos.Y.Offset + delta.Y)
+        end
+    end)
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if badgeDragging and badgeHasMoved then saveBadgePos() end
+            badgeDragging = false
+        end
+    end)
     local function toggleMainMenu()
+        if badgeHasMoved then badgeHasMoved = false; return end
         main.Visible = not main.Visible
     end
     brandBadge.Activated:Connect(toggleMainMenu)
