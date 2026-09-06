@@ -329,7 +329,7 @@ LP.CharacterAdded:Connect(setupTPBatCharacter)
 if LP.Character then task.spawn(function() setupTPBatCharacter(LP.Character) end) end
 
 -- ============================================================
--- MIRROR TP DOWN (FROM ACE DUELS - ADDED)
+-- MIRROR TP DOWN (FROM ACE MAX HUB - ADDED)
 -- ============================================================
 local MIRROR_TP_DROP_THRESHOLD = 3
 local MIRROR_TP_DOWN_Y = -7.00
@@ -394,8 +394,8 @@ _G.GreenSetMirrorTPDown(true)
 -- CONFIG VERSION & EARLY LOAD
 -- ============================================================
 local CONFIG_VERSION = 2
-local CONFIG_FILE = "DuelsConfig.json"
-local CONFIG_BACKUP = "DuelsConfig.bak"
+local CONFIG_FILE = "MaxHubConfig.json"
+local CONFIG_BACKUP = "MaxHubConfig.bak"
 
 local earlyConfig = nil
 local function loadEarlyConfig()
@@ -564,7 +564,7 @@ antiFlingEnabled=false,
     autoTPHeight=20,
     autoTPConn=nil,
 }
--- ORVYN FULL SPEED SYSTEM (replaces all Duels speed code)
+-- ORVYN FULL SPEED SYSTEM (replaces all Max Hub speed code)
 local function getOrvynActiveSpeed()
     if State.laggerMode == 2 then return State.laggerCarrySpeed -- 24.5 Orvyn
     elseif State.laggerMode == 1 then return State.laggerSpeed -- 15 Orvyn
@@ -781,8 +781,8 @@ local Steal = {
 -- PRESETS
 -- ============================================================
 local Presets = {}
-local PRESET_FILE = "DuelsPresets.json"
-local LAST_PRESET_FILE = "DuelsLastPreset.json"
+local PRESET_FILE = "MaxHubPresets.json"
+local LAST_PRESET_FILE = "MaxHubLastPreset.json"
 
 local function buildPresetSnapshot() return {
     normalSpeed=State.normalSpeed, carrySpeed=State.carrySpeed,
@@ -893,7 +893,7 @@ local C = {
 
 -- CLEANUP
 do
-    local cleanupNames = {"VyseSlottedGUI","VyseAsireGUI","VyseAsireHubV4","VyseAsireHubV5","VyseAsireHubV5_1","AsireHubV5_1","AsireHubV5_2","LaitoHubV1","DuelsV1"}
+    local cleanupNames = {"VyseSlottedGUI","VyseAsireGUI","VyseAsireHubV4","VyseAsireHubV5","VyseAsireHubV5_1","AsireHubV5_1","AsireHubV5_2","LaitoHubV1","MaxHubV1"}
     for _,name in ipairs(cleanupNames) do
         pcall(function() local o=game:GetService("CoreGui"):FindFirstChild(name); if o then o:Destroy() end end)
         pcall(function() local o=LP:WaitForChild("PlayerGui"):FindFirstChild(name); if o then o:Destroy() end end)
@@ -1388,7 +1388,7 @@ local function Main()
 
     local titleLbl = Instance.new("TextLabel", titleBar)
     titleLbl.Size = UDim2.new(0,160,0,16); titleLbl.Position = UDim2.new(0,50,0,7)
-    titleLbl.BackgroundTransparency = 1; titleLbl.Text = "Duels"
+    titleLbl.BackgroundTransparency = 1; titleLbl.Text = "Max Hub"
     titleLbl.TextColor3 = C.topTitle; titleLbl.Font = Enum.Font.GothamBlack; titleLbl.TextSize = 14
     titleLbl.TextXAlignment = Enum.TextXAlignment.Left; titleLbl.ZIndex = 6
 
@@ -1407,7 +1407,7 @@ local function Main()
     closeBtn.MouseLeave:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.1), {TextColor3=C.topBtn}):Play() end)
     closeBtn.MouseButton1Click:Connect(function()
         State.guiVisible = false; mainOuter.Visible = false
-        if _G.DuelsQAHide then pcall(_G.DuelsQAHide, true) end
+        if _G.MaxHubQAHide then pcall(_G.MaxHubQAHide, true) end
         requestSave()
     end)
 
@@ -2137,14 +2137,14 @@ toggleSetters["antiRagdoll"] = setAntiRag
             end)
             makeGap(10)
             local fw = Instance.new("Frame", currentPage); fw.Size = UDim2.new(1,0,0,22); fw.BackgroundTransparency=1; fw.BorderSizePixel=0; fw.LayoutOrder=LO()
-            local fl = Instance.new("TextLabel", fw); fl.Size = UDim2.new(1,0,1,0); fl.BackgroundTransparency=1; fl.Text="Duels  ·  powered by luck 🍀"; fl.TextColor3=Color3.fromRGB(50,100,65); fl.Font=Enum.Font.Gotham; fl.TextSize=10; fl.TextXAlignment=Enum.TextXAlignment.Center
+            local fl = Instance.new("TextLabel", fw); fl.Size = UDim2.new(1,0,1,0); fl.BackgroundTransparency=1; fl.Text="Max Hub  ·  powered by luck 🍀"; fl.TextColor3=Color3.fromRGB(50,100,65); fl.Font=Enum.Font.Gotham; fl.TextSize=10; fl.TextXAlignment=Enum.TextXAlignment.Center
             _G._VezySaveStatusLbl = fl
             _G._VezyFlashSave = function(success)
                 if not _G._VezySaveStatusLbl or not _G._VezySaveStatusLbl.Parent then return end
                 local lbl = _G._VezySaveStatusLbl
                 if success then lbl.Text="✓  Auto-saved"; lbl.TextColor3=Color3.fromRGB(46,200,120)
                 else lbl.Text="✗  Save failed"; lbl.TextColor3=Color3.fromRGB(220,80,80) end
-                task.delay(1.5,function() if lbl and lbl.Parent then lbl.Text="Duels  ·  powered by luck 🍀"; lbl.TextColor3=Color3.fromRGB(50,100,65) end end)
+                task.delay(1.5,function() if lbl and lbl.Parent then lbl.Text="Max Hub  ·  powered by luck 🍀"; lbl.TextColor3=Color3.fromRGB(50,100,65) end end)
             end
         end)
         page.LayoutOrder = 6
@@ -2456,11 +2456,11 @@ toggleSetters["antiRagdoll"] = setAntiRag
         if not h or not hrp then return end
         local head=char:FindFirstChild("Head")
         if head then
-            local oldBB=head:FindFirstChild("DuelsBB"); if oldBB then oldBB:Destroy() end
-            local bb=Instance.new("BillboardGui", head); bb.Name="DuelsBB"; bb.Size=UDim2.new(0,180,0,100); bb.StudsOffset=Vector3.new(0,3,0); bb.AlwaysOnTop=true
+            local oldBB=head:FindFirstChild("MaxHubBB"); if oldBB then oldBB:Destroy() end
+            local bb=Instance.new("BillboardGui", head); bb.Name="MaxHubBB"; bb.Size=UDim2.new(0,180,0,100); bb.StudsOffset=Vector3.new(0,3,0); bb.AlwaysOnTop=true
             local list=Instance.new("UIListLayout",bb); list.FillDirection=Enum.FillDirection.Vertical; list.SortOrder=Enum.SortOrder.LayoutOrder; list.VerticalAlignment=Enum.VerticalAlignment.Center; list.Padding=UDim.new(0,2)
             local speedBillLbl=Instance.new("TextLabel",bb); speedBillLbl.Name="SpeedBillLbl"; speedBillLbl.Size=UDim2.new(1,0,0,24); speedBillLbl.BackgroundTransparency=1; speedBillLbl.Text="0.0"; speedBillLbl.TextColor3=Color3.fromRGB(38,240,125); speedBillLbl.Font=Enum.Font.GothamBlack; speedBillLbl.TextScaled=true; speedBillLbl.TextStrokeTransparency=0.1; speedBillLbl.TextStrokeColor3=Color3.new(0,0,0); speedBillLbl.LayoutOrder=1
-            local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/Duels"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
+            local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/Max Hub"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
             local ragTimerLbl=Instance.new("TextLabel",bb); ragTimerLbl.Name="RagdollTimerLbl"; ragTimerLbl.Size=UDim2.new(1,0,0,30); ragTimerLbl.BackgroundTransparency=1; ragTimerLbl.Text=""; ragTimerLbl.TextColor3=Color3.fromRGB(255,60,60); ragTimerLbl.Font=Enum.Font.GothamBlack; ragTimerLbl.TextScaled=true; ragTimerLbl.TextStrokeTransparency=0.1; ragTimerLbl.TextStrokeColor3=Color3.new(0,0,0); ragTimerLbl.LayoutOrder=3
         end
         stopAntiRagdoll()
@@ -2839,7 +2839,7 @@ end
     local function getRagTimerLbl()
         local char = LP.Character; if not char then return nil end
         local head = char:FindFirstChild("Head"); if not head then return nil end
-        local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
+        local bb = head:FindFirstChild("MaxHubBB"); if not bb then return nil end
         return bb:FindFirstChild("RagdollTimerLbl")
     end
     local function startRagTimerGui()
@@ -2883,7 +2883,7 @@ end
 
     
     -- ============================================================
-    -- SAFE MODE (from Ace Duels)
+    -- SAFE MODE (from Ace Max Hub)
     -- Prevents aimbot/auto movement during duel countdown and while carrying brainrot
     -- ============================================================
     _G.GreenSafeMode = _G.GreenSafeMode or {}
@@ -2895,10 +2895,10 @@ end
     local function safeModeGetCountdownLabel()
         local ok, label = pcall(function()
             return LP.PlayerGui
-            and LP.PlayerGui:FindFirstChild("DuelsMachineTopFrame")
-            and LP.PlayerGui.DuelsMachineTopFrame:FindFirstChild("DuelsMachineTopFrame")
-            and LP.PlayerGui.DuelsMachineTopFrame.DuelsMachineTopFrame:FindFirstChild("Timer")
-            and LP.PlayerGui.DuelsMachineTopFrame.DuelsMachineTopFrame.Timer:FindFirstChild("Label")
+            and LP.PlayerGui:FindFirstChild("MaxHubMachineTopFrame")
+            and LP.PlayerGui.MaxHubMachineTopFrame:FindFirstChild("MaxHubMachineTopFrame")
+            and LP.PlayerGui.MaxHubMachineTopFrame.MaxHubMachineTopFrame:FindFirstChild("Timer")
+            and LP.PlayerGui.MaxHubMachineTopFrame.MaxHubMachineTopFrame.Timer:FindFirstChild("Label")
         end)
         return (ok and label) or nil
     end
@@ -3320,7 +3320,7 @@ end
         pcall(function()
             local head2=LP.Character and LP.Character:FindFirstChild("Head")
             if head2 then
-                local bb2=head2:FindFirstChild("DuelsBB")
+                local bb2=head2:FindFirstChild("MaxHubBB")
                 local sl=bb2 and bb2:FindFirstChild("SpeedBillLbl")
                 if sl then sl.Text=string.format("%.1f",Vector3.new(hrp.Velocity.X,0,hrp.Velocity.Z).Magnitude) end
             end
@@ -3370,7 +3370,7 @@ end
         elseif kc==Keys.guiHide then
             if isKb then
                 State.guiVisible=not State.guiVisible; mainOuter.Visible=State.guiVisible
-                if _G.DuelsQAHide then pcall(_G.DuelsQAHide, not State.guiVisible) end
+                if _G.MaxHubQAHide then pcall(_G.MaxHubQAHide, not State.guiVisible) end
                 requestSave()
             end
         end
@@ -3401,12 +3401,12 @@ end
     -- MINI CLOVER BUTTON
     -- ============================================================
     local cloverBtn = Instance.new("TextButton", gui)
-    cloverBtn.Name = "DuelsClover"
+    cloverBtn.Name = "MaxHubClover"
     cloverBtn.Size = UDim2.new(0,140,0,36)
     cloverBtn.Position = UDim2.new(0,20,0,200)
     cloverBtn.BackgroundColor3 = Color3.fromRGB(14,24,18)
     cloverBtn.BorderSizePixel = 0
-    cloverBtn.Text = "🍀 Duels"
+    cloverBtn.Text = "🍀 Max Hub"
     cloverBtn.TextColor3 = Color3.fromRGB(80,255,80)
     cloverBtn.Font = Enum.Font.GothamBold
     cloverBtn.TextSize = 14
@@ -3447,7 +3447,7 @@ end
     cloverBtn.MouseButton1Click:Connect(function()
         State.guiVisible = not State.guiVisible
         mainOuter.Visible = State.guiVisible
-        if _G.DuelsQAHide then pcall(_G.DuelsQAHide, not State.guiVisible) end
+        if _G.MaxHubQAHide then pcall(_G.MaxHubQAHide, not State.guiVisible) end
         requestSave()
     end)
 
@@ -3693,7 +3693,7 @@ end
         end
 
         mainOuter.Visible = State.guiVisible
-        if _G.DuelsQAHide then pcall(_G.DuelsQAHide, not State.guiVisible) end
+        if _G.MaxHubQAHide then pcall(_G.MaxHubQAHide, not State.guiVisible) end
         for _, wrapper in pairs(stackWrappers) do wrapper.Visible = not State.stackButtonsHidden end
         if hideButtonsSetter then hideButtonsSetter(State.stackButtonsHidden) end
         if lockButtonsSetter then lockButtonsSetter(State.stackButtonsLocked) end
@@ -3885,10 +3885,10 @@ local function setupOtherPlayerSpeed(player)
         local head = char:FindFirstChild("Head")
         local hrp  = char:FindFirstChild("HumanoidRootPart")
         if not head or not hrp then return end
-        local oldBB = head:FindFirstChild("DuelsBB_Other")
+        local oldBB = head:FindFirstChild("MaxHubBB_Other")
         if oldBB then oldBB:Destroy() end
         local bb = Instance.new("BillboardGui", head)
-        bb.Name = "DuelsBB_Other"
+        bb.Name = "MaxHubBB_Other"
         bb.Size = UDim2.new(0, 160, 0, 24)
         bb.StudsOffset = Vector3.new(0, 3, 0)
         bb.AlwaysOnTop = true
