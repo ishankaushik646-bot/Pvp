@@ -2843,25 +2843,11 @@ function M.stopAntiRagdoll()
     end
     antiRagResetCooldown = 0
 end
-
--- ============================================================
--- AUTO RESET ON DEATH (New robust implementation)
--- ============================================================
-local deathResetConn = nil
-local deathResetCharAdded = nil
-
-function M.cursedInstaReset()
-    doInstantReset()  -- uses the new logic
-end
--- ANTI DIE FROM DUELS V2
 function M.startAntiDie()
     if M._antiDieConn then return end
     local char = player.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then
-        task.spawn(function() task.wait(0.5) if M.antiDieEnabled then M.startAntiDie() end end)
-        return
-    end
+    if not hum then task.spawn(function() task.wait(0.5) if M.antiDieEnabled then M.startAntiDie() end end) return end
     pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
     M._antiDieConn = hum.StateChanged:Connect(function(_, new)
         if not M.antiDieEnabled then return end
@@ -2907,6 +2893,16 @@ function M.stopAntiFling()
     if M._antiFlingConn then M._antiFlingConn:Disconnect(); M._antiFlingConn=nil end
 end
 
+
+-- ============================================================
+-- AUTO RESET ON DEATH (New robust implementation)
+-- ============================================================
+local deathResetConn = nil
+local deathResetCharAdded = nil
+
+function M.cursedInstaReset()
+    doInstantReset()  -- uses the new logic
+end
 
 function M.setupDeathReset()
     -- Remove old connection if any
@@ -3263,14 +3259,13 @@ end
 
 -- ============================================================
 -- ============================================================
--- DROP BRAINROT - REPLACED WITH DUELS V2 SAFE JUMP DROP
+-- DROP BRAINROT - DUELS V2 SAFE JUMP (REPLACED)
 -- ============================================================
 M.DROP_ASCEND_DURATION = 0.22
 M.DROP_ASCEND_SPEED = 160
 M._dropConn = nil
 M.dropActive = false
 M._wfConns = {}
-
 function M.runJumpDrop()
     if M.dropActive then return end
     local char = player.Character
@@ -3328,11 +3323,7 @@ function M.runJumpDrop()
         end
     end)
 end
-
-function M.runDrop()
-    M.runJumpDrop()
-end
-
+function M.runDrop() M.runJumpDrop() end
 function M.stopDrop()
     M.dropActive=false
     if M._dropConn then M._dropConn:Disconnect(); M._dropConn=nil end
@@ -3344,7 +3335,6 @@ function M.stopDrop()
     end
     M._wfConns={}
 end
-
 
 -- ============================================================
 -- NUKE OPTIMIZER
@@ -6063,10 +6053,6 @@ function M.resetAllSettings()
     M.carrySpeedActive = false
     M.laggerModeEnabled = false
     M.antiRagdollEnabled = false
-M.antiFlingEnabled = false
-M._antiDieConn = nil
-M._antiDieLoop = nil
-M._antiFlingConn = nil
     M.infJumpEnabled = false
     M.infJumpMode = "manual"
     M.medusaCounterEnabled = false
@@ -6186,8 +6172,6 @@ do
 end
 if M.mobileButtonsEnabled then pcall(function() M.buildMobileButtons() end) end
 if M.antiRagdollEnabled then M.startAntiRagdoll() end
-if M.antiDieEnabled then M.startAntiDie() end
-if M.antiFlingEnabled then M.startAntiFling() end
 if M.infJumpEnabled then
     if M.infJumpMode=="manual" then M.startManualInfJumpLoop()
     elseif M.infJumpMode=="hold" then M.startHoldInfJump() end
