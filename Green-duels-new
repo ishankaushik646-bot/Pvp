@@ -3263,11 +3263,44 @@ end
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd) -- ORVYN REPLACED
+                -- TRUE 30+ CARRY BYPASS FOR DUELS (Orvyn can do 30+ in base game, Duels drops at 28.9, so we use CFrame trick)
+                do
+                    local holding = false
+                    local charCheck = LP.Character
+                    if charCheck then
+                        for _, t in pairs(charCheck:GetChildren()) do
+                            if t:IsA("Tool") and t.Name:lower():find("brainrot") then holding=true break end
+                        end
+                    end
+                    if holding and spd > 28.8 then
+                        -- Move via CFrame at true speed, but spoof Velocity to 28.7 so Duels anti-cheat doesn't drop
+                        hrp.CFrame = hrp.CFrame + Vector3.new(md.X * spd * 0.016, 0, md.Z * spd * 0.016)
+                        hrp.Velocity = Vector3.new(md.X * 28.7, hrp.Velocity.Y, md.Z * 28.7)
+                        hrp.AssemblyLinearVelocity = Vector3.new(md.X * 28.7, hrp.AssemblyLinearVelocity.Y, md.Z * 28.7)
+                    else
+                        hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd)
+                    end
+                end
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end -- ORVYN REPLACED
+                if anyHeld then
+                    do
+                        local holding = false
+                        local charCheck = LP.Character
+                        if charCheck then
+                            for _, t in pairs(charCheck:GetChildren()) do
+                                if t:IsA("Tool") and t.Name:lower():find("brainrot") then holding=true break end
+                            end
+                        end
+                        if holding and spd > 28.8 then
+                            hrp.CFrame = hrp.CFrame + Vector3.new(State.lastMoveDir.X * spd * 0.016, 0, State.lastMoveDir.Z * spd * 0.016)
+                            hrp.Velocity = Vector3.new(State.lastMoveDir.X * 28.7, hrp.Velocity.Y, State.lastMoveDir.Z * 28.7)
+                        else
+                            hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd)
+                        end
+                    end
+                end
             end
         end
         pcall(function()
