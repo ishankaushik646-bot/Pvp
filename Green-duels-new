@@ -43,6 +43,24 @@ local Workspace = game:GetService("Workspace")
 local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
 
 -- UNIVERSAL SPOOF HOOK - KEEP ORIGINAL MODE LOGIC
+local spoofedVelocity = Vector3.zero
+local _oldIndex; _oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+    if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") then
+        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and LP.Character and self:IsDescendantOf(LP.Character) then
+            return spoofedVelocity
+        end
+    end
+    return _oldIndex(self, key)
+end))
+local _oldNewIndex; _oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, key, value)
+    if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") then
+        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and LP.Character and self:IsDescendantOf(LP.Character) then
+            spoofedVelocity = value
+            return
+        end
+    end
+    return _oldNewIndex(self, key, value)
+end))
 
 
 -- ============================================================
@@ -496,7 +514,7 @@ local function applyImpulseForVelocity(hrp, desiredVelocity)
     local flat = Vector3.new(desiredVelocity.X, 0, desiredVelocity.Z)
     local spd = flat.Magnitude
     if spd < 0.05 then
-         = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+        spoofedVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
         hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
         hrp.AssemblyAngularVelocity = Vector3.zero
         return
@@ -505,7 +523,7 @@ local function applyImpulseForVelocity(hrp, desiredVelocity)
     pcall(function()
         if hrp.SetNetworkOwner then hrp:SetNetworkOwner(LP) end
     end)
-     = Vector3.new(dir.X * 16, hrp.AssemblyLinearVelocity.Y, dir.Z * 16)
+    spoofedVelocity = Vector3.new(dir.X * 16, hrp.AssemblyLinearVelocity.Y, dir.Z * 16)
     hrp.AssemblyLinearVelocity = Vector3.new(dir.X * spd, hrp.AssemblyLinearVelocity.Y, dir.Z * spd)
 end
 
@@ -1164,7 +1182,7 @@ startAntiDie = function()
             end
             if hrp and not dropActive and hrp.Position.Y < -100 then
                 hrp.CFrame = CFrame.new(0,25,0)
-                 = Vector3.zero
+                spoofedVelocity = Vector3.zero
             end
             task.wait(0.5)
         end
@@ -1190,7 +1208,7 @@ startAntiFling = function()
         if hrp.AssemblyLinearVelocity.Magnitude > 160 then
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-             = Vector3.zero
+            spoofedVelocity = Vector3.zero
         end
     end)
 end
@@ -2248,48 +2266,72 @@ toggleSetters["antiRagdoll"] = setAntiRag
         if stackBtnRefs.laggerCarry then stackBtnRefs.laggerCarry.setOn(State.laggerMode==2) end
     end
     
-        local function setLaggerMode(mode)
+    local function setLaggerMode(mode)
         if mode == State.laggerMode then return end
-        -- ORVYN LOGIC: 0=normal, 1=lagger, 2=lagger+carry
+        local oldMode = State.laggerMode
+
         if mode == 0 then
-            State.laggerMode = 0
-            State.speedToggled = State._prevSpeed or false
             State.carrySpeed = State._prevCarry or 30
+            State.speedToggled = State._prevSpeed or false
+            if carryBox then
+                carryBox.Text = tostring(State.speedToggled and State.carrySpeed or State.normalSpeed)
+            end
+            if stackBtnRefs.carrySpeed then
+                stackBtnRefs.carrySpeed.setOn(State.speedToggled)
+            end
         elseif mode == 1 then
-            if State.laggerMode == 0 then
+            if oldMode == 0 then
                 State._prevCarry = State.carrySpeed
                 State._prevSpeed = State.speedToggled
             end
-            State.laggerMode = 1
             State.speedToggled = false
+            if stackBtnRefs.carrySpeed then
+                stackBtnRefs.carrySpeed.setOn(false)
+            end
+            if carryBox then
+                carryBox.Text = tostring(State.laggerSpeed)
+            end
         elseif mode == 2 then
-            if State.laggerMode == 0 then
+            if oldMode == 0 then
                 State._prevCarry = State.carrySpeed
                 State._prevSpeed = State.speedToggled
             end
-            State.laggerMode = 2
             State.speedToggled = false
+            if stackBtnRefs.carrySpeed then
+                stackBtnRefs.carrySpeed.setOn(false)
+            end
+            if carryBox then
+                carryBox.Text = tostring(State.laggerCarrySpeed)
+            end
         end
-        if carryBox then
-            if State.laggerMode==1 then carryBox.Text=tostring(State.laggerSpeed)
-            elseif State.laggerMode==2 then carryBox.Text=tostring(State.laggerCarrySpeed)
-            else carryBox.Text=tostring(State.speedToggled and State.carrySpeed or State.normalSpeed) end
-        end
+
+        State.laggerMode = mode
         updateLaggerButtons()
         requestSave()
     end
 
     local function toggleLaggerMode()
-        if State.laggerMode == 0 then setLaggerMode(1)
-        elseif State.laggerMode == 1 then setLaggerMode(2)
-        else setLaggerMode(0) end
+        if State.laggerMode == 0 then
+            setLaggerMode(1)
+        elseif State.laggerMode == 1 then
+            setLaggerMode(2)
+        else
+            setLaggerMode(1)
+        end
     end
 
     local function toggleSpeed()
-        if State.laggerMode ~= 0 then setLaggerMode(0); return end
+        if State.laggerMode ~= 0 then
+            setLaggerMode(0)
+            return
+        end
         State.speedToggled = not State.speedToggled
-        if stackBtnRefs.carrySpeed then stackBtnRefs.carrySpeed.setOn(State.speedToggled) end
-        if carryBox then carryBox.Text = tostring(State.speedToggled and State.carrySpeed or State.normalSpeed) end
+        if stackBtnRefs.carrySpeed then
+            stackBtnRefs.carrySpeed.setOn(State.speedToggled)
+        end
+        if carryBox then
+            carryBox.Text = tostring(State.speedToggled and State.carrySpeed or State.normalSpeed)
+        end
         requestSave()
     end
 
@@ -2443,7 +2485,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
     local flat = Vector3.new(desiredVelocity.X, 0, desiredVelocity.Z)
     local spd = flat.Magnitude
     if spd < 0.05 then
-         = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+        spoofedVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
         hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
         hrp.AssemblyAngularVelocity = Vector3.zero
         return
@@ -2452,7 +2494,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
     pcall(function()
         if hrp.SetNetworkOwner then hrp:SetNetworkOwner(LP) end
     end)
-     = Vector3.new(dir.X * 16, hrp.AssemblyLinearVelocity.Y, dir.Z * 16)
+    spoofedVelocity = Vector3.new(dir.X * 16, hrp.AssemblyLinearVelocity.Y, dir.Z * 16)
     hrp.AssemblyLinearVelocity = Vector3.new(dir.X * spd, hrp.AssemblyLinearVelocity.Y, dir.Z * spd)
 end
 
@@ -3260,19 +3302,16 @@ end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
             local md=h.MoveDirection
             local spd
-            -- ORVYN getActiveMoveSpeed LOGIC
             if State.laggerMode==1 then spd=State.laggerSpeed
             elseif State.laggerMode==2 then spd=State.laggerCarrySpeed
-            elseif State.laggerMode==0 and State.speedToggled then spd=State.carrySpeed
-            else spd=State.normalSpeed end
+            else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd)
+                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd) -- ORVYN REPLACED
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end
-            end
+                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end -- ORVYN REPLACED
             end
         end
         pcall(function()
