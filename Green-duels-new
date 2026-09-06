@@ -27,8 +27,8 @@ if not request then return end
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
-if _G.DuelsV2_Running then return end
-_G.DuelsV2_Running = true
+if _G.MaxHub_Running then return end
+_G.MaxHub_Running = true
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -117,7 +117,7 @@ local function findResetRemote()
     for _, descendant in pairs(game:GetDescendants()) do
         if descendant:IsA("RemoteEvent") and descendant.Name:sub(1, 3) == "RE/" then
             resetRemote = descendant
-            print("[Duels] Found reset remote:", descendant:GetFullName())
+            print("[Max Hub] Found reset remote:", descendant:GetFullName())
             break
         end
     end
@@ -128,7 +128,7 @@ local o; o = hookfunction(Instance.new("RemoteEvent").FireServer, newcclosure(fu
     if not resetRemote and self.Name:sub(1, 3) == "RE/" then
         resetRemote = self
         originalFireServer = o
-        print("[Duels] Found reset remote via hook:", self:GetFullName())
+        print("[Max Hub] Found reset remote via hook:", self:GetFullName())
     end
     return o(self, ...)
 end))
@@ -139,7 +139,7 @@ local function instaReset()
         task.wait(0.5)
         findResetRemote()
         if not resetRemote then
-            warn("[Duels] Reset remote not found!")
+            warn("[Max Hub] Reset remote not found!")
             return
         end
     end
@@ -175,8 +175,8 @@ local function instaReset()
             task.wait()
         end
         for _, conn in pairs(connections) do conn:Disconnect() end
-        if resetDetected then print("[Duels] Reset successful after", attempts, "attempts")
-        else warn("[Duels] No reset detected") end
+        if resetDetected then print("[Max Hub] Reset successful after", attempts, "attempts")
+        else warn("[Max Hub] No reset detected") end
     end)
 end
 
@@ -287,13 +287,13 @@ local function startTPBat()
             end
         end
     end)
-    print("[Duels] TP Bat STARTED (toggle ON)")
+    print("[Max Hub] TP Bat STARTED (toggle ON)")
 end
 
 local function stopTPBat()
     if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
-    print("[Duels] TP Bat STOPPED (toggle OFF)")
+    print("[Max Hub] TP Bat STOPPED (toggle OFF)")
 end
 
 local function toggleTPBat()
@@ -579,7 +579,7 @@ if earlyConfig then
     if earlyConfig.stealMode and (earlyConfig.stealMode=="normal" or earlyConfig.stealMode=="semi") then
         -- preload steal mode before UI so toggles start correct
         pcall(function() Steal.StealMode = earlyConfig.stealMode end)
-        print("[Duels] Early restored Steal Mode:", earlyConfig.stealMode)
+        print("[Max Hub] Early restored Steal Mode:", earlyConfig.stealMode)
     end
 end
 
@@ -1127,7 +1127,7 @@ startAntiRagdoll = function()
     if not antiRagdollCacheCharacter() then
         task.wait(0.5)
         if not antiRagdollCacheCharacter() then
-            warn("[Duels] Anti-Ragdoll: Could not cache character")
+            warn("[Max Hub] Anti-Ragdoll: Could not cache character")
             return
         end
     end
@@ -1146,7 +1146,7 @@ startAntiRagdoll = function()
         end
     end)
     
-    print("[Duels] Anti-Ragdoll STARTED")
+    print("[Max Hub] Anti-Ragdoll STARTED")
 end
 
 stopAntiRagdoll = function()
@@ -1155,7 +1155,7 @@ stopAntiRagdoll = function()
         antiRagdollConn = nil
     end
     antiRagdollCached = {}
-    print("[Duels] Anti-Ragdoll STOPPED")
+    print("[Max Hub] Anti-Ragdoll STOPPED")
 end
 
 local antiDieConn = nil
@@ -1238,11 +1238,11 @@ end)
 -- ============================================================
 
 local function Main()
-    if _G.DuelsV2_MainExecuted then return end
-    _G.DuelsV2_MainExecuted = true
+    if _G.MaxHub_MainExecuted then return end
+    _G.MaxHub_MainExecuted = true
 
     local gui=Instance.new("ScreenGui")
-    gui.Name="DuelsV2"; gui.ResetOnSpawn=false; gui.DisplayOrder=10
+    gui.Name="MaxHub"; gui.ResetOnSpawn=false; gui.DisplayOrder=10
     gui.IgnoreGuiInset=true; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
     gui.Parent=LP:WaitForChild("PlayerGui")
     local uiScaleObj=Instance.new("UIScale",gui); uiScaleObj.Scale=1.0
@@ -1694,7 +1694,7 @@ local function Main()
             end
         end
         if _G._VezyFlashSave then _G._VezyFlashSave(true); task.delay(1.2,function() if _G._VezyFlashSave then _G._VezyFlashSave(false) end end) end
-        print("[Duels] Cleaned "..removed.." effects/lights")
+        print("[Max Hub] Cleaned "..removed.." effects/lights")
     end
     local origLighting = {
         Ambient = Lighting.Ambient, Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime,
@@ -1875,7 +1875,7 @@ local function Main()
                     if normalToggle then normalToggle(mode=="normal") end
                     if semiToggle then semiToggle(mode=="semi") end
                 end)
-                print("[Duels] Steal Mode:", string.upper(mode))
+                print("[Max Hub] Steal Mode:", string.upper(mode))
                 if requestSave then requestSave() end
                 task.wait()
                 updatingStealMode = false
@@ -1959,7 +1959,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
             mkStroke(jumpDropBtn, C.inputBorder, 1)
             
             jumpDropBtn.MouseButton1Click:Connect(function()
-                print("[Duels] Drop type: Jump Drop (safe - ascends then teleports)")
+                print("[Max Hub] Drop type: Jump Drop (safe - ascends then teleports)")
             end)
 
             -- Auto TP
@@ -2968,7 +2968,7 @@ end
             stopped=true
         end
         if stopped then
-            print("[Duels] SAFE MODE LOCK - stopped aimbot/movement: " .. (reason or ""))
+            print("[Max Hub] SAFE MODE LOCK - stopped aimbot/movement: " .. (reason or ""))
         end
     end
 
@@ -3534,7 +3534,7 @@ end
         end)
         if not success then
             pcall(_G._VezyFlashSave, false)
-            warn("[Duels] Config save FAILED!")
+            warn("[Max Hub] Config save FAILED!")
         else
             pcall(_G._VezyFlashSave, true)
         end
@@ -3550,12 +3550,12 @@ end
             if _isfile(CONFIG_BACKUP) then
                 raw = _readfile(CONFIG_BACKUP)
                 if raw and raw ~= "" then
-                    print("[Duels] Loaded config from backup")
+                    print("[Max Hub] Loaded config from backup")
                 end
             end
         end
         if not raw or raw == "" then
-            print("[Duels] No valid config file found, using defaults")
+            print("[Max Hub] No valid config file found, using defaults")
             return false
         end
         
@@ -3563,7 +3563,7 @@ end
         if not ok or not decErr then
             pcall(function() _delfile(CONFIG_FILE) end)
             pcall(function() _delfile(CONFIG_BACKUP) end)
-            warn("[Duels] Corrupt config deleted, using defaults")
+            warn("[Max Hub] Corrupt config deleted, using defaults")
             return false
         end
 
@@ -3626,13 +3626,13 @@ end
         -- RESTORE AIMBOT MODE
         if decErr.aimbotMode and (decErr.aimbotMode == "original" or decErr.aimbotMode == "sakura") then
             State.aimbotMode = decErr.aimbotMode
-            print("[Duels] Restored Aimbot Mode:", State.aimbotMode)
+            print("[Max Hub] Restored Aimbot Mode:", State.aimbotMode)
         end
 
         -- RESTORE STEAL MODE (Normal / Semi) - FIXED SAVE/LOAD
         if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
             Steal.StealMode = decErr.stealMode
-            print("[Duels] Restored Steal Mode:", Steal.StealMode)
+            print("[Max Hub] Restored Steal Mode:", Steal.StealMode)
             pcall(function()
                 if _G._SetStealMode then
                     _G._SetStealMode(Steal.StealMode)
@@ -3643,7 +3643,7 @@ end
             end)
         else
             -- if config had no stealMode (old config), keep current but log
-            print("[Duels] No stealMode in config, using:", Steal.StealMode)
+            print("[Max Hub] No stealMode in config, using:", Steal.StealMode)
         end
 
         local bools = {
@@ -3764,7 +3764,7 @@ end
             cloverBtn.Position = UDim2.new(0, decErr.cloverPosition.X, 0, decErr.cloverPosition.Y)
         end
 
-        print("[Duels] Config loaded successfully")
+        print("[Max Hub] Config loaded successfully")
         return true
     end
 
@@ -3852,13 +3852,13 @@ end
     end)
 
     startAutoSteal()
-    print("[Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
+    print("[Max Hub] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
 
 -- ============================================================
 -- SAFE MAIN EXECUTION - FIXED
 -- ============================================================
-if not _G.DuelsV2_MainExecuted then
+if not _G.MaxHub_MainExecuted then
     task.wait(0.5)  -- Wait for player to fully load
     if LP and LP:FindFirstChild("PlayerGui") then
         Main()
@@ -3869,7 +3869,7 @@ if not _G.DuelsV2_MainExecuted then
             Main()
         end)
         if not success then
-            warn("[Duels] Failed to execute Main:", err)
+            warn("[Max Hub] Failed to execute Main:", err)
         end
     end
 end
