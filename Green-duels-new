@@ -5595,72 +5595,319 @@ end
 
 
 
--- Mobile buttons lock feature - add lock button to panel
+
+-- INDEPENDENT MOBILE BUTTONS MOVEMENT + LOCK TOGGLE IN SETTINGS
 do
-    local _origBuildMobile = M.buildMobileButtons
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+    local TweenService = game:GetService("TweenService")
+    local UIS = game:GetService("UserInputService")
+    local HS = game:GetService("HttpService")
+    local RS = game:GetService("RunService")
+    
+    M.MOB_POS_FILE = M.MOB_POS_FILE or "OrvynMobilePos.json"
+    
+    function M.loadBtnPositions()
+        if not (isfile and isfile(M.MOB_POS_FILE)) then return {} end
+        local ok, data = pcall(function() return HS:JSONDecode(readfile(M.MOB_POS_FILE)) end)
+        if ok and type(data)=="table" then return data end
+        return {}
+    end
+    
+    function M.saveBtnPositions()
+        if not writefile then return end
+        if not M.mobGuiRef then return end
+        local out = {}
+        local panel = M.mobGuiRef:FindFirstChild("MobPanel")
+        if panel then
+            out["_panel"] = {xo=panel.Position.X.Offset, yo=panel.Position.Y.Offset}
+        end
+        for _, child in ipairs(M.mobGuiRef:GetDescendants()) do
+            if child:IsA("TextButton") and child:GetAttribute("BtnKey") then
+                local key = child:GetAttribute("BtnKey")
+                if key ~= "LockBtn" then
+                    out[key] = {xo=child.Position.X.Offset, yo=child.Position.Y.Offset}
+                end
+            end
+        end
+        pcall(function() writefile(M.MOB_POS_FILE, HS:JSONEncode(out)) end)
+    end
+    
     function M.buildMobileButtons()
-        _origBuildMobile()
-        pcall(function()
-            local mobGui = M.mobGuiRef
-            if not mobGui then return end
-            local panel = mobGui:FindFirstChild("MobPanel")
-            if not panel then return end
-            if panel:FindFirstChild("LockBtn") then return end
+        M.destroyMobileButtons()
+        if not M.mobileButtonsEnabled then return end
+        
+        local savedPositions = M.loadBtnPositions()
+        local BTN_SIZE = math.max(52, math.floor(M.mobileButtonsSize * (M.uiScale or 1) * 0.6))
+        local BTN_GAP = 10
+        local PADDING = 10
+        
+        local mobGui = Instance.new("ScreenGui")
+        mobGui.Name = "OrvynMobileButtons"
+        mobGui.ResetOnSpawn = false
+        mobGui.DisplayOrder = 20
+        mobGui.IgnoreGuiInset = true
+        pcall(function() if syn and syn.protect_gui then syn.protect_gui(mobGui) end end)
+        if not pcall(function() mobGui.Parent = game:GetService("CoreGui") end) then
+            mobGui.Parent = player:WaitForChild("PlayerGui")
+        end
+        M.mobGuiRef = mobGui
+        
+        local panel = Instance.new("Frame")
+        panel.Name = "MobPanel"
+        panel.Size = UDim2.new(1, 0, 1, 0)
+        panel.Position = UDim2.new(0, 0, 0, 0)
+        panel.BackgroundTransparency = 1
+        panel.BorderSizePixel = 0
+        panel.ZIndex = 100
+        panel.Parent = mobGui
+        
+        local btnDefs = {
+            {"drop", "DROP"},
+            {"bypass", "BYPASS"},
+            {"tpDown", "TP\nDOWN"},
+            {"carrySpeed", "CARRY\nSPEED"},
+            {"lagger", "LAGGER\nMODE"},
+            {"laggerCarry", "LAGGER\nCARRY"},
+            {"autoBat", "AIMBOT"},
+            {"autoLeft", "AUTO\nLEFT"},
+            {"autoRight", "AUTO\nRIGHT"},
+            {"instaReset", "INSTA\nRESET"},
+        }
+        
+        -- Default grid positions if no saved
+        local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800,600)
+        local startX = vp.X - 160
+        local startY = vp.Y/2 - 200
+        
+        local function createIndependentButton(key, label, defaultX, defaultY)
+            local saved = savedPositions[key]
+            local x = saved and saved.xo or defaultX
+            local y = saved and saved.yo or defaultY
             
-            local lockBtn = Instance.new("TextButton")
-            lockBtn.Name = "LockBtn"
-            lockBtn.Size = UDim2.new(0, 32, 0, 32)
-            lockBtn.Position = UDim2.new(0, -36, 0, 0)
-            lockBtn.BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45)
-            lockBtn.Text = M.mobileButtonsLocked and "🔒" or "🔓"
-            lockBtn.TextSize = 16
-            lockBtn.Font = Enum.Font.GothamBold
-            lockBtn.TextColor3 = Color3.new(1,1,1)
-            lockBtn.ZIndex = 200
-            lockBtn.Parent = panel
-            local c = Instance.new("UICorner", lockBtn); c.CornerRadius = UDim.new(0,8)
+            local btn = Instance.new("TextButton")
+            btn.Name = "Btn_"..key
+            btn.Size = UDim2.new(0, BTN_SIZE, 0, BTN_SIZE)
+            btn.Position = UDim2.new(0, x, 0, y)
+            btn.BackgroundColor3 = Color3.fromRGB(12,12,14)
+            btn.BackgroundTransparency = 0.1
+            btn.Text = label
+            btn.TextColor3 = Color3.fromRGB(255,255,255)
+            btn.TextSize = 11
+            btn.Font = Enum.Font.GothamBold
+            btn.TextWrapped = true
+            btn.BorderSizePixel = 0
+            btn.ZIndex = 101
+            btn.AutoButtonColor = false
+            btn:SetAttribute("BtnKey", key)
+            btn.Parent = panel
             
-            lockBtn.MouseButton1Click:Connect(function()
-                M.mobileButtonsLocked = not M.mobileButtonsLocked
-                lockBtn.Text = M.mobileButtonsLocked and "🔒" or "🔓"
-                lockBtn.BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45)
-                -- Save to config
-                pcall(function() 
-                    local HS = game:GetService("HttpService")
-                    if writefile and isfile and isfile("OrvynConfig.json") then
-                        local cfg = HS:JSONDecode(readfile("OrvynConfig.json"))
-                        cfg.mobileButtonsLocked = M.mobileButtonsLocked
-                        writefile("OrvynConfig.json", HS:JSONEncode(cfg))
-                    end
-                end)
+            local corner = Instance.new("UICorner", btn); corner.CornerRadius = UDim.new(0, 14)
+            local stroke = Instance.new("UIStroke", btn); stroke.Color = Color3.fromRGB(0,210,210); stroke.Thickness = 1; stroke.Transparency = 0.7
+            local grad = Instance.new("UIGradient", btn)
+            grad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(20,30,24)), ColorSequenceKeypoint.new(1, Color3.fromRGB(8,12,10))})
+            grad.Rotation = 90
+            
+            local isOn = false
+            local function setOn(v)
+                isOn = v
+                if v then
+                    TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3=Color3.fromRGB(0,210,210), TextColor3=Color3.fromRGB(10,10,15)}):Play()
+                    stroke.Transparency = 0.1
+                else
+                    TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3=Color3.fromRGB(12,12,14), TextColor3=Color3.fromRGB(255,255,255)}):Play()
+                    stroke.Transparency = 0.7
+                end
+            end
+            
+            M.mobBtnRefs[key] = setOn
+            
+            -- Independent drag logic
+            local dragging = false
+            local dragStart, startPos
+            local dragMoved = false
+            
+            btn.InputBegan:Connect(function(input)
+                if M.mobileButtonsLocked then return end
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    dragStart = input.Position
+                    startPos = btn.Position
+                    dragMoved = false
+                end
             end)
             
-            -- Make panel draggable only when unlocked, and save position
-            local dragInfo = {dragging=false, start=nil, startPos=nil}
-            -- Override panel drag to respect lock
-            for _, conn in ipairs(panel:GetPropertyChangedSignal("Position"):GetConnections() or {}) do end
-        end)
-    end
-end
-
--- Also expose lock toggle in main GUI settings if possible
-pcall(function()
-    -- Try to add lock toggle to settings after GUI built
-    task.wait(1)
-    local main = M.mainFrame
-    if main then
-        -- Find settings-related toggle for mobile
-        -- We will add a global function to toggle lock
-        getgenv().ToggleMobileLock = function()
-            M.mobileButtonsLocked = not M.mobileButtonsLocked
-            M.buildMobileButtons()
-            return M.mobileButtonsLocked
+            btn.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    if M.mobileButtonsLocked then dragging = false; return end
+                    local delta = input.Position - dragStart
+                    if delta.Magnitude > 5 then dragMoved = true end
+                    btn.Position = UDim2.new(0, startPos.X.Offset + delta.X, 0, startPos.Y.Offset + delta.Y)
+                end
+            end)
+            
+            btn.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    if dragging then
+                        dragging = false
+                        if dragMoved then
+                            M.saveBtnPositions()
+                        end
+                    end
+                end
+            end)
+            
+            btn.Activated:Connect(function()
+                if dragMoved then dragMoved = false; return end
+                if key == "drop" then M.runDrop()
+                elseif key == "tpDown" then M.runTPFloor()
+                elseif key == "instaReset" then M.cursedInstaReset()
+                elseif key == "autoLeft" then
+                    if M.autoBatEnabled then M.stopBatAimbot() end
+                    if M.autoRightEnabled then M.autoRightEnabled=false; M.stopAutoRight(); if M.mobBtnRefs.autoRight then M.mobBtnRefs.autoRight(false) end end
+                    M.autoLeftEnabled = not M.autoLeftEnabled
+                    if M.autoLeftEnabled then M.startAutoLeft() else M.stopAutoLeft() end
+                    setOn(M.autoLeftEnabled)
+                    if M.autoLeftSetVisual then M.autoLeftSetVisual(M.autoLeftEnabled) end
+                elseif key == "autoRight" then
+                    if M.autoBatEnabled then M.stopBatAimbot() end
+                    if M.autoLeftEnabled then M.autoLeftEnabled=false; M.stopAutoLeft(); if M.mobBtnRefs.autoLeft then M.mobBtnRefs.autoLeft(false) end end
+                    M.autoRightEnabled = not M.autoRightEnabled
+                    if M.autoRightEnabled then M.startAutoRight() else M.stopAutoRight() end
+                    setOn(M.autoRightEnabled)
+                    if M.autoRightSetVisual then M.autoRightSetVisual(M.autoRightEnabled) end
+                elseif key == "autoBat" then
+                    if M.autoLeftEnabled then M.autoLeftEnabled=false; M.stopAutoLeft(); if M.mobBtnRefs.autoLeft then M.mobBtnRefs.autoLeft(false) end end
+                    if M.autoRightEnabled then M.autoRightEnabled=false; M.stopAutoRight(); if M.mobBtnRefs.autoRight then M.mobBtnRefs.autoRight(false) end end
+                    if not M.autoBatEnabled then M.queueAutoBatStart() else M.stopBatAimbot() end
+                    setOn(M.autoBatEnabled)
+                elseif key == "bypass" then
+                    M.bypassAimbotEnabled = not M.bypassAimbotEnabled
+                    if M.bypassAimbotEnabled then M.startBypassAimbot() else M.stopBypassAimbot() end
+                    setOn(M.bypassAimbotEnabled)
+                    if M.setBypassVisual then M.setBypassVisual(M.bypassAimbotEnabled) end
+                elseif key == "carrySpeed" then
+                    M.carrySpeedActive = not M.carrySpeedActive
+                    setOn(M.carrySpeedActive)
+                    if M.carryModeBtn then M.carryModeBtn.Text = M.carrySpeedActive and "Carry On" or "Carry Off" end
+                elseif key == "lagger" then
+                    M.laggerModeEnabled = not M.laggerModeEnabled
+                    setOn(M.laggerModeEnabled)
+                    if M.laggerModeBtn then M.laggerModeBtn.Text = M.laggerModeEnabled and "Lag On" or "Lag Off" end
+                elseif key == "laggerCarry" then
+                    -- toggle lagger carry if exists
+                    M.laggerCarryEnabled = not (M.laggerCarryEnabled or false)
+                    setOn(M.laggerCarryEnabled)
+                end
+                -- save config for toggles
+                pcall(function() if saveOrvynConfig then saveOrvynConfig() end end)
+            end)
+            
+            -- Set initial visual state based on current M values
+            if key == "autoLeft" then setOn(M.autoLeftEnabled)
+            elseif key == "autoRight" then setOn(M.autoRightEnabled)
+            elseif key == "autoBat" then setOn(M.autoBatEnabled)
+            elseif key == "bypass" then setOn(M.bypassAimbotEnabled)
+            elseif key == "carrySpeed" then setOn(M.carrySpeedActive)
+            elseif key == "lagger" then setOn(M.laggerModeEnabled)
+            end
+        end
+        
+        for i, def in ipairs(btnDefs) do
+            local key, label = def[1], def[2]
+            local row = math.floor((i-1)/2)
+            local col = (i-1)%2
+            local defX = startX + col * (BTN_SIZE + BTN_GAP)
+            local defY = startY + row * (BTN_SIZE + BTN_GAP)
+            createIndependentButton(key, label, defX, defY)
         end
     end
-end)
+    
+    -- Add lock toggle in Settings tab after GUI built
+    task.spawn(function()
+        task.wait(1.5)
+        pcall(function()
+            local main = M.mainFrame
+            if not main then return end
+            local scroll = main:FindFirstChildWhichIsA("ScrollingFrame")
+            if not scroll then return end
+            
+            -- Find SETTINGS group or add to scroll
+            local settingsHeaderFound = false
+            for _, child in ipairs(scroll:GetChildren()) do
+                if child:IsA("Frame") and child.Size.Y.Offset == 35 then
+                    local lbl = child:FindFirstChildWhichIsA("TextLabel")
+                    if lbl and lbl.Text:upper():find("MISC") then
+                        settingsHeaderFound = true
+                        -- Add lock toggle right after MISC header
+                        local row = Instance.new("Frame")
+                        row.Size = UDim2.new(1, 0, 0, 50)
+                        row.BackgroundTransparency = 1
+                        row.LayoutOrder = child.LayoutOrder + 1
+                        row.Parent = scroll
+                        
+                        local lbl2 = Instance.new("TextLabel", row)
+                        lbl2.Size = UDim2.new(0, 220, 1, 0)
+                        lbl2.Position = UDim2.new(0, 20, 0, 0)
+                        lbl2.BackgroundTransparency = 1
+                        lbl2.Text = "Lock Mobile Buttons"
+                        lbl2.TextColor3 = Color3.fromRGB(255,255,255)
+                        lbl2.Font = Enum.Font.GothamBold
+                        lbl2.TextSize = 14
+                        lbl2.TextXAlignment = Enum.TextXAlignment.Left
+                        
+                        local toggleBg = Instance.new("Frame", row)
+                        toggleBg.Size = UDim2.new(0, 40, 0, 22)
+                        toggleBg.Position = UDim2.new(1, -60, 0.5, -11)
+                        toggleBg.BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45)
+                        toggleBg.BorderSizePixel = 0
+                        Instance.new("UICorner", toggleBg).CornerRadius = UDim.new(1, 0)
+                        
+                        local circle = Instance.new("Frame", toggleBg)
+                        circle.Size = UDim2.new(0, 16, 0, 16)
+                        circle.Position = M.mobileButtonsLocked and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+                        circle.BackgroundColor3 = Color3.fromRGB(10,10,15)
+                        circle.BorderSizePixel = 0
+                        Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
+                        
+                        local function updateLockVisual()
+                            game:GetService("TweenService"):Create(toggleBg, TweenInfo.new(0.25), {BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45)}):Play()
+                            game:GetService("TweenService"):Create(circle, TweenInfo.new(0.25, Enum.EasingStyle.Back), {Position = M.mobileButtonsLocked and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)}):Play()
+                        end
+                        
+                        local clickArea = Instance.new("TextButton", row)
+                        clickArea.Size = UDim2.new(1,0,1,0)
+                        clickArea.BackgroundTransparency = 1
+                        clickArea.Text = ""
+                        clickArea.MouseButton1Click:Connect(function()
+                            M.mobileButtonsLocked = not M.mobileButtonsLocked
+                            updateLockVisual()
+                            -- Save to config
+                            pcall(function()
+                                if saveOrvynConfig then saveOrvynConfig() end
+                                local HS = game:GetService("HttpService")
+                                if writefile and isfile and isfile("OrvynConfig.json") then
+                                    local ok, cfg = pcall(function() return HS:JSONDecode(readfile("OrvynConfig.json")) end)
+                                    if ok and cfg then
+                                        cfg.mobileButtonsLocked = M.mobileButtonsLocked
+                                        writefile("OrvynConfig.json", HS:JSONEncode(cfg))
+                                    end
+                                end
+                            end)
+                        end)
+                        
+                        -- Store ref for external toggle
+                        M.mobileLockToggleVisual = updateLockVisual
+                        break
+                    end
+                end
+            end
+        end)
+    end)
+end
 
-
--- DUELS V2 SKIN WRAPPER - keeps original build but restyles to Duels
+-- DUELS V2 SKIN WRAPPER
+ - keeps original build but restyles to Duels
 do
     local _origBuild = M.buildGui
     function M.buildGui()
