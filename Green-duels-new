@@ -2853,10 +2853,7 @@ local deathResetCharAdded = nil
 function M.cursedInstaReset()
     doInstantReset()  -- uses the new logic
 end
-
--- ============================================================
--- ANTI DIE - FROM DUELS V2
--- ============================================================
+-- ANTI DIE FROM DUELS V2
 function M.startAntiDie()
     if M._antiDieConn then return end
     local char = player.Character
@@ -2878,9 +2875,7 @@ function M.startAntiDie()
             local c = player.Character
             local h = c and c:FindFirstChildOfClass("Humanoid")
             local hrp = c and c:FindFirstChild("HumanoidRootPart")
-            if h and h.Health < h.MaxHealth * 0.35 then
-                h.Health = h.MaxHealth
-            end
+            if h and h.Health < h.MaxHealth * 0.35 then h.Health = h.MaxHealth end
             if hrp and not M.dropActive and hrp.Position.Y < -100 then
                 hrp.CFrame = CFrame.new(0,25,0)
                 hrp.AssemblyLinearVelocity = Vector3.zero
@@ -2889,17 +2884,12 @@ function M.startAntiDie()
         end
     end)
 end
-
 function M.stopAntiDie()
     if M._antiDieConn then M._antiDieConn:Disconnect(); M._antiDieConn=nil end
     if M._antiDieLoop then task.cancel(M._antiDieLoop); M._antiDieLoop=nil end
     local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
     if hum then pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end) end
 end
-
--- ============================================================
--- ANTI FLING - FROM DUELS V2
--- ============================================================
 function M.startAntiFling()
     if M._antiFlingConn then return end
     M._antiFlingConn = RunService.Heartbeat:Connect(function()
@@ -2913,11 +2903,9 @@ function M.startAntiFling()
         end
     end)
 end
-
 function M.stopAntiFling()
     if M._antiFlingConn then M._antiFlingConn:Disconnect(); M._antiFlingConn=nil end
 end
-
 
 
 function M.setupDeathReset()
@@ -3342,7 +3330,6 @@ function M.runJumpDrop()
 end
 
 function M.runDrop()
-    -- Only Jump Drop now (Duels V2 safe)
     M.runJumpDrop()
 end
 
@@ -5004,26 +4991,27 @@ function M.buildGui()
     end)
     M.setAntiRagVisual = setAntiRag
 
-    local _, setMedusa = createToggle("Medusa Counter", M.medusaCounterEnabled, function(on)
-        M.medusaCounterEnabled = on
-        if on then M.setupMedusa(player.Character) else M.stopMedusaCounter() end
-    end)
-    M.setMedusaVisual = setMedusa
-
-    -- Medusa Reset toggle (uses
     local _, setAntiDie = createToggle("Anti Die", M.antiDieEnabled, function(on)
         M.antiDieEnabled = on
         if on then M.startAntiDie() else M.stopAntiDie() end
         saveOrvynConfig()
     end)
     M.setAntiDieVisual = setAntiDie
+
     local _, setAntiFling = createToggle("Anti Fling", M.antiFlingEnabled, function(on)
         M.antiFlingEnabled = on
         if on then M.startAntiFling() else M.stopAntiFling() end
         saveOrvynConfig()
     end)
     M.setAntiFlingVisual = setAntiFling
- new implementation)
+
+    local _, setMedusa = createToggle("Medusa Counter", M.medusaCounterEnabled, function(on)
+        M.medusaCounterEnabled = on
+        if on then M.setupMedusa(player.Character) else M.stopMedusaCounter() end
+    end)
+    M.setMedusaVisual = setMedusa
+
+    -- Medusa Reset toggle (uses new implementation)
     local _, setMedReset = createToggle("Medusa Reset", M.medusaResetEnabled, function(on)
         M.medusaResetEnabled = on
         if on then M.startMedusaReset() else M.stopMedusaReset() end
@@ -6075,7 +6063,6 @@ function M.resetAllSettings()
     M.carrySpeedActive = false
     M.laggerModeEnabled = false
     M.antiRagdollEnabled = false
-M.antiDieEnabled = false
 M.antiFlingEnabled = false
 M._antiDieConn = nil
 M._antiDieLoop = nil
@@ -6199,6 +6186,8 @@ do
 end
 if M.mobileButtonsEnabled then pcall(function() M.buildMobileButtons() end) end
 if M.antiRagdollEnabled then M.startAntiRagdoll() end
+if M.antiDieEnabled then M.startAntiDie() end
+if M.antiFlingEnabled then M.startAntiFling() end
 if M.infJumpEnabled then
     if M.infJumpMode=="manual" then M.startManualInfJumpLoop()
     elseif M.infJumpMode=="hold" then M.startHoldInfJump() end
