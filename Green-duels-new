@@ -3788,7 +3788,7 @@ function M.buildMobileButtons()
 
     local dragInfo = {dragging = false, start = nil, startPos = nil}
     panel.InputBegan:Connect(function(input)
-        if M.uiLocked then return end
+        if M.uiLocked or M.mobileButtonsLocked then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragInfo.dragging = true
             dragInfo.start = input.Position
@@ -5594,6 +5594,72 @@ function M.buildGui()
 end
 
 
+
+-- Mobile buttons lock feature - add lock button to panel
+do
+    local _origBuildMobile = M.buildMobileButtons
+    function M.buildMobileButtons()
+        _origBuildMobile()
+        pcall(function()
+            local mobGui = M.mobGuiRef
+            if not mobGui then return end
+            local panel = mobGui:FindFirstChild("MobPanel")
+            if not panel then return end
+            if panel:FindFirstChild("LockBtn") then return end
+            
+            local lockBtn = Instance.new("TextButton")
+            lockBtn.Name = "LockBtn"
+            lockBtn.Size = UDim2.new(0, 32, 0, 32)
+            lockBtn.Position = UDim2.new(0, -36, 0, 0)
+            lockBtn.BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45)
+            lockBtn.Text = M.mobileButtonsLocked and "🔒" or "🔓"
+            lockBtn.TextSize = 16
+            lockBtn.Font = Enum.Font.GothamBold
+            lockBtn.TextColor3 = Color3.new(1,1,1)
+            lockBtn.ZIndex = 200
+            lockBtn.Parent = panel
+            local c = Instance.new("UICorner", lockBtn); c.CornerRadius = UDim.new(0,8)
+            
+            lockBtn.MouseButton1Click:Connect(function()
+                M.mobileButtonsLocked = not M.mobileButtonsLocked
+                lockBtn.Text = M.mobileButtonsLocked and "🔒" or "🔓"
+                lockBtn.BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45)
+                -- Save to config
+                pcall(function() 
+                    local HS = game:GetService("HttpService")
+                    if writefile and isfile and isfile("OrvynConfig.json") then
+                        local cfg = HS:JSONDecode(readfile("OrvynConfig.json"))
+                        cfg.mobileButtonsLocked = M.mobileButtonsLocked
+                        writefile("OrvynConfig.json", HS:JSONEncode(cfg))
+                    end
+                end)
+            end)
+            
+            -- Make panel draggable only when unlocked, and save position
+            local dragInfo = {dragging=false, start=nil, startPos=nil}
+            -- Override panel drag to respect lock
+            for _, conn in ipairs(panel:GetPropertyChangedSignal("Position"):GetConnections() or {}) do end
+        end)
+    end
+end
+
+-- Also expose lock toggle in main GUI settings if possible
+pcall(function()
+    -- Try to add lock toggle to settings after GUI built
+    task.wait(1)
+    local main = M.mainFrame
+    if main then
+        -- Find settings-related toggle for mobile
+        -- We will add a global function to toggle lock
+        getgenv().ToggleMobileLock = function()
+            M.mobileButtonsLocked = not M.mobileButtonsLocked
+            M.buildMobileButtons()
+            return M.mobileButtonsLocked
+        end
+    end
+end)
+
+
 -- DUELS V2 SKIN WRAPPER - keeps original build but restyles to Duels
 do
     local _origBuild = M.buildGui
@@ -5665,7 +5731,14 @@ do
                 scroll.Position = UDim2.new(0, 0, 0, 104)
                 scroll.Size = UDim2.new(1, 0, 1, -104)
                 local tabs = {"SPEED","COMBAT","STEAL","MOTION","VISUAL","SETTINGS"}
-                local mapping = {["SPEEDS"]="SPEED",["CARRY"]="SPEED",["LAGGER"]="SPEED",["BAT"]="COMBAT",["BYPASS"]="COMBAT",["RAGDOLL"]="COMBAT",["MEDUSA"]="COMBAT",["BODY"]="COMBAT",["STEAL"]="STEAL",["JUMP"]="MOTION",["LEFT"]="MOTION",["RIGHT"]="MOTION",["TP"]="MOTION",["DROP"]="MOTION",["ESP"]="VISUAL",["SKY"]="VISUAL",["FOV"]="VISUAL",["ANIMATION"]="VISUAL",["ANTI"]="SETTINGS",["STRETCH"]="SETTINGS",["MOBILE"]="SETTINGS",["KEYBINDS"]="SETTINGS"}
+                local mapping = {
+                    ["SPEEDS"]="SPEED", ["LAGGER"]="SPEED", ["SPEED"]="SPEED", ["CARRY"]="SPEED", ["NORMAL"]="SPEED",
+                    ["COMBAT"]="COMBAT", ["BAT"]="COMBAT", ["BYPASS"]="COMBAT", ["RAGDOLL"]="COMBAT", ["MEDUSA"]="COMBAT", ["BODY"]="COMBAT", ["AIMBOT"]="COMBAT", ["LOCK"]="COMBAT", ["DEFENSE"]="COMBAT",
+                    ["STEAL"]="STEAL",
+                    ["MOTION"]="MOTION", ["JUMP"]="MOTION", ["AUTO"]="MOTION", ["LEFT"]="MOTION", ["RIGHT"]="MOTION", ["TP"]="MOTION", ["DROP"]="MOTION", ["UNWALK"]="MOTION",
+                    ["VISUALS"]="VISUAL", ["VISUAL"]="VISUAL", ["ESP"]="VISUAL", ["SKY"]="VISUAL", ["VISION"]="VISUAL", ["PANELS"]="VISUAL", ["CHARTER"]="VISUAL", ["ANIMATION"]="VISUAL", ["PACK"]="VISUAL", ["HEADLESS"]="VISUAL", ["KORBLOX"]="VISUAL", ["FOV"]="VISUAL",
+                    ["MISC"]="SETTINGS", ["INTRO"]="SETTINGS", ["MOBILE"]="SETTINGS", ["MENU"]="SETTINGS", ["KEYBINDS"]="SETTINGS", ["DANGER"]="SETTINGS", ["UI"]="SETTINGS", ["THEMES"]="SETTINGS", ["PERFORMANCE"]="SETTINGS"
+                }
                 local children = {}
                 for _, child in ipairs(scroll:GetChildren()) do
                     if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then table.insert(children, child) end
