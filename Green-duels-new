@@ -1,5 +1,5 @@
 -- ============================================================
--- DUELS V2 - COMPLETE
+-- MAX HUB - COMPLETE
 -- Jump drop only (no crasher)
 -- TP Bat (TOGGLE - stays on until clicked again)
 -- Blossom Reset (player reset)
@@ -454,7 +454,7 @@ if introShouldPlay then
     title.Size = UDim2.new(1,0,0,50)
     title.Position = UDim2.new(0,0,0,170)
     title.BackgroundTransparency = 1
-    title.Text = "DUELS V2"
+    title.Text = "MAX HUB"
     title.TextColor3 = Color3.fromRGB(80,255,80)
     title.TextTransparency = 1
     title.TextScaled = true
@@ -2174,162 +2174,68 @@ toggleSetters["antiRagdoll"] = setAntiRag
     end
 
     -- ============================================================
-
-    -- ============================================================
-    -- INFO BAR - ORVYN LAYOUT WITH DUELS V2 GREEN COLORS (GUI ONLY)
+    -- INFO BAR
     -- ============================================================
     local infoBar = Instance.new("Frame", gui)
-    infoBar.Name = "OrvynStealBar_DuelsGreen"
-    infoBar.Size = UDim2.new(0, 380, 0, 40)
-    infoBar.Position = UDim2.new(0.5, 0, 1, -24)
-    infoBar.AnchorPoint = Vector2.new(0.5, 1)
-    infoBar.BackgroundColor3 = Color3.fromRGB(8, 12, 10) -- Duels original bg
-    infoBar.BackgroundTransparency = 0.08
-    infoBar.BorderSizePixel = 0
-    infoBar.Active = true
-    infoBar.Parent = gui
-    mkCorner(infoBar, 20)
-    mkStroke(infoBar, Color3.fromRGB(46, 200, 120), 1.5) -- Duels green stroke
+    infoBar.Size = UDim2.new(0,360,0,36); infoBar.Position = UDim2.new(0.5,-180,0.88,-20)
+    infoBar.BackgroundColor3 = Color3.fromRGB(8,12,10); infoBar.BorderSizePixel=0; infoBar.Active=true
+    mkCorner(infoBar,18); mkStroke(infoBar, Color3.fromRGB(46,200,120), 1.5)
 
-    local pad = Instance.new("UIPadding")
-    pad.PaddingLeft = UDim.new(0, 8)
-    pad.PaddingRight = UDim.new(0, 10)
-    pad.PaddingTop = UDim.new(0, 6)
-    pad.PaddingBottom = UDim.new(0, 6)
-    pad.Parent = infoBar
+    local progressBg = Instance.new("Frame", infoBar)
+    progressBg.Size = UDim2.new(0,180,1,-8); progressBg.Position = UDim2.new(0,4,0,4)
+    progressBg.BackgroundColor3 = Color3.fromRGB(14,22,18); progressBg.BorderSizePixel=0; progressBg.ClipsDescendants=true
+    Instance.new("UICorner", progressBg).CornerRadius = UDim.new(1,0)
 
-    local list = Instance.new("UIListLayout")
-    list.FillDirection = Enum.FillDirection.Horizontal
-    list.VerticalAlignment = Enum.VerticalAlignment.Center
-    list.HorizontalAlignment = Enum.HorizontalAlignment.Left
-    list.Padding = UDim.new(0, 8)
-    list.SortOrder = Enum.SortOrder.LayoutOrder
-    list.Parent = infoBar
+    local progressFill = Instance.new("Frame", progressBg)
+    progressFill.Size = UDim2.new(0,0,1,0); progressFill.BackgroundColor3 = Color3.fromRGB(46,200,120)
+    progressFill.BorderSizePixel=0; Instance.new("UICorner", progressFill).CornerRadius = UDim.new(1,0)
 
-    -- STEAL badge - Orvyn layout, Duels green color
-    local badge = Instance.new("Frame")
-    badge.LayoutOrder = 1
-    badge.Size = UDim2.fromOffset(58, 26)
-    badge.BackgroundColor3 = Color3.fromRGB(46, 200, 120) -- Duels green instead of Orvyn teal
-    badge.BorderSizePixel = 0
-    badge.Parent = infoBar
-    mkCorner(badge, 13)
-    local badgeTxt = Instance.new("TextLabel")
-    badgeTxt.Size = UDim2.fromScale(1, 1)
-    badgeTxt.BackgroundTransparency = 1
-    badgeTxt.Text = "STEAL"
-    badgeTxt.Font = Enum.Font.GothamBlack
-    badgeTxt.TextSize = 12
-    badgeTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
-    badgeTxt.Parent = badge
+    local stealTextLbl = Instance.new("TextLabel", progressBg)
+    stealTextLbl.Size = UDim2.new(0,60,1,0); stealTextLbl.Position = UDim2.new(0,12,0,0)
+    stealTextLbl.BackgroundTransparency=1; stealTextLbl.Text="STEAL"; stealTextLbl.TextColor3=Color3.fromRGB(140,235,175)
+    stealTextLbl.Font = Enum.Font.GothamBlack; stealTextLbl.TextSize=12; stealTextLbl.TextXAlignment=Enum.TextXAlignment.Left
+    stealTextLbl.ZIndex = 5
 
-    -- Progress track + percent - Orvyn layout
-    local progressBg = Instance.new("Frame")
-    progressBg.Name = "Track"
-    progressBg.LayoutOrder = 2
-    progressBg.Size = UDim2.new(0, 140, 0, 26)
-    progressBg.BackgroundColor3 = Color3.fromRGB(14, 22, 18) -- Duels dark
-    progressBg.BorderSizePixel = 0
-    progressBg.ClipsDescendants = true
-    progressBg.Parent = infoBar
-    mkCorner(progressBg, 13)
+    local stealPctLbl = Instance.new("TextLabel", progressBg)
+    stealPctLbl.Size = UDim2.new(0,50,1,0); stealPctLbl.Position = UDim2.new(1,-58,0,0)
+    stealPctLbl.BackgroundTransparency=1; stealPctLbl.Text="0%"; stealPctLbl.TextColor3=Color3.fromRGB(46,200,120)
+    stealPctLbl.Font = Enum.Font.GothamBlack; stealPctLbl.TextSize=13; stealPctLbl.TextXAlignment=Enum.TextXAlignment.Right
+    stealPctLbl.ZIndex = 5
 
-    local progressFill = Instance.new("Frame")
-    progressFill.Name = "Fill"
-    progressFill.Size = UDim2.fromScale(0, 1)
-    progressFill.BackgroundColor3 = Color3.fromRGB(46, 200, 120) -- Duels green fill
-    progressFill.BorderSizePixel = 0
-    progressFill.Parent = progressBg
-    mkCorner(progressFill, 13)
-    -- Keep shimmer gradient but green version
-    local grad = Instance.new("UIGradient")
-    grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 120, 70)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(60, 255, 140)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 120, 70)),
-    })
-    grad.Parent = progressFill
+    local fpsIcon = Instance.new("TextLabel", infoBar)
+    fpsIcon.Size = UDim2.new(0,24,0,18); fpsIcon.Position = UDim2.new(0,190,0.5,-9)
+    fpsIcon.BackgroundTransparency=1; fpsIcon.Text="FPS:"; fpsIcon.TextColor3=Color3.fromRGB(200,220,210)
+    fpsIcon.Font = Enum.Font.GothamBold; fpsIcon.TextSize=12; fpsIcon.TextXAlignment=Enum.TextXAlignment.Center
 
-    local stealPctLbl = Instance.new("TextLabel")
-    stealPctLbl.BackgroundTransparency = 1
-    stealPctLbl.Size = UDim2.fromScale(1, 1)
-    stealPctLbl.Font = Enum.Font.GothamBold
-    stealPctLbl.TextSize = 12
-    stealPctLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-    stealPctLbl.Text = "0%"
-    stealPctLbl.ZIndex = 3
-    stealPctLbl.Parent = progressBg
+    local fpsVal = Instance.new("TextLabel", infoBar)
+    fpsVal.Size = UDim2.new(0,40,0,18); fpsVal.Position = UDim2.new(0,216,0.5,-9)
+    fpsVal.BackgroundTransparency=1; fpsVal.Text="0"; fpsVal.TextColor3=Color3.fromRGB(245,255,248)
+    fpsVal.Font = Enum.Font.GothamBold; fpsVal.TextSize=14; fpsVal.TextXAlignment=Enum.TextXAlignment.Left
 
-    -- FPS pill - Orvyn layout, Duels colors
-    local fpsPill = Instance.new("Frame")
-    fpsPill.LayoutOrder = 3
-    fpsPill.Size = UDim2.fromOffset(70, 26)
-    fpsPill.BackgroundColor3 = Color3.fromRGB(14, 22, 18)
-    fpsPill.BorderSizePixel = 0
-    fpsPill.Parent = infoBar
-    mkCorner(fpsPill, 13)
-    local fpsVal = Instance.new("TextLabel")
-    fpsVal.Size = UDim2.fromScale(1, 1)
-    fpsVal.BackgroundTransparency = 1
-    fpsVal.Font = Enum.Font.GothamBold
-    fpsVal.TextSize = 11
-    fpsVal.TextColor3 = Color3.fromRGB(210, 235, 220)
-    fpsVal.Text = "FPS 0"
-    fpsVal.Parent = fpsPill
+    local pingIcon = Instance.new("TextLabel", infoBar)
+    pingIcon.Size = UDim2.new(0,18,0,18); pingIcon.Position = UDim2.new(0,264,0.5,-9)
+    pingIcon.BackgroundTransparency=1; pingIcon.Text="📡"; pingIcon.TextColor3=Color3.fromRGB(180,220,200)
+    pingIcon.Font = Enum.Font.GothamBold; pingIcon.TextSize=14; pingIcon.TextXAlignment=Enum.TextXAlignment.Center
 
-    -- PING pill - Orvyn layout, Duels colors
-    local pingPill = Instance.new("Frame")
-    pingPill.LayoutOrder = 4
-    pingPill.Size = UDim2.fromOffset(90, 26)
-    pingPill.BackgroundColor3 = Color3.fromRGB(14, 22, 18)
-    pingPill.BorderSizePixel = 0
-    pingPill.Parent = infoBar
-    mkCorner(pingPill, 13)
-    local pingVal = Instance.new("TextLabel")
-    pingVal.Size = UDim2.fromScale(1, 1)
-    pingVal.BackgroundTransparency = 1
-    pingVal.Font = Enum.Font.GothamBold
-    pingVal.TextSize = 11
-    pingVal.TextColor3 = Color3.fromRGB(210, 235, 220)
-    pingVal.Text = "PING 0 ms"
-    pingVal.Parent = pingPill
+    local pingVal = Instance.new("TextLabel", infoBar)
+    pingVal.Size = UDim2.new(0,50,0,18); pingVal.Position = UDim2.new(0,284,0.5,-9)
+    pingVal.BackgroundTransparency=1; pingVal.Text="0ms"; pingVal.TextColor3=Color3.fromRGB(245,255,248)
+    pingVal.Font = Enum.Font.GothamBold; pingVal.TextSize=12; pingVal.TextXAlignment=Enum.TextXAlignment.Left
 
-    -- Accent dot - Orvyn layout, Duels green
-    local statusDotBg = Instance.new("Frame")
-    statusDotBg.LayoutOrder = 5
-    statusDotBg.Size = UDim2.fromOffset(22, 22)
-    statusDotBg.BackgroundColor3 = Color3.fromRGB(14, 22, 18)
-    statusDotBg.BorderSizePixel = 0
-    statusDotBg.Parent = infoBar
-    mkCorner(statusDotBg, 11)
-    mkStroke(statusDotBg, Color3.fromRGB(46, 200, 120), 1)
+    local statusDotBg = Instance.new("Frame", infoBar)
+    statusDotBg.Size = UDim2.new(0,22,0,22); statusDotBg.Position = UDim2.new(1,-30,0.5,-11)
+    statusDotBg.BackgroundColor3 = Color3.fromRGB(14,22,18); statusDotBg.BorderSizePixel=0
+    mkCorner(statusDotBg,11); mkStroke(statusDotBg, Color3.fromRGB(46,200,120),1)
+
     local statusDot = Instance.new("Frame", statusDotBg)
-    statusDot.Size = UDim2.fromOffset(10, 10)
-    statusDot.Position = UDim2.new(0.5, -5, 0.5, -5)
-    statusDot.BackgroundColor3 = Color3.fromRGB(46, 200, 120)
-    statusDot.BorderSizePixel = 0
-    mkCorner(statusDot, 5)
-
-    -- Auto-size bar width to content (Orvyn feature)
-    task.defer(function()
-        local contentW = list.AbsoluteContentSize.X + 18
-        if contentW > 50 then
-            infoBar.Size = UDim2.fromOffset(math.max(contentW, 280), 40)
-        end
-    end)
-    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        local contentW = list.AbsoluteContentSize.X + 18
-        if contentW > 50 then
-            infoBar.Size = UDim2.fromOffset(math.max(contentW, 280), 40)
-        end
-    end)
+    statusDot.Size = UDim2.new(0,10,0,10); statusDot.Position = UDim2.new(0.5,-5,0.5,-5)
+    statusDot.BackgroundColor3 = Color3.fromRGB(46,200,120); statusDot.BorderSizePixel=0; mkCorner(statusDot,5)
 
     local frameCount = 0
     local lastTime = tick()
     RunService.RenderStepped:Connect(function()
         frameCount = frameCount+1
-        local 
-now = tick()
+        local now = tick()
         if now-lastTime >= 1 then
             local fps = math.floor(frameCount/(now-lastTime))
             fpsVal.Text = tostring(fps)
@@ -2787,7 +2693,7 @@ end
                 if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
                 yVel=math.clamp(yVel,-70,110)
                 local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
-                root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+                root.Velocity = Vector3.new(desiredVel.X, root.Velocity.Y, desiredVel.Z); root.AssemblyLinearVelocity = Vector3.new(desiredVel.X, root.AssemblyLinearVelocity.Y, desiredVel.Z) -- ORVYN SPEED
                 local speed3=targetVel.Magnitude
                 local predictTime=math.clamp(speed3/150,0.05,0.2)
                 local predictedPos=targetPos+targetVel*predictTime
@@ -2829,7 +2735,7 @@ end
                     if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
                     yVel=math.clamp(yVel,-70,110)
                     local desiredVel=Vector3.new(flatDir.X*chaseSpeed,yVel,flatDir.Z*chaseSpeed)
-                    hrp.AssemblyLinearVelocity=hrp.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+                    hrp.Velocity = Vector3.new(desiredVel.X, hrp.Velocity.Y, desiredVel.Z); hrp.AssemblyLinearVelocity = Vector3.new(desiredVel.X, hrp.AssemblyLinearVelocity.Y, desiredVel.Z) -- ORVYN SPEED
                     local toTarget=targetPos-myPos
                     if toTarget.Magnitude>0.1 then
                         local goalCF=CFrame.lookAt(myPos,targetPos)
