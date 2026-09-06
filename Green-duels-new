@@ -5626,27 +5626,44 @@ do
             if not tabBar then
                 tabBar = Instance.new("Frame")
                 tabBar.Name = "DuelsTabBar"
-                tabBar.Size = UDim2.new(1, 0, 0, 38)
-                tabBar.Position = UDim2.new(0, 0, 0, 51)
-                tabBar.BackgroundColor3 = Color3.fromRGB(0,0,0)
-                tabBar.BackgroundTransparency = 0.3
+                tabBar.Size = UDim2.new(1, 0, 0, 52)
+                tabBar.Position = UDim2.new(0, 0, 0, 52)
+                tabBar.BackgroundColor3 = Color3.fromRGB(10,18,12)
+                tabBar.BackgroundTransparency = 0.1
                 tabBar.BorderSizePixel = 0
+                tabBar.ZIndex = 10
                 tabBar.Parent = main
+                local corner = Instance.new("UICorner", tabBar)
+                corner.CornerRadius = UDim.new(0,0)
+                
                 local tabScroll = Instance.new("ScrollingFrame", tabBar)
-                tabScroll.Size = UDim2.new(1, 0, 1, 0)
+                tabScroll.Name = "TabScroll"
+                tabScroll.Size = UDim2.new(1, -8, 1, -6)
+                tabScroll.Position = UDim2.new(0, 4, 0, 3)
                 tabScroll.BackgroundTransparency = 1
+                tabScroll.BorderSizePixel = 0
                 tabScroll.ScrollBarThickness = 0
-                tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
                 tabScroll.ScrollingDirection = Enum.ScrollingDirection.X
+                tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+                tabScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+                tabScroll.ZIndex = 11
+                tabScroll.ClipsDescendants = true
+                
                 local list = Instance.new("UIListLayout", tabScroll)
                 list.FillDirection = Enum.FillDirection.Horizontal
-                list.Padding = UDim.new(0, 4)
+                list.Padding = UDim.new(0, 6)
                 list.VerticalAlignment = Enum.VerticalAlignment.Center
+                list.HorizontalAlignment = Enum.HorizontalAlignment.Left
+                list.SortOrder = Enum.SortOrder.LayoutOrder
+                
                 local pad = Instance.new("UIPadding", tabScroll)
-                pad.PaddingLeft = UDim.new(0, 8)
-                pad.PaddingRight = UDim.new(0, 8)
-                scroll.Position = UDim2.new(0, 0, 0, 89)
-                scroll.Size = UDim2.new(1, 0, 1, -89)
+                pad.PaddingLeft = UDim.new(0, 6)
+                pad.PaddingRight = UDim.new(0, 6)
+                pad.PaddingTop = UDim.new(0, 2)
+                pad.PaddingBottom = UDim.new(0, 2)
+                
+                scroll.Position = UDim2.new(0, 0, 0, 104)
+                scroll.Size = UDim2.new(1, 0, 1, -104)
                 local tabs = {"SPEED","COMBAT","STEAL","MOTION","VISUAL","SETTINGS"}
                 local mapping = {["SPEEDS"]="SPEED",["CARRY"]="SPEED",["LAGGER"]="SPEED",["BAT"]="COMBAT",["BYPASS"]="COMBAT",["RAGDOLL"]="COMBAT",["MEDUSA"]="COMBAT",["BODY"]="COMBAT",["STEAL"]="STEAL",["JUMP"]="MOTION",["LEFT"]="MOTION",["RIGHT"]="MOTION",["TP"]="MOTION",["DROP"]="MOTION",["ESP"]="VISUAL",["SKY"]="VISUAL",["FOV"]="VISUAL",["ANIMATION"]="VISUAL",["ANTI"]="SETTINGS",["STRETCH"]="SETTINGS",["MOBILE"]="SETTINGS",["KEYBINDS"]="SETTINGS"}
                 local children = {}
@@ -5676,19 +5693,34 @@ do
                 end
                 for i, tabName in ipairs(tabs) do
                     local btn = Instance.new("TextButton", tabScroll)
-                    btn.Size = UDim2.new(0, 68, 0, 26)
+                    btn.Name = tabName.."Tab"
+                    btn.Size = UDim2.new(0, 82, 0, 36)
                     btn.LayoutOrder = i
-                    btn.BackgroundColor3 = Color3.fromRGB(8,14,10)
+                    btn.BackgroundColor3 = Color3.fromRGB(18,32,22)
+                    btn.BorderSizePixel = 0
                     btn.Text = tabName
-                    btn.TextColor3 = Color3.fromRGB(120,180,140)
+                    btn.TextColor3 = Color3.fromRGB(160,210,170)
                     btn.Font = Enum.Font.GothamBold
-                    btn.TextSize = 10
-                    local c = Instance.new("UICorner", btn); c.CornerRadius = UDim.new(0,8)
+                    btn.TextSize = 12
+                    btn.AutoButtonColor = false
+                    btn.ZIndex = 12
+                    local c = Instance.new("UICorner", btn); c.CornerRadius = UDim.new(0,10)
+                    local s = Instance.new("UIStroke", btn); s.Color = Color3.fromRGB(0,210,210); s.Thickness = 1; s.Transparency = 0.6
                     btn.MouseButton1Click:Connect(function()
                         showTab(tabName)
-                        for _, b in ipairs(tabScroll:GetChildren()) do if b:IsA("TextButton") then b.BackgroundColor3 = (b.Text == tabName) and Color3.fromRGB(0,210,210) or Color3.fromRGB(8,14,10) end end
+                        for _, b in ipairs(tabScroll:GetChildren()) do
+                            if b:IsA("TextButton") then
+                                local isActive = (b.Text == tabName)
+                                game:GetService("TweenService"):Create(b, TweenInfo.new(0.15), {BackgroundColor3 = isActive and Color3.fromRGB(0,210,210) or Color3.fromRGB(18,32,22), TextColor3 = isActive and Color3.fromRGB(10,10,15) or Color3.fromRGB(160,210,170)}):Play()
+                                local st = b:FindFirstChildOfClass("UIStroke")
+                                if st then st.Transparency = isActive and 0.1 or 0.6 end
+                            end
+                        end
                     end)
-                    if tabName == "SPEED" then btn.BackgroundColor3 = Color3.fromRGB(0,210,210) end
+                    if tabName == "SPEED" then 
+                        btn.BackgroundColor3 = Color3.fromRGB(0,210,210)
+                        btn.TextColor3 = Color3.fromRGB(10,10,15)
+                    end
                 end
                 showTab("SPEED")
             end
