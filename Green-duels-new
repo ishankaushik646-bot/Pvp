@@ -4400,15 +4400,15 @@ end
 -- ============================================================
 -- SAFE MAIN EXECUTION - FIXED
 -- ============================================================
-if not _G.DuelsV2_MainExecuted then
+print("[DEBUG] Starting DuelsV2 Main"); _G.DuelsV2_MainExecuted = nil; if not _G.DuelsV2_MainExecuted then
     task.wait(0.5)  -- Wait for player to fully load
     if LP and LP:FindFirstChild("PlayerGui") then
-        Main()
+        local ok, err = pcall(Main); if not ok then warn("[Duels-Orvyn ERROR] Main failed: "..tostring(err)) end
     else
         LP = LP or Players:WaitForChild("LocalPlayer")
         local success, err = pcall(function()
             LP:WaitForChild("PlayerGui")
-            Main()
+            local ok, err = pcall(Main); if not ok then warn("[Duels-Orvyn ERROR] Main failed: "..tostring(err)) end
         end)
         if not success then
             warn("[Duels] Failed to execute Main:", err)
