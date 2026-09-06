@@ -6118,3 +6118,173 @@ end)
 function M.refreshSpeedModeLabel()
     -- Not used for cycler, but keep for compatibility
 end
+
+
+-- OVERRIDE: Independent mobile buttons + lock (integrated in one file)
+do
+    local HS = game:GetService("HttpService")
+    local TweenService = game:GetService("TweenService")
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+    
+    M.mobileButtonsLocked = M.mobileButtonsLocked or false
+    M.perButtonDragEnabled = true
+    
+    function M.saveBtnPositions()
+        if not writefile or not M.mobGuiRef then return end
+        local out = {}
+        local panel = M.mobGuiRef:FindFirstChild("MobPanel")
+        if panel then out["_panel"] = {xo=panel.Position.X.Offset, yo=panel.Position.Y.Offset} end
+        for _, child in ipairs(M.mobGuiRef:GetDescendants()) do
+            if child:IsA("TextButton") and child:GetAttribute("BtnKey") then
+                local key = child:GetAttribute("BtnKey")
+                out[key] = {xo=child.Position.X.Offset, yo=child.Position.Y.Offset}
+            end
+        end
+        pcall(function() writefile(M.MOB_POS_FILE, HS:JSONEncode(out)) end)
+    end
+    
+    local _origBuildMobile = M.buildMobileButtons
+    M.buildMobileButtons = function()
+        M.destroyMobileButtons()
+        if not M.mobileButtonsEnabled then return end
+        local savedPositions = M.loadBtnPositions and M.loadBtnPositions() or {}
+        local BTN_SIZE = 56
+        local vp = workspace.CurrentCamera.ViewportSize
+        local startX = vp.X - 170
+        local startY = vp.Y/2 - 220
+        
+        local mobGui = Instance.new("ScreenGui")
+        mobGui.Name = "OrvynMobileButtons"
+        mobGui.ResetOnSpawn = false
+        mobGui.DisplayOrder = 20
+        mobGui.IgnoreGuiInset = true
+        pcall(function() if gethui then mobGui.Parent = gethui() else mobGui.Parent = game:GetService("CoreGui") end end)
+        if not mobGui.Parent then mobGui.Parent = player:WaitForChild("PlayerGui") end
+        M.mobGuiRef = mobGui
+        
+        local panel = Instance.new("Frame")
+        panel.Name = "MobPanel"
+        panel.Size = UDim2.new(1,0,1,0)
+        panel.BackgroundTransparency = 1
+        panel.Parent = mobGui
+        
+        local keys = {{"drop","DROP"},{"bypass","BYPASS"},{"tpDown","TP\nDOWN"},{"carrySpeed","CARRY\nSPEED"},{"lagger","LAGGER"},{"laggerCarry","LAGGER\nCARRY"},{"autoBat","AIMBOT"},{"autoLeft","AUTO\nLEFT"},{"autoRight","AUTO\nRIGHT"},{"instaReset","RESET"}}
+        
+        for i, data in ipairs(keys) do
+            local key, label = data[1], data[2]
+            local saved = savedPositions[key]
+            local defX = startX + ((i-1)%2)*66
+            local defY = startY + math.floor((i-1)/2)*66
+            local x = saved and saved.xo or defX
+            local y = saved and saved.yo or defY
+            
+            local btn = Instance.new("TextButton")
+            btn.Name = "Btn_"..key
+            btn.Size = UDim2.new(0,BTN_SIZE,0,BTN_SIZE)
+            btn.Position = UDim2.new(0,x,0,y)
+            btn.BackgroundColor3 = Color3.fromRGB(15,15,18)
+            btn.Text = label
+            btn.TextColor3 = Color3.new(1,1,1)
+            btn.TextSize = 10
+            btn.Font = Enum.Font.GothamBold
+            btn.TextWrapped = true
+            btn.BorderSizePixel = 0
+            btn.AutoButtonColor = false
+            btn:SetAttribute("BtnKey", key)
+            btn.Parent = panel
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0,12)
+            local stroke = Instance.new("UIStroke", btn); stroke.Color = Color3.fromRGB(0,210,210); stroke.Transparency = 0.7; stroke.Thickness = 1
+            
+            local function setOn(v)
+                if v then
+                    TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3=Color3.fromRGB(0,210,210), TextColor3=Color3.fromRGB(10,10,15)}):Play()
+                    stroke.Transparency = 0.1
+                else
+                    TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3=Color3.fromRGB(15,15,18), TextColor3=Color3.new(1,1,1)}):Play()
+                    stroke.Transparency = 0.7
+                end
+            end
+            M.mobBtnRefs[key] = setOn
+            
+            local dragging, dragStart, startPos, moved = false, nil, nil, false
+            btn.InputBegan:Connect(function(input)
+                if M.mobileButtonsLocked then return end
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true; dragStart = input.Position; startPos = btn.Position; moved = false
+                end
+            end)
+            btn.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    if M.mobileButtonsLocked then dragging=false; return end
+                    local delta = input.Position - dragStart
+                    if delta.Magnitude>5 then moved=true end
+                    btn.Position = UDim2.new(0, startPos.X.Offset+delta.X, 0, startPos.Y.Offset+delta.Y)
+                end
+            end)
+            btn.InputEnded:Connect(function(input)
+                if dragging then dragging=false; if moved then M.saveBtnPositions() end; moved=false end
+            end)
+            
+            btn.Activated:Connect(function()
+                if moved then return end
+                if key=="drop" then M.runDrop()
+                elseif key=="tpDown" then M.runTPFloor()
+                elseif key=="instaReset" then M.cursedInstaReset()
+                elseif key=="autoLeft" then
+                    M.autoLeftEnabled = not M.autoLeftEnabled
+                    if M.autoLeftEnabled then M.startAutoLeft() else M.stopAutoLeft() end
+                    setOn(M.autoLeftEnabled)
+                elseif key=="autoRight" then
+                    M.autoRightEnabled = not M.autoRightEnabled
+                    if M.autoRightEnabled then M.startAutoRight() else M.stopAutoRight() end
+                    setOn(M.autoRightEnabled)
+                elseif key=="autoBat" then
+                    if not M.autoBatEnabled then M.queueAutoBatStart() else M.stopBatAimbot() end
+                    setOn(M.autoBatEnabled)
+                end
+            end)
+        end
+    end
+    
+    -- Add lock toggle in SETTINGS tab bottom
+    task.spawn(function()
+        task.wait(1.5)
+        pcall(function()
+            local main = M.mainFrame
+            if not main then return end
+            local scroll = main:FindFirstChildWhichIsA("ScrollingFrame")
+            if not scroll then return end
+            if scroll:FindFirstChild("LockMobileToggle") then return end
+            local row = Instance.new("Frame")
+            row.Name = "LockMobileToggle"
+            row.Size = UDim2.new(1,0,0,50)
+            row.BackgroundTransparency = 1
+            row.LayoutOrder = 9999
+            row.Parent = scroll
+            local lbl = Instance.new("TextLabel", row)
+            lbl.Size = UDim2.new(0,200,1,0); lbl.Position = UDim2.new(0,20,0,0); lbl.BackgroundTransparency=1
+            lbl.Text = "Lock Mobile Buttons"; lbl.TextColor3=Color3.new(1,1,1); lbl.Font=Enum.Font.GothamBold; lbl.TextSize=14; lbl.TextXAlignment=Enum.TextXAlignment.Left
+            local toggleBg = Instance.new("Frame", row)
+            toggleBg.Size = UDim2.new(0,40,0,22); toggleBg.Position=UDim2.new(1,-60,0.5,-11); toggleBg.BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45); toggleBg.BorderSizePixel=0
+            Instance.new("UICorner", toggleBg).CornerRadius=UDim.new(1,0)
+            local circle = Instance.new("Frame", toggleBg)
+            circle.Size=UDim2.new(0,16,0,16); circle.Position = M.mobileButtonsLocked and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8); circle.BackgroundColor3=Color3.fromRGB(10,10,15); circle.BorderSizePixel=0
+            Instance.new("UICorner", circle).CornerRadius=UDim.new(1,0)
+            local clickArea = Instance.new("TextButton", row); clickArea.Size=UDim2.new(1,0,1,0); clickArea.BackgroundTransparency=1; clickArea.Text=""
+            clickArea.MouseButton1Click:Connect(function()
+                M.mobileButtonsLocked = not M.mobileButtonsLocked
+                TweenService:Create(toggleBg, TweenInfo.new(0.25), {BackgroundColor3 = M.mobileButtonsLocked and Color3.fromRGB(0,210,210) or Color3.fromRGB(30,30,45)}):Play()
+                TweenService:Create(circle, TweenInfo.new(0.25, Enum.EasingStyle.Back), {Position = M.mobileButtonsLocked and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)}):Play()
+                pcall(function() if saveOrvynConfig then saveOrvynConfig() end end)
+            end)
+        end)
+    end)
+end
+
+
+
+-- Expose M globally for patches
+getgenv().OrvynM = M
+_G.OrvynM = M
+warn("[ORVYN] M exposed for patches")
