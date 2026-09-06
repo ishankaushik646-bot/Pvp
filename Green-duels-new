@@ -42,8 +42,7 @@ local Workspace = game:GetService("Workspace")
 
 local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
 
--- UNIVERSAL SPOOF HOOK - KEEP ORIGINAL MODE LOGIC
-local 
+-- [ORVYN LOGIC - SPOOF REMOVED]
 
 
 -- ============================================================
@@ -493,7 +492,6 @@ end
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
 local function applyImpulseForVelocity(hrp, desiredVelocity)
-    -- ORVYN PURE - Direct Velocity, no spoof = no kick
     if not hrp or not desiredVelocity then return end
     hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
 end
@@ -2452,7 +2450,6 @@ toggleSetters["antiRagdoll"] = setAntiRag
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
     local function applyImpulseForVelocity(hrp, desiredVelocity)
-    -- ORVYN PURE - Direct Velocity, no spoof = no kick
     if not hrp or not desiredVelocity then return end
     hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
 end
