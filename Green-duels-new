@@ -3255,7 +3255,6 @@ end
 
     RunService.RenderStepped:Connect(function()
         if not (h and hrp) then return end; if State._tpInProgress then return end
-        if isRagdollState(h) then State.lastMoveDir=Vector3.new(0,0,0); return end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
             local md=h.MoveDirection
             local spd
