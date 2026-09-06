@@ -42,29 +42,9 @@ local Workspace = game:GetService("Workspace")
 
 local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
 
--- UNIVERSAL SPOOF HOOK - KEEP ORIGINAL MODE LOGIC
-local spoofedVelocity = Vector3.zero
-local _oldIndex; _oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
-    if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") then
-        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and LP.Character and self:IsDescendantOf(LP.Character) then
-            return spoofedVelocity
-        end
-    end
-    return _oldIndex(self, key)
-end))
-local _oldNewIndex; _oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, key, value)
-    if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") then
-        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and LP.Character and self:IsDescendantOf(LP.Character) then
-            spoofedVelocity = value
-            return
-        end
-    end
-    return _oldNewIndex(self, key, value)
-end))
-
-
 -- ============================================================
 -- FIX: Missing variables
+-- [ORVYN LOGIC - SPOOF REMOVED TO FIX KICK]
 -- ============================================================
 local DROP_TYPES = {
     JUMP = "jump",
@@ -510,28 +490,16 @@ end
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
 local function applyImpulseForVelocity(hrp, desiredVelocity)
+    -- ORVYN PURE - No spoof, direct Velocity like Orvyn hub
     if not hrp or not desiredVelocity then return end
-    local flat = Vector3.new(desiredVelocity.X, 0, desiredVelocity.Z)
-    local spd = flat.Magnitude
-    if spd < 0.05 then
-        spoofedVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-        hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        return
-    end
-    local dir = flat.Unit
-    pcall(function()
-        if hrp.SetNetworkOwner then hrp:SetNetworkOwner(LP) end
-    end)
-    spoofedVelocity = Vector3.new(dir.X * 16, hrp.AssemblyLinearVelocity.Y, dir.Z * 16)
-    hrp.AssemblyLinearVelocity = Vector3.new(dir.X * spd, hrp.AssemblyLinearVelocity.Y, dir.Z * spd)
+    hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
 end
 
--- ============================================================
+-- ==================================================================================================================
 -- STATE
 -- ============================================================
 local State = {
-    normalSpeed=60, carrySpeed=30, laggerSpeed=15, laggerCarrySpeed=24.5,
+    normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
     speedToggled=false,
     laggerMode=0,
     infJumpEnabled=true, antiRagdollEnabled=false,
@@ -1182,7 +1150,6 @@ startAntiDie = function()
             end
             if hrp and not dropActive and hrp.Position.Y < -100 then
                 hrp.CFrame = CFrame.new(0,25,0)
-                spoofedVelocity = Vector3.zero
             end
             task.wait(0.5)
         end
@@ -1208,7 +1175,6 @@ startAntiFling = function()
         if hrp.AssemblyLinearVelocity.Magnitude > 160 then
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-            spoofedVelocity = Vector3.zero
         end
     end)
 end
@@ -2482,22 +2448,6 @@ toggleSetters["antiRagdoll"] = setAntiRag
     -- ============================================================
     local function applyImpulseForVelocity(hrp, desiredVelocity)
     if not hrp or not desiredVelocity then return end
-    local flat = Vector3.new(desiredVelocity.X, 0, desiredVelocity.Z)
-    local spd = flat.Magnitude
-    if spd < 0.05 then
-        spoofedVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-        hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        return
-    end
-    local dir = flat.Unit
-    pcall(function()
-        if hrp.SetNetworkOwner then hrp:SetNetworkOwner(LP) end
-    end)
-    spoofedVelocity = Vector3.new(dir.X * 16, hrp.AssemblyLinearVelocity.Y, dir.Z * 16)
-    hrp.AssemblyLinearVelocity = Vector3.new(dir.X * spd, hrp.AssemblyLinearVelocity.Y, dir.Z * spd)
-end
-
     stopAutoLeft = function()
         if alConn then alConn:Disconnect(); alConn = nil end; alPhase = 1
         local char = LP.Character; if char then local hum2 = char:FindFirstChildOfClass("Humanoid"); if hum2 then pcall(function() hum2:Move(Vector3.zero, false) end) end end
@@ -3300,18 +3250,26 @@ end
     RunService.RenderStepped:Connect(function()
         if not (h and hrp) then return end; if State._tpInProgress then return end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
+            -- ORVYN PURE LOGIC START
             local md=h.MoveDirection
             local spd
-            if State.laggerMode==1 then spd=State.laggerSpeed
-            elseif State.laggerMode==2 then spd=State.laggerCarrySpeed
-            else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
+            -- Exact Orvyn getActiveMoveSpeed logic mapped to Duels State:
+            -- if laggerMode 2 => lagger+carry, if 1 => lagger only, if 0+speedToggled => carry, else normal
+            if State.laggerMode==2 then spd=State.laggerCarrySpeed
+            elseif State.laggerMode==1 then spd=State.laggerSpeed
+            elseif State.speedToggled then spd=State.carrySpeed
+            else spd=State.normalSpeed end
+            
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd) -- ORVYN REPLACED
+                -- Orvyn direct Velocity, keeps Y
+                hrp.Velocity=Vector3.new(md.X*spd, hrp.Velocity.Y, md.Z*spd)
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end -- ORVYN REPLACED
+                if anyHeld then hrp.Velocity=Vector3.new(State.lastMoveDir.X*spd, hrp.Velocity.Y, State.lastMoveDir.Z*spd) end
+            end
+            -- ORVYN PURE LOGIC END
             end
         end
         pcall(function()
