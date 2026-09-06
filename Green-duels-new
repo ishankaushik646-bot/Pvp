@@ -5599,58 +5599,29 @@ do
     local _origBuild = M.buildGui
     function M.buildGui()
         _origBuild()
-        -- Now apply Duels V2 skin on top of working Orvyn GUI
         pcall(function()
             local main = M.mainFrame
-            if not main or not main:IsA("GuiObject") then
-                -- In original, M.mainFrame is the ScreenGui? Actually main is ImageLabel named Main inside gui
-                -- Find Main frame
+            if not main or not main.Parent then
                 local gui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("OrvynHubGUI")
-                if gui then
-                    main = gui:FindFirstChild("Main") or gui:FindFirstChild("MainOuter") or main
-                end
+                if gui then main = gui:FindFirstChild("Main") or main end
             end
             if not main then return end
-
-            -- Change size to Duels size 400x560
             main.Size = UDim2.new(0, 400, 0, 560)
             main.Position = UDim2.new(0.5, -200, 0.5, -280)
             main.BackgroundColor3 = Color3.fromRGB(8,14,10)
-            main.BackgroundTransparency = 0.05
-
-            -- Add gradient
             local grad = main:FindFirstChild("DuelsGrad") or Instance.new("UIGradient")
             grad.Name = "DuelsGrad"
-            grad.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(14,26,18)),
-                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(8,16,11)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(4,8,6))
-            })
+            grad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(14,26,18)), ColorSequenceKeypoint.new(0.5, Color3.fromRGB(8,16,11)), ColorSequenceKeypoint.new(1, Color3.fromRGB(4,8,6))})
             grad.Rotation = 90
             grad.Parent = main
-
-            -- Stroke
             local stroke = main:FindFirstChildOfClass("UIStroke")
             if stroke then
                 stroke.Color = Color3.fromRGB(0,210,210)
                 stroke.Thickness = 1.4
                 stroke.Transparency = 0.2
-                local sg = stroke:FindFirstChild("StrokeGrad") or Instance.new("UIGradient")
-                sg.Name = "StrokeGrad"
-                sg.Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0, Color3.fromRGB(0,210,210)),
-                    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(30,132,73)),
-                    ColorSequenceKeypoint.new(1, Color3.fromRGB(0,210,210))
-                })
-                sg.Parent = stroke
-                task.spawn(function() while main.Parent do sg.Rotation = (sg.Rotation + 0.4) % 360; game:GetService("RunService").RenderStepped:Wait() end end)
             end
-
-            -- Find scroll
             local scroll = main:FindFirstChildWhichIsA("ScrollingFrame")
             if not scroll then return end
-
-            -- Create tab bar if not exists
             local tabBar = main:FindFirstChild("DuelsTabBar")
             if not tabBar then
                 tabBar = Instance.new("Frame")
@@ -5661,50 +5632,29 @@ do
                 tabBar.BackgroundTransparency = 0.3
                 tabBar.BorderSizePixel = 0
                 tabBar.Parent = main
-
                 local tabScroll = Instance.new("ScrollingFrame", tabBar)
                 tabScroll.Size = UDim2.new(1, 0, 1, 0)
                 tabScroll.BackgroundTransparency = 1
                 tabScroll.ScrollBarThickness = 0
                 tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
                 tabScroll.ScrollingDirection = Enum.ScrollingDirection.X
-
                 local list = Instance.new("UIListLayout", tabScroll)
                 list.FillDirection = Enum.FillDirection.Horizontal
                 list.Padding = UDim.new(0, 4)
                 list.VerticalAlignment = Enum.VerticalAlignment.Center
-
                 local pad = Instance.new("UIPadding", tabScroll)
                 pad.PaddingLeft = UDim.new(0, 8)
                 pad.PaddingRight = UDim.new(0, 8)
-
-                -- Adjust scroll position to be below tab bar
                 scroll.Position = UDim2.new(0, 0, 0, 89)
                 scroll.Size = UDim2.new(1, 0, 1, -89)
-
-                -- Build tabs mapping based on section headers
                 local tabs = {"SPEED","COMBAT","STEAL","MOTION","VISUAL","SETTINGS"}
-                local mapping = {
-                    ["SPEEDS"]="SPEED", ["NORMAL SPEED"]="SPEED", ["CARRY"]="SPEED", ["LAGGER"]="SPEED",
-                    ["BAT"]="COMBAT", ["BYPASS"]="COMBAT", ["ANTI"]="COMBAT", ["MEDUSA"]="COMBAT", ["BODY"]="COMBAT", ["DEFENSE"]="COMBAT", ["AIMBOT"]="COMBAT", ["LOCK"]="COMBAT",
-                    ["STEAL"]="STEAL", ["SEMI"]="STEAL",
-                    ["JUMP"]="MOTION", ["AUTO"]="MOTION", ["DROP"]="MOTION", ["UNWALK"]="MOTION", ["TP"]="MOTION",
-                    ["ESP"]="VISUAL", ["SKY"]="VISUAL", ["FOV"]="VISUAL", ["ANIMATION"]="VISUAL", ["PACK"]="VISUAL", ["HEADLESS"]="VISUAL", ["KORBLOX"]="VISUAL",
-                    ["PERFORMANCE"]="SETTINGS", ["INTRO"]="SETTINGS", ["MOBILE"]="SETTINGS", ["MENU"]="SETTINGS", ["KEYBINDS"]="SETTINGS", ["DANGER"]="SETTINGS", ["UI"]="SETTINGS"
-                }
-
-                -- Group existing children
+                local mapping = {["SPEEDS"]="SPEED",["CARRY"]="SPEED",["LAGGER"]="SPEED",["BAT"]="COMBAT",["BYPASS"]="COMBAT",["RAGDOLL"]="COMBAT",["MEDUSA"]="COMBAT",["BODY"]="COMBAT",["STEAL"]="STEAL",["JUMP"]="MOTION",["LEFT"]="MOTION",["RIGHT"]="MOTION",["TP"]="MOTION",["DROP"]="MOTION",["ESP"]="VISUAL",["SKY"]="VISUAL",["FOV"]="VISUAL",["ANIMATION"]="VISUAL",["ANTI"]="SETTINGS",["STRETCH"]="SETTINGS",["MOBILE"]="SETTINGS",["KEYBINDS"]="SETTINGS"}
                 local children = {}
                 for _, child in ipairs(scroll:GetChildren()) do
-                    if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
-                        table.insert(children, child)
-                    end
+                    if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then table.insert(children, child) end
                 end
-
-                local currentTab = "SPEED"
                 local tabGroups = {}
                 for _, t in ipairs(tabs) do tabGroups[t] = {} end
-
                 local lastTab = "SPEED"
                 for _, child in ipairs(children) do
                     local txt = ""
@@ -5712,27 +5662,18 @@ do
                         local lbl = child:FindFirstChildWhichIsA("TextLabel")
                         if lbl then txt = lbl.Text:upper() end
                     end
-                    -- Check if this is a section header
                     local isHeader = (child.Size.Y.Offset == 35)
                     if isHeader and txt ~= "" then
-                        -- Find tab for this header
-                        for key, tab in pairs(mapping) do
-                            if txt:find(key) then lastTab = tab; break end
-                        end
+                        for key, tab in pairs(mapping) do if txt:find(key) then lastTab = tab; break end end
                     end
                     table.insert(tabGroups[lastTab], child)
                 end
-
                 local function showTab(name)
                     for tabName, group in pairs(tabGroups) do
                         local visible = (tabName == name)
-                        for _, obj in ipairs(group) do
-                            obj.Visible = visible
-                        end
+                        for _, obj in ipairs(group) do obj.Visible = visible end
                     end
                 end
-
-                -- Create tab buttons
                 for i, tabName in ipairs(tabs) do
                     local btn = Instance.new("TextButton", tabScroll)
                     btn.Size = UDim2.new(0, 68, 0, 26)
@@ -5743,49 +5684,17 @@ do
                     btn.Font = Enum.Font.GothamBold
                     btn.TextSize = 10
                     local c = Instance.new("UICorner", btn); c.CornerRadius = UDim.new(0,8)
-                    local s = Instance.new("UIStroke", btn); s.Color = Color3.fromRGB(28,60,40); s.Thickness = 1
                     btn.MouseButton1Click:Connect(function()
                         showTab(tabName)
-                        for _, b in ipairs(tabScroll:GetChildren()) do
-                            if b:IsA("TextButton") then
-                                local active = (b.Text == tabName)
-                                game:GetService("TweenService"):Create(b, TweenInfo.new(0.15), {BackgroundColor3 = active and Color3.fromRGB(0,210,210) or Color3.fromRGB(8,14,10), TextColor3 = active and Color3.fromRGB(10,10,15) or Color3.fromRGB(120,180,140)}):Play()
-                            end
-                        end
+                        for _, b in ipairs(tabScroll:GetChildren()) do if b:IsA("TextButton") then b.BackgroundColor3 = (b.Text == tabName) and Color3.fromRGB(0,210,210) or Color3.fromRGB(8,14,10) end end
                     end)
-                    if tabName == "SPEED" then
-                        btn.BackgroundColor3 = Color3.fromRGB(0,210,210)
-                        btn.TextColor3 = Color3.fromRGB(10,10,15)
-                    end
+                    if tabName == "SPEED" then btn.BackgroundColor3 = Color3.fromRGB(0,210,210) end
                 end
-
                 showTab("SPEED")
-            end
-
-            -- Avatar header
-            local header = main:FindFirstChild("Header") or main:FindFirstChildWhichIsA("Frame")
-            if header then
-                pcall(function()
-                    local avatarBg = header:FindFirstChild("AvatarBg") or Instance.new("Frame")
-                    avatarBg.Name = "AvatarBg"
-                    avatarBg.Size = UDim2.new(0,32,0,32)
-                    avatarBg.Position = UDim2.new(0,12,0.5,-16)
-                    avatarBg.BackgroundColor3 = Color3.fromRGB(8,14,10)
-                    avatarBg.Parent = header
-                    local ac = avatarBg:FindFirstChild("UICorner") or Instance.new("UICorner", avatarBg); ac.CornerRadius = UDim.new(0,16)
-                    local as = avatarBg:FindFirstChild("UIStroke") or Instance.new("UIStroke", avatarBg); as.Color = Color3.fromRGB(0,210,210); as.Thickness = 1.2; as.Transparency = 0.3
-                    local img = avatarBg:FindFirstChild("ImageLabel") or Instance.new("ImageLabel", avatarBg)
-                    img.Size = UDim2.new(1,-4,1,-4); img.Position = UDim2.new(0,2,0,2); img.BackgroundTransparency = 1
-                    local ac2 = img:FindFirstChild("UICorner") or Instance.new("UICorner", img); ac2.CornerRadius = UDim.new(0,14)
-                    local ok, thumb = pcall(function() return game:GetService("Players"):GetUserThumbnailAsync(game:GetService("Players").LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
-                    if ok and thumb then img.Image = thumb end
-                end)
             end
         end)
     end
 end
-
-function M.applyStealBarTheme
 
 function M.applyStealBarTheme(accentColor)
     if M.statusFill then
