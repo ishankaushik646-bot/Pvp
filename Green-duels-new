@@ -554,7 +554,6 @@ antiFlingEnabled=false,
     lastMoveDir=Vector3.new(0,0,0),
     carrySpeedActive=false,
     laggerModeEnabled=false,
-
     _prevCarry=30, _prevSpeed=false,
     stackButtonsHidden=false,
     countdownActive=false,
@@ -2811,48 +2810,38 @@ toggleSetters["antiRagdoll"] = setAntiRag
         if stackBtnRefs.laggerCarry then stackBtnRefs.laggerCarry.setOn(State.laggerMode==2) end
     end
     
-        -- === ORVYN FULL SPEED LOGIC REPLACEMENT ===
-    local function setLaggerMode(mode)
-        -- Orvyn style: mode 0 = off, 1 = lagger, 2 = lagger+carry
-        -- Fully replaces Duels logic with Orvyn's toggle system
+        local function setLaggerMode(mode)
+        -- ORVYN FULL REPLACEMENT
         local prev = State.laggerMode
         State.laggerMode = mode
-        -- Orvyn's laggerModeEnabled mapping
+        State.laggerModeEnabled = (mode ~= 0)
         if mode == 0 then
-            -- Off
-            State.laggerModeEnabled = false
-            State.carrySpeedActive = State._prevSpeed or false
-            State.speedToggled = State._prevSpeed or false
-            State.carrySpeedActive = State.speedToggled
             if stackBtnRefs.lagger then stackBtnRefs.lagger.setOn(false) end
             if stackBtnRefs.laggerCarry then stackBtnRefs.laggerCarry.setOn(false) end
             if prev ~= 0 then
+                State.speedToggled = State._prevSpeed or false
+                State.carrySpeedActive = State.speedToggled
                 if stackBtnRefs.carrySpeed then stackBtnRefs.carrySpeed.setOn(State.speedToggled) end
             end
         elseif mode == 1 then
             if prev == 0 then State._prevSpeed = State.speedToggled end
-            State.laggerModeEnabled = true
-            State.carrySpeedActive = false
             State.speedToggled = false
+            State.carrySpeedActive = false
             if stackBtnRefs.carrySpeed then stackBtnRefs.carrySpeed.setOn(false) end
             if stackBtnRefs.lagger then stackBtnRefs.lagger.setOn(true) end
             if stackBtnRefs.laggerCarry then stackBtnRefs.laggerCarry.setOn(false) end
         elseif mode == 2 then
             if prev == 0 then State._prevSpeed = State.speedToggled end
-            State.laggerModeEnabled = true
-            State.carrySpeedActive = true
             State.speedToggled = true
+            State.carrySpeedActive = true
             if stackBtnRefs.carrySpeed then stackBtnRefs.carrySpeed.setOn(true) end
             if stackBtnRefs.lagger then stackBtnRefs.lagger.setOn(false) end
             if stackBtnRefs.laggerCarry then stackBtnRefs.laggerCarry.setOn(true) end
         end
-        -- Orvyn's refresh label equivalent
         if carryBox then
-            local curSpd = getActiveMoveSpeed()
-            carryBox.Text = tostring(curSpd)
+            carryBox.Text = tostring(getActiveMoveSpeed())
         end
         requestSave()
-        print("[Duels-Orvyn] Speed Mode -> Lagger:", mode, "ActiveSpeed:", getActiveMoveSpeed())
     end
 
     local function toggleLaggerMode()
@@ -2865,23 +2854,22 @@ toggleSetters["antiRagdoll"] = setAntiRag
         end
     end
 
-        local function toggleSpeed()
-        -- Orvyn toggleCarryMode full replacement
+    local function toggleSpeed()
+        -- ORVYN FULL
         if State.laggerMode ~= 0 then
             setLaggerMode(0)
             return
         end
+        State.carrySpeedActive = not State.carrySpeedActive
         State.speedToggled = not State.speedToggled
-        State.carrySpeedActive = State.speedToggled
         if stackBtnRefs.carrySpeed then
             stackBtnRefs.carrySpeed.setOn(State.speedToggled)
-            if carryBox then carryBox.Text = tostring(getActiveMoveSpeed()) end
         end
-        print("[Duels-Orvyn] Carry Toggle:", State.speedToggled, "Speed:", getActiveMoveSpeed())
+        if carryBox then
+            carryBox.Text = tostring(State.speedToggled and State.carrySpeed or State.normalSpeed)
+        end
         requestSave()
     end
-
-    local function
 
     -- STACK BUTTONS LOOP - ALL LIGHT GREEN
     for i,def in ipairs(stackDefs) do
@@ -3845,7 +3833,7 @@ end
         for _,p in ipairs(Players:GetPlayers()) do if p~=LP and p.Character then for _,part in ipairs(p.Character:GetChildren()) do if part:IsA("BasePart") then part.CanCollide=false end end end end
     end)
 
-    -- === ORVYN FULL SPEED RENDER LOOP ===
+    -- === ORVYN FULL SPEED SYSTEM (REPLACES ALL SPEED LOGIC) ===
     RunService.RenderStepped:Connect(function()
         local char = LP.Character
         if not char then return end
@@ -3853,15 +3841,13 @@ end
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hum or not hrp then return end
         if State._tpInProgress then return end
-        h = hum -- keep legacy refs
-        -- Orvyn isRagdollState check
-        if isRagdollState(hum) then State.lastMoveDir=Vector3.new(0,0,0); return end
+        h = hum
+        if isRagdollState and isRagdollState(hum) then State.lastMoveDir=Vector3.new(0,0,0); return end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
             local md=hum.MoveDirection
             local spd=getActiveMoveSpeed()
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                -- Orvyn direct velocity method (more responsive than impulse)
                 hrp.AssemblyLinearVelocity=Vector3.new(md.X*spd, hrp.AssemblyLinearVelocity.Y, md.Z*spd)
                 spoofedVelocity=hrp.AssemblyLinearVelocity
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
