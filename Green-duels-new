@@ -2461,7 +2461,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
 
     local stealPctLbl = Instance.new("TextLabel", progressBg)
     stealPctLbl.Size = UDim2.new(0,50,1,0); stealPctLbl.Position = UDim2.new(1,-58,0,0)
-    stealPctLbl.BackgroundTransparency=1; stealPctLbl.Text="0%"; stealPctLbl.TextColor3=Color3.fromRGB(0,0,0)
+    stealPctLbl.BackgroundTransparency=1; stealPctLbl.Text="0%"; stealPctLbl.TextColor3=Color3.fromRGB(255,255,255)
     stealPctLbl.Font = Enum.Font.GothamBlack; stealPctLbl.TextSize=13; stealPctLbl.TextXAlignment=Enum.TextXAlignment.Right
     stealPctLbl.ZIndex = 5
 
