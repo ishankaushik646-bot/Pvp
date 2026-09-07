@@ -307,8 +307,8 @@ local function setupTPBatCharacter(char)
     if tpBatToggled then startTPBat() end
 end
 
-LP.CharacterAdded:Connect(setupTPBatCharacter)
-if LP.Character then task.spawn(function() setupTPBatCharacter(LP.Character) end) end
+LP.CharacterAdded:Connect(function(char) setupTPBatCharacter(char); task.wait(0.3); pcall(function() setupRagdollTriggers(char) end) end)
+if LP.Character then task.spawn(function() setupTPBatCharacter(LP.Character); task.wait(0.5); pcall(function() setupRagdollTriggers(LP.Character) end) end) end
 
 -- ============================================================
 -- MIRROR TP DOWN (FROM ACE DUELS - ADDED)
@@ -537,6 +537,112 @@ antiFlingEnabled=true, -- VOID EXACT: enabled
     autoTPHeight=20,
     autoTPConn=nil,
 }
+
+
+-- ====================== VOIDS RAGDOLL GUI / TIMER (from Voids) ======================
+local ragdollGuiEnabled = true
+local activeRagdollBillboard=nil
+local activeStoneBillboard=nil
+
+local function addShimmerToLabel(lbl,c1,c2)
+    local gr=Instance.new("UIGradient",lbl)
+    gr.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,c1 or Color3.fromRGB(200,200,200)),ColorSequenceKeypoint.new(0.5,c2 or Color3.fromRGB(255,255,255)),ColorSequenceKeypoint.new(1,c1 or Color3.fromRGB(200,200,200))})
+    gr.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0.3,0),NumberSequenceKeypoint.new(0.5,0,0),NumberSequenceKeypoint.new(1,0.3,0)})
+    return gr
+end
+
+local function createRagdollBillboard(duration,labelText)
+    if not ragdollGuiEnabled then return nil end
+    local WHITE=Color3.fromRGB(255,255,255)
+    local BG=Color3.fromRGB(12,5,10)
+    local W,H=210,80
+    local guiName="MoveeRagdollTimer_"..labelText
+    pcall(function()
+        local cg=game:GetService("CoreGui"); local old=cg:FindFirstChild(guiName); if old then old:Destroy() end
+        local pg=LP:FindFirstChild("PlayerGui"); if pg then local o=pg:FindFirstChild(guiName); if o then o:Destroy() end end
+    end)
+    local sg=Instance.new("ScreenGui")
+    sg.Name=guiName; sg.ResetOnSpawn=false; sg.IgnoreGuiInset=true; sg.DisplayOrder=25
+    pcall(function() if syn and syn.protect_gui then syn.protect_gui(sg) end end)
+    if not pcall(function() sg.Parent=game:GetService("CoreGui") end) then sg.Parent=LP:WaitForChild("PlayerGui") end
+    local card=Instance.new("Frame",sg)
+    card.Size=UDim2.new(0,W,0,H); card.Position=UDim2.new(0.5,-W/2,0,58)
+    card.BackgroundColor3=BG; card.BackgroundTransparency=1
+    card.BorderSizePixel=0; card.ZIndex=30; card.Active=true
+    Instance.new("UICorner",card).CornerRadius=UDim.new(0,14)
+    local stroke=Instance.new("UIStroke",card)
+    stroke.Color=WHITE; stroke.Thickness=3; stroke.Transparency=1
+    task.spawn(function()
+        local t=0
+        while stroke and stroke.Parent do
+            t=t+0.05
+            stroke.Transparency=0.02+math.abs(math.sin(t*2.5))*0.25
+            task.wait(0.04)
+        end
+    end)
+    local titleLbl=Instance.new("TextLabel",card)
+    titleLbl.Size=UDim2.new(1,-16,0,28); titleLbl.Position=UDim2.new(0,8,0,6)
+    titleLbl.BackgroundTransparency=1
+    titleLbl.Text=(labelText=="RAGDOLL" and "RAGDOLL TIMER" or (labelText=="STONE" and "STONE TIMER" or labelText.." TIMER"))
+    titleLbl.TextColor3=WHITE; titleLbl.Font=Enum.Font.GothamBlack; titleLbl.TextSize=13
+    titleLbl.TextXAlignment=Enum.TextXAlignment.Center; titleLbl.ZIndex=32
+    local divider=Instance.new("Frame",card)
+    divider.Size=UDim2.new(1,-20,0,1); divider.Position=UDim2.new(0,10,0,34)
+    divider.BackgroundColor3=WHITE; divider.BackgroundTransparency=0.5; divider.BorderSizePixel=0; divider.ZIndex=31
+    local timerLbl=Instance.new("TextLabel",card)
+    timerLbl.Size=UDim2.new(1,0,0,H-38); timerLbl.Position=UDim2.new(0,0,0,36)
+    timerLbl.BackgroundTransparency=1; timerLbl.Text=string.format("%.1f",duration).."s"
+    timerLbl.TextColor3=WHITE; timerLbl.Font=Enum.Font.GothamBlack; timerLbl.TextSize=24
+    timerLbl.TextXAlignment=Enum.TextXAlignment.Center; timerLbl.ZIndex=32
+    local shimmer=addShimmerToLabel(timerLbl,WHITE,WHITE)
+    task.spawn(function() local t=0; while timerLbl and timerLbl.Parent do t=t+0.04; shimmer.Offset=Vector2.new(math.sin(t)*0.5,0); task.wait(0.04) end end)
+    local dragStart,dragStartPos,dragging=nil,nil,false
+    card.InputBegan:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+            dragging=true; dragStart=inp.Position; dragStartPos=card.Position
+            inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(inp)
+        if dragging and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
+            local dd=inp.Position-dragStart
+            card.Position=UDim2.new(dragStartPos.X.Scale,dragStartPos.X.Offset+dd.X,dragStartPos.Y.Scale,dragStartPos.Y.Offset+dd.Y)
+        end
+    end)
+    local startTime=tick(); local conn
+    conn=RunService.Heartbeat:Connect(function()
+        local remaining=math.max(0,duration-(tick()-startTime))
+        if remaining<=0 then conn:Disconnect(); pcall(function() sg:Destroy() end)
+        elseif timerLbl and timerLbl.Parent then timerLbl.Text=string.format("%.1f",remaining).."s" end
+    end)
+    return sg
+end
+
+local function onHumanoidStateChanged(old,new)
+    local char=LP.Character; if not char then return end
+    local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    local isRag=(new==Enum.HumanoidStateType.Physics or new==Enum.HumanoidStateType.Ragdoll or new==Enum.HumanoidStateType.FallingDown)
+    if isRag and not hum.PlatformStand and not activeRagdollBillboard then
+        activeRagdollBillboard=createRagdollBillboard(2.6,"RAGDOLL")
+        task.delay(2.6,function() if activeRagdollBillboard then pcall(function() activeRagdollBillboard:Destroy() end); activeRagdollBillboard=nil end end)
+    end
+end
+local function onStoneStateChanged()
+    local char=LP.Character; if not char then return end
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    if hum and hum.PlatformStand and not activeStoneBillboard then
+        activeStoneBillboard=createRagdollBillboard(4.5,"STONE")
+        task.delay(4.5,function() if activeStoneBillboard then pcall(function() activeStoneBillboard:Destroy() end); activeStoneBillboard=nil end end)
+    end
+end
+local function setupRagdollTriggers(char)
+    char=char or LP.Character; if not char then return end
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.StateChanged:Connect(onHumanoidStateChanged)
+        hum:GetPropertyChangedSignal("PlatformStand"):Connect(onStoneStateChanged)
+    end
+end
 
 
 -- ====================== EXACT VOID SPEED (1:1) ======================
@@ -1038,10 +1144,10 @@ runTPDown = function()
 end
 
 -- ============================================================
--- JUMP DROP ONLY (Safe - No Crasher)
+-- DROP BRAINROT - VOIDS VERSION (Ascend then snap to ground)
 -- ============================================================
-local DROP_ASCEND_DURATION = 0.22
-local DROP_ASCEND_SPEED = 160
+local DROP_ASCEND_DURATION = 0.2
+local DROP_ASCEND_SPEED = 150
 local _dropConn = nil
 local dropActive = false
 
@@ -1064,46 +1170,34 @@ local function runJumpDrop()
             if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
             return
         end
-        if not dropActive then
-            if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
-            if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
-            return
-        end
-        if tick() - t0 >= DROP_ASCEND_DURATION then
-            if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
-            pcall(function()
-                local rp = RaycastParams.new()
-                rp.FilterDescendantsInstances = {c}
-                rp.FilterType = Enum.RaycastFilterType.Exclude
-                local rr = workspace:Raycast(r.Position, Vector3.new(0, -3000, 0), rp)
-                if rr then
-                    local hum = c:FindFirstChildOfClass("Humanoid")
-                    local off = ((hum and hum.HipHeight) or 2) + (r.Size.Y / 2)
-                    -- safer landing: stop momentum first, then place character slightly above ground
-                    local oldVel = r.AssemblyLinearVelocity
-                    r.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    r.CFrame = CFrame.new(r.Position.X, rr.Position.Y + off + 0.15, r.Position.Z)
-                    local hum = c:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        hum:ChangeState(Enum.HumanoidStateType.Landed)
-                    end
-                    -- small stabilization impulse instead of a hard velocity correction
-                    r:ApplyImpulse(Vector3.new(0, -r.AssemblyMass * math.max(oldVel.Y, 0) * 0.05, 0))
-                end
-            end)
+        if tick()-t0 >= (DROP_ASCEND_DURATION or 0.2) then
+            _dropConn:Disconnect()
+            _dropConn=nil
+            local rp=RaycastParams.new()
+            rp.FilterDescendantsInstances={c}
+            rp.FilterType=Enum.RaycastFilterType.Exclude
+            local rr=workspace:Raycast(r.Position, Vector3.new(0,-2000,0), rp)
+            if rr then
+                local hum2=c:FindFirstChildOfClass("Humanoid")
+                local off=(hum2 and hum2.HipHeight or 2)+(r.Size.Y/2)
+                r.CFrame=CFrame.new(r.Position.X, rr.Position.Y+off, r.Position.Z)
+                pcall(function()
+                    r.AssemblyLinearVelocity=Vector3.zero
+                    r.Velocity=Vector3.zero
+                end)
+            end
             dropActive = false
             if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
             return
         end
-        -- safer drop lift: apply a controlled upward impulse instead of forcing velocity
-        local mass = r.AssemblyMass
-        local current = r.AssemblyLinearVelocity
-
-        -- prevent extreme vertical speed that can cause damage/death
-        local targetY = math.clamp(DROP_ASCEND_SPEED, 80, 120)
-        if current.Y < targetY then
-            r:ApplyImpulse(Vector3.new(0, (targetY - current.Y) * mass, 0))
-        end
+        pcall(function()
+            r.Velocity=Vector3.new(r.Velocity.X, DROP_ASCEND_SPEED or 150, r.Velocity.Z)
+            r.AssemblyLinearVelocity=Vector3.new(
+                r.AssemblyLinearVelocity.X,
+                DROP_ASCEND_SPEED or 150,
+                r.AssemblyLinearVelocity.Z
+            )
+        end)
     end)
 end
 
@@ -1710,15 +1804,17 @@ local function Main()
 
     local function _applyAntiLagObj(obj)
         pcall(function()
-            if obj:IsA("BasePart") then
-                obj.Material = Enum.Material.Plastic; obj.Reflectance = 0; obj.CastShadow = false
+            if obj:IsA("Accessory") or obj:IsA("Hat") then
+                obj:Destroy()
+            elseif obj:IsA("BasePart") then
+                obj.Material = Enum.Material.Plastic
+                obj.Reflectance = 0
+                obj.CastShadow = false
             elseif obj:IsA("Decal") or obj:IsA("Texture") then
                 obj.Transparency = 1
             elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam")
             or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
                 obj.Enabled = false
-            elseif obj:IsA("AnimationController") or obj:IsA("Animator") then
-                for _,t in ipairs(obj:GetPlayingAnimationTracks()) do pcall(function() t:Stop(0) end) end
             end
         end)
     end
@@ -1731,6 +1827,7 @@ local function Main()
         antiLagDefSpecular   = antiLagDefSpecular   or Lighting.EnvironmentSpecularScale
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 1e10
+        Lighting.Brightness = 1
         Lighting.EnvironmentDiffuseScale = 0
         Lighting.EnvironmentSpecularScale = 0
         for _,e in pairs(Lighting:GetChildren()) do
@@ -1748,7 +1845,7 @@ local function Main()
 
     local function disableAntiLag()
         antiLagActive = false
-        if antiLagDescConn then antiLagDescConn:Disconnect(); antiLagDescConn = nil end
+        if antiLagDescConn then antiLagDescConn:Disconnect(); antiLagDescConn=nil end
         pcall(function()
             Lighting.GlobalShadows = true
             if antiLagDefBrightness then Lighting.Brightness = antiLagDefBrightness end
@@ -1761,6 +1858,8 @@ local function Main()
                     or e:IsA("BloomEffect") or e:IsA("DepthOfFieldEffect") then e.Enabled = true end
                 end)
             end
+        end)
+    end
         end)
     end
 
