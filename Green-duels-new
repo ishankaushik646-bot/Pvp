@@ -857,13 +857,23 @@ local Steal = {
     AutoStealEnabled=true, 
     StealRadius=55, 
     StealDuration=0.25, 
-    StealMode="normal", -- "normal" or "semi" (semi = weekly auto grab)
+    StealMode="normal", -- "normal" or "semi" or "void"
     Data={},
     HalfFireRange=10, 
     HalfHoldMin=1.3, 
     HalfHoldMax=2.6, 
     HalfEntryDelay=0.3,
-    SemiRadius=62
+    SemiRadius=62,
+    -- VOID STEAL (from Voids)
+    HoldMode=1, -- 1=90%, 2=85%, 3=80%, 4=75%
+}
+
+-- VOID STEAL CONFIG (from Voids duels)
+local VOID_HOLD_CFG = {
+    [1] = { threshold = 0.90, nearDist = 14, label = "90%" },
+    [2] = { threshold = 0.85, nearDist = 12, label = "85%" },
+    [3] = { threshold = 0.80, nearDist = 11, label = "80%" },
+    [4] = { threshold = 0.75, nearDist = 10, label = "75%" },
 }
 
 -- ============================================================
@@ -876,7 +886,7 @@ local LAST_PRESET_FILE = "DuelsLastPreset.json"
 local function buildPresetSnapshot() return {
     normalSpeed=State.normalSpeed, carrySpeed=State.carrySpeed,
     laggerSpeed=State.laggerSpeed, laggerCarrySpeed=State.laggerCarrySpeed,
-    stealRadius=Steal.StealRadius, stealDuration=Steal.StealDuration, stealMode=Steal.StealMode,
+    stealRadius=Steal.StealRadius, stealDuration=Steal.StealDuration, stealMode=Steal.StealMode, stealHoldMode=Steal.HoldMode,
     infJump=State.infJumpEnabled, antiRagdoll=State.antiRagdollEnabled,
     antiDie=State.antiDieEnabled, antiFling=State.antiFlingEnabled,
     medusaCounter=State.medusaCounterEnabled, batCounter=State.batCounterEnabled,
@@ -1944,7 +1954,7 @@ local function Main()
         page.LayoutOrder = 2
     end
 
-    -- Auto Steal Page - WITH SEMI STEAL SELECTOR (Native UI)
+    -- Auto Steal Page - WITH VOID STEAL + HOLD AT % (from Voids)
     do
         local page = buildPage("Auto Steal", function()
             makeGap(2); makeSectionHeader("Auto Steal"); makeGap(2)
@@ -1952,8 +1962,7 @@ local function Main()
             toggleSetters["autoSteal"] = setInstaGrab
             
             makeGap(8); makeSectionHeader("Choose Steal Type"); makeGap(2)
-            -- FIXED: Robust selector - no nil refs, proper mutual exclusive logic
-            local normalToggle, semiToggle
+            local normalToggle, semiToggle, voidToggle
             local updatingStealMode = false
 
             local function setStealMode(mode)
@@ -1963,6 +1972,7 @@ local function Main()
                 pcall(function()
                     if normalToggle then normalToggle(mode=="normal") end
                     if semiToggle then semiToggle(mode=="semi") end
+                    if voidToggle then voidToggle(mode=="void") end
                 end)
                 print("[Duels] Steal Mode:", string.upper(mode))
                 if requestSave then requestSave() end
@@ -1972,7 +1982,7 @@ local function Main()
 
             normalToggle = makeToggleRow("Normal Steal", Steal.StealMode=="normal", function(on)
                 if updatingStealMode then return end
-                if on then setStealMode("normal") else setStealMode("semi") end
+                if on then setStealMode("normal") else setStealMode("void") end
             end)
 
             semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", Steal.StealMode=="semi", function(on)
@@ -1980,10 +1990,67 @@ local function Main()
                 if on then setStealMode("semi") else setStealMode("normal") end
             end)
 
+            voidToggle = makeToggleRow("Void Steal [Hold %]", Steal.StealMode=="void", function(on)
+                if updatingStealMode then return end
+                if on then setStealMode("void") else setStealMode("normal") end
+            end)
+
             toggleSetters["normalSteal"] = normalToggle
             toggleSetters["semiSteal"] = semiToggle
-            -- expose setter for config load
+            toggleSetters["voidSteal"] = voidToggle
             _G._SetStealMode = setStealMode
+
+            -- HOLD AT % ROW (like Voids duels)
+            makeGap(6); makeSectionHeader("Hold At %"); makeGap(2)
+            local pctRow = Instance.new("Frame", currentPage)
+            pctRow.Size = UDim2.new(1,-16,0,38)
+            pctRow.BackgroundTransparency = 1
+            pctRow.LayoutOrder = LO()
+            local pctLay = Instance.new("UIListLayout", pctRow)
+            pctLay.FillDirection = Enum.FillDirection.Horizontal
+            pctLay.Padding = UDim.new(0,6)
+            pctLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
+            pctLay.SortOrder = Enum.SortOrder.LayoutOrder
+
+            local pctBtns = {}
+            local function refreshPctButtons()
+                for mode, cfg in pairs(VOID_HOLD_CFG) do
+                    local b = pctBtns[mode]
+                    if b then
+                        local on = (Steal.HoldMode == mode)
+                        b.BackgroundColor3 = on and C.accent or Color3.fromRGB(14,22,16)
+                        b.TextColor3 = on and Color3.fromRGB(0,20,8) or C.rowLabel
+                        if b:FindFirstChild("UIStroke") then
+                            b:FindFirstChild("UIStroke").Color = on and C.accent or C.rowBorder
+                        end
+                    end
+                end
+            end
+
+            for mode = 1, 4 do
+                local cfg = VOID_HOLD_CFG[mode]
+                local b = Instance.new("TextButton", pctRow)
+                b.Size = UDim2.new(0,58,0,32)
+                b.BackgroundColor3 = Color3.fromRGB(14,22,16)
+                b.BorderSizePixel = 0
+                b.Text = cfg.label
+                b.TextColor3 = C.rowLabel
+                b.Font = Enum.Font.GothamBold
+                b.TextSize = 13
+                b.AutoButtonColor = false
+                b.LayoutOrder = mode
+                mkCorner(b, 8)
+                mkStroke(b, C.rowBorder, 1)
+                b.MouseButton1Click:Connect(function()
+                    Steal.HoldMode = mode
+                    refreshPctButtons()
+                    if requestSave then requestSave() end
+                    print("[Duels] Void Hold At:", cfg.label)
+                end)
+                pctBtns[mode] = b
+            end
+            refreshPctButtons()
+            _G._RefreshHoldPct = refreshPctButtons
 
             makeGap(6); makeSectionHeader("Steal Config"); makeGap(2)
             stealRadBox = makeInputRow("Steal Radius", Steal.StealRadius, function(n) if n then n=math.floor(n); if n>=1 and n<=500 then Steal.StealRadius=n; Steal.SemiRadius=n end end end)
@@ -3170,6 +3237,80 @@ end
                 if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
                 resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
             end)
+        elseif Steal.StealMode=="void" then
+            -- VOID STEAL - Hold at % logic from Voids (90/85/80/75)
+            local cfg = VOID_HOLD_CFG[Steal.HoldMode or 1] or VOID_HOLD_CFG[1]
+            local threshold = cfg.threshold
+            local nearDist = cfg.nearDist
+            local totalTime = Steal.StealDuration
+            local timeToThreshold = totalTime * threshold
+            local timeAfterThreshold = totalTime - timeToThreshold
+            local startTime = tick()
+
+            if stealProgressConn then stealProgressConn:Disconnect() end
+            stealProgressConn=RunService.Heartbeat:Connect(function()
+                if not isStealing then return end
+                local elapsed = tick() - startTime
+                local pct = math.clamp(elapsed / totalTime, 0, 1)
+                if pct > threshold then pct = threshold end
+                updateProgressBar(pct)
+            end)
+
+            task.spawn(function()
+                for _,fn in ipairs(data.hold) do task.spawn(fn) end
+                -- Phase 1: charge up to threshold %
+                while tick() - startTime < timeToThreshold do
+                    if not Steal.AutoStealEnabled or not prompt.Parent then
+                        if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                        resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+                        return
+                    end
+                    task.wait()
+                end
+                updateProgressBar(threshold)
+                -- Phase 2: wait until near enough (max 4s) - HOLD AT %
+                local stillNear = false
+                if _getPromptDist(prompt) <= nearDist then stillNear = true end
+                if not stillNear then
+                    local holdStart = tick()
+                    while tick() - holdStart < 4 do
+                        if not Steal.AutoStealEnabled or not prompt.Parent then
+                            if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                            resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+                            return
+                        end
+                        updateProgressBar(threshold)
+                        if _getPromptDist(prompt) <= nearDist then
+                            stillNear = true
+                            break
+                        end
+                        task.wait()
+                    end
+                    if not stillNear then
+                        if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                        resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+                        return
+                    end
+                end
+                -- Phase 3: finish remaining duration then trigger
+                local resumeTime = tick()
+                while tick() - resumeTime < timeAfterThreshold do
+                    if not Steal.AutoStealEnabled or not prompt.Parent then
+                        if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                        resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+                        return
+                    end
+                    local fin = (tick() - resumeTime) / math.max(timeAfterThreshold, 0.01)
+                    local pct = threshold + fin * (1 - threshold)
+                    updateProgressBar(pct)
+                    task.wait()
+                end
+                updateProgressBar(1)
+                for _,fn in ipairs(data.trigger) do task.spawn(fn) end
+                task.wait(0.05)
+                if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+            end)
         else
             -- NORMAL STEAL
             local startTime=tick(); local duration=Steal.StealDuration
@@ -3708,7 +3849,7 @@ end
         end
 
         -- RESTORE STEAL MODE (Normal / Semi) - FIXED SAVE/LOAD
-        if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
+        if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi" or decErr.stealMode == "void") then
             Steal.StealMode = decErr.stealMode
             print("[Duels] Restored Steal Mode:", Steal.StealMode)
             pcall(function()
@@ -3722,6 +3863,11 @@ end
         else
             -- if config had no stealMode (old config), keep current but log
             print("[Duels] No stealMode in config, using:", Steal.StealMode)
+        end
+        if decErr.stealHoldMode and type(decErr.stealHoldMode)=="number" then
+            Steal.HoldMode = math.clamp(math.floor(decErr.stealHoldMode),1,4)
+            print("[Duels] Restored HoldMode:", VOID_HOLD_CFG[Steal.HoldMode].label)
+            if _G._RefreshHoldPct then pcall(_G._RefreshHoldPct) end
         end
 
         local bools = {
@@ -3885,7 +4031,7 @@ end
                     if d.laggerCarrySpeed then State.laggerCarrySpeed=d.laggerCarrySpeed; if laggerCarryBox then laggerCarryBox.Text=tostring(d.laggerCarrySpeed) end end
                     if d.stealRadius then Steal.StealRadius=d.stealRadius; if stealRadBox and not stealRadBox:IsFocused() then stealRadBox.Text=tostring(Steal.StealRadius) end end
                     if d.stealDuration then Steal.StealDuration=d.stealDuration; if stealDurBox then stealDurBox.Text=tostring(Steal.StealDuration) end end
-                    if d.stealMode and (d.stealMode=="normal" or d.stealMode=="semi") then
+                    if d.stealMode and (d.stealMode=="normal" or d.stealMode=="semi" or d.stealMode=="void") then
                         Steal.StealMode=d.stealMode
                         -- update toggles if they exist
                         pcall(function()
