@@ -1874,62 +1874,82 @@ local function Main()
             _G._SetStealMode = setStealMode
 
             makeGap(8); makeSectionHeader("Hold At % (Void Only)"); makeGap(2)
-            -- Void Hold % buttons like in Void Duels
-            local pctRow = Instance.new("Frame")
-            pctRow.Size = UDim2.new(1,-8,0,36)
-            pctRow.BackgroundTransparency = 1
-            pctRow.LayoutOrder = 10
-            pctRow.Parent = page
-            local pctLay = Instance.new("UIListLayout", pctRow)
-            pctLay.FillDirection = Enum.FillDirection.Horizontal
-            pctLay.Padding = UDim.new(0,6)
-            pctLay.VerticalAlignment = Enum.VerticalAlignment.Center
-            local PCT_OPTIONS = {
-                {mode=1, label="90%", stealMode="void90"},
-                {mode=2, label="85%", stealMode="void85"},
-                {mode=3, label="80%", stealMode="void80"},
-                {mode=4, label="75%", stealMode="void75"},
-            }
-            local pctBtns = {}
-            local function refreshPctButtons()
-                for _,info in ipairs(PCT_OPTIONS) do
-                    local b = pctBtns[info.mode]
-                    if b then
-                        local on = (Steal.VoidMode == info.mode) and string.find(Steal.StealMode, "void")
-                        b.BackgroundColor3 = on and Color3.fromRGB(255,255,255) or Color3.fromRGB(18,18,22)
-                        b.TextColor3 = on and Color3.fromRGB(0,0,0) or Color3.fromRGB(230,230,235)
+            do
+                local pctRow = Instance.new("Frame")
+                pctRow.Name = "VoidHoldPctRow"
+                pctRow.Size = UDim2.new(1, -16, 0, 42)
+                pctRow.BackgroundColor3 = Color3.fromRGB(14,22,16)
+                pctRow.BorderSizePixel = 0
+                pctRow.Parent = page
+                -- Use LO() if available for proper ordering
+                pcall(function() pctRow.LayoutOrder = LO() end)
+                Instance.new("UICorner", pctRow).CornerRadius = UDim.new(0,12)
+                local stroke = Instance.new("UIStroke", pctRow)
+                stroke.Color = Color3.fromRGB(34,76,46)
+                stroke.Thickness = 1
+                stroke.Transparency = 0.5
+
+                local pctLay = Instance.new("UIListLayout", pctRow)
+                pctLay.FillDirection = Enum.FillDirection.Horizontal
+                pctLay.Padding = UDim.new(0,6)
+                pctLay.VerticalAlignment = Enum.VerticalAlignment.Center
+                pctLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
+                pctLay.SortOrder = Enum.SortOrder.LayoutOrder
+
+                local pad = Instance.new("UIPadding", pctRow)
+                pad.PaddingLeft = UDim.new(0,10)
+                pad.PaddingRight = UDim.new(0,10)
+
+                local PCT_OPTIONS = {
+                    {mode=1, label="90%", stealMode="void90"},
+                    {mode=2, label="85%", stealMode="void85"},
+                    {mode=3, label="80%", stealMode="void80"},
+                    {mode=4, label="75%", stealMode="void75"},
+                }
+                local pctBtns = {}
+                local function refreshPctButtons()
+                    for _,info in ipairs(PCT_OPTIONS) do
+                        local b = pctBtns[info.mode]
+                        if b then
+                            local isVoid = Steal.StealMode and string.find(Steal.StealMode, "void")
+                            local on = (Steal.VoidMode == info.mode) and isVoid
+                            b.BackgroundColor3 = on and Color3.fromRGB(38,240,125) or Color3.fromRGB(18,18,22)
+                            b.TextColor3 = on and Color3.fromRGB(0,20,8) or Color3.fromRGB(230,230,235)
+                        end
                     end
                 end
+                for i,info in ipairs(PCT_OPTIONS) do
+                    local b = Instance.new("TextButton")
+                    b.Name = "Pct_"..info.label
+                    b.Size = UDim2.new(0,58,0,30)
+                    b.BackgroundColor3 = Color3.fromRGB(18,18,22)
+                    b.BorderSizePixel = 0
+                    b.Text = info.label
+                    b.TextColor3 = Color3.fromRGB(230,230,235)
+                    b.Font = Enum.Font.GothamBold
+                    b.TextSize = 13
+                    b.AutoButtonColor = false
+                    b.LayoutOrder = i
+                    b.Parent = pctRow
+                    Instance.new("UICorner", b).CornerRadius = UDim.new(0,8)
+                    local s = Instance.new("UIStroke", b)
+                    s.Color = Color3.fromRGB(50,50,55)
+                    s.Thickness = 1
+                    b.MouseButton1Click:Connect(function()
+                        Steal.VoidMode = info.mode
+                        Steal.StealMode = info.stealMode
+                        refreshPctButtons()
+                        if voidToggle then pcall(function() voidToggle(true) end) end
+                        if normalToggle then pcall(function() normalToggle(false) end) end
+                        if semiToggle then pcall(function() semiToggle(false) end) end
+                        if requestSave then pcall(requestSave) end
+                        print("[Duels] Void Hold % set to", info.label)
+                    end)
+                    pctBtns[info.mode] = b
+                end
+                refreshPctButtons()
+                _G._RefreshVoidPct = refreshPctButtons
             end
-            for i,info in ipairs(PCT_OPTIONS) do
-                local b = Instance.new("TextButton")
-                b.Size = UDim2.new(0,58,0,30)
-                b.BackgroundColor3 = Color3.fromRGB(18,18,22)
-                b.BorderSizePixel = 0
-                b.Text = info.label
-                b.TextColor3 = Color3.fromRGB(230,230,235)
-                b.Font = Enum.Font.GothamBold
-                b.TextSize = 13
-                b.AutoButtonColor = false
-                b.LayoutOrder = i
-                b.Parent = pctRow
-                Instance.new("UICorner", b).CornerRadius = UDim.new(0,8)
-                local stroke = Instance.new("UIStroke", b)
-                stroke.Color = Color3.fromRGB(50,50,55)
-                stroke.Thickness = 1
-                b.MouseButton1Click:Connect(function()
-                    Steal.VoidMode = info.mode
-                    Steal.StealMode = info.stealMode
-                    refreshPctButtons()
-                    if voidToggle then voidToggle(true) end
-                    if normalToggle then normalToggle(false) end
-                    if semiToggle then semiToggle(false) end
-                    if requestSave then requestSave() end
-                end)
-                pctBtns[info.mode] = b
-            end
-            refreshPctButtons()
-            _G._RefreshVoidPct = refreshPctButtons
 
             makeGap(6); makeSectionHeader("Steal Config"); makeGap(2)
             stealRadBox = makeInputRow("Steal Radius", Steal.StealRadius, function(n) if n then n=math.floor(n); if n>=1 and n<=500 then Steal.StealRadius=n; Steal.SemiRadius=n end end end)
