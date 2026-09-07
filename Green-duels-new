@@ -986,7 +986,7 @@ local LAST_PRESET_FILE = "DuelsLastPreset.json"
 local function buildPresetSnapshot() return {
     normalSpeed=State.normalSpeed, carrySpeed=State.carrySpeed,
     laggerSpeed=State.laggerSpeed, laggerCarrySpeed=State.laggerCarrySpeed,
-    stealRadius=Steal.StealRadius, stealDuration=Steal.StealDuration, stealMode=Steal.StealMode, stealHoldMode=Steal.HoldMode,
+    stealRadius=Steal.StealRadius, stealDuration=Steal.StealDuration, stealMode=Steal.StealMode, holdMode=Steal.HoldMode, stretchedResEnabled=State.stretchedResEnabled, stretchFOV=State.stretchFOV, stealHoldMode=Steal.HoldMode,
     infJump=State.infJumpEnabled, antiRagdoll=State.antiRagdollEnabled,
     antiDie=State.antiDieEnabled, antiFling=State.antiFlingEnabled,
     medusaCounter=State.medusaCounterEnabled, batCounter=State.batCounterEnabled,
@@ -2241,9 +2241,9 @@ toggleSetters["antiRagdoll"] = setAntiRag
     do
         local page = buildPage("Visual", function()
             makeGap(2); makeSectionHeader("Performance"); makeGap(2)
-            antiLagSetter = makeToggleRow("Anti-Lag (recommended)", State.antiLagEnabled, function(on) State.antiLagEnabled=on; if on then enableAntiLag() else disableAntiLag() end end)
+            antiLagSetter = makeToggleRow("Anti-Lag (recommended)", State.antiLagEnabled, function(on) State.antiLagEnabled=on; if on then enableAntiLag() else disableAntiLag() end if requestSave then requestSave() end end)
             toggleSetters["antiLag"] = antiLagSetter
-            stretchSetter = makeToggleRow("Stretch Rez", State.stretchedResEnabled, function(on) State.stretchedResEnabled=on; if on then enableStretchRez() else disableStretchRez() end end)
+            stretchSetter = makeToggleRow("Stretch Rez", State.stretchedResEnabled, function(on) State.stretchedResEnabled=on; if on then enableStretchRez() else disableStretchRez() end if requestSave then requestSave() end end)
             toggleSetters["stretchedRes"] = stretchSetter
             do
                 local fovRow = Instance.new("Frame", currentPage); fovRow.Size = UDim2.new(1,-16,0,42); fovRow.BackgroundColor3=Color3.fromRGB(14,22,16); fovRow.BorderSizePixel=0; fovRow.LayoutOrder=LO(); mkCorner(fovRow,12)
@@ -3835,6 +3835,8 @@ end
                 mirrorTPDownEnabled = mirrorTPDownEnabled,
                 safeMode = State.safeModeEnabled,
                 stealMode = Steal.StealMode,
+                holdMode = Steal.HoldMode,
+                holdAtPercent = Steal.HoldMode,
                 aimbotMode = State.aimbotMode,
             }
             local encoded = HttpService:JSONEncode(cfg)
@@ -3954,6 +3956,18 @@ end
         else
             -- if config had no stealMode (old config), keep current but log
             print("[Duels] No stealMode in config, using:", Steal.StealMode)
+        end
+
+        -- RESTORE HOLD AT % (FIXED SAVE/LOAD)
+        if decErr.holdMode ~= nil or decErr.holdAtPercent ~= nil then
+            local restored = decErr.holdMode or decErr.holdAtPercent
+            if type(restored) == "number" and VOID_HOLD_CFG[restored] then
+                Steal.HoldMode = restored
+                print("[Duels] Restored HoldMode:", Steal.HoldMode, VOID_HOLD_CFG[Steal.HoldMode].label)
+                pcall(function()
+                    if _G._RefreshHoldPct then _G._RefreshHoldPct() end
+                end)
+            end
         end
 
         local bools = {
