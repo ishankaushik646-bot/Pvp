@@ -724,12 +724,7 @@ pcall(function()
     end
 end)
 
--- Second connection like Void does (Heartbeat as well)
-pcall(function()
-    RunService.Heartbeat:Connect(function()
-        _voidApplyVelocitySpeedExact(getActiveMoveSpeedExact())
-    end)
-end)
+-- REMOVED double speed connection (was causing 2x speed - fixed)
 
 -- ====================== ANTI DIE (global — Anti Drop style) EXACT VOID ======================
 local function setupAntiDieExact(char)
@@ -2250,17 +2245,6 @@ toggleSetters["antiRagdoll"] = setAntiRag
             toggleSetters["antiLag"] = antiLagSetter
             stretchSetter = makeToggleRow("Stretch Rez", State.stretchedResEnabled, function(on) State.stretchedResEnabled=on; if on then enableStretchRez() else disableStretchRez() end end)
             toggleSetters["stretchedRes"] = stretchSetter
-
-            do
-                local ragdollToggle = makeToggleRow("Ragdoll Timer (Head)", State.ragdollGuiEnabled ~= false, function(on)
-                    ragdollGuiEnabled = on
-                    if State then State.ragdollGuiEnabled = on end
-                    if _G.ToggleRagdollGui then _G.ToggleRagdollGui(on) end
-                    requestSave()
-                end)
-                toggleSetters["ragdollTimer"] = ragdollToggle
-            end
-
             do
                 local fovRow = Instance.new("Frame", currentPage); fovRow.Size = UDim2.new(1,-16,0,42); fovRow.BackgroundColor3=Color3.fromRGB(14,22,16); fovRow.BorderSizePixel=0; fovRow.LayoutOrder=LO(); mkCorner(fovRow,12)
                 local fovStroke = mkStroke(fovRow, Color3.fromRGB(34,76,46),1); fovStroke.Transparency=0.5
@@ -2734,7 +2718,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
             local bb=Instance.new("BillboardGui", head); bb.Name="DuelsBB"; bb.Size=UDim2.new(0,180,0,100); bb.StudsOffset=Vector3.new(0,3,0); bb.AlwaysOnTop=true
             local list=Instance.new("UIListLayout",bb); list.FillDirection=Enum.FillDirection.Vertical; list.SortOrder=Enum.SortOrder.LayoutOrder; list.VerticalAlignment=Enum.VerticalAlignment.Center; list.Padding=UDim.new(0,2)
             local speedBillLbl=Instance.new("TextLabel",bb); speedBillLbl.Name="SpeedBillLbl"; speedBillLbl.Size=UDim2.new(1,0,0,24); speedBillLbl.BackgroundTransparency=1; speedBillLbl.Text="0.0"; speedBillLbl.TextColor3=Color3.fromRGB(38,240,125); speedBillLbl.Font=Enum.Font.GothamBlack; speedBillLbl.TextScaled=true; speedBillLbl.TextStrokeTransparency=0.1; speedBillLbl.TextStrokeColor3=Color3.new(0,0,0); speedBillLbl.LayoutOrder=1
-            local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text=""; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
+            local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/Duels"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
             local ragTimerLbl=Instance.new("TextLabel",bb); ragTimerLbl.Name="RagdollTimerLbl"; ragTimerLbl.Size=UDim2.new(1,0,0,30); ragTimerLbl.BackgroundTransparency=1; ragTimerLbl.Text=""; ragTimerLbl.TextColor3=Color3.fromRGB(255,60,60); ragTimerLbl.Font=Enum.Font.GothamBlack; ragTimerLbl.TextScaled=true; ragTimerLbl.TextStrokeTransparency=0.1; ragTimerLbl.TextStrokeColor3=Color3.new(0,0,0); ragTimerLbl.LayoutOrder=3
         end
         stopAntiRagdoll()
@@ -2755,68 +2739,6 @@ toggleSetters["antiRagdoll"] = setAntiRag
     end
     LP.CharacterAdded:Connect(setupChar)
     if LP.Character then task.spawn(function() setupChar(LP.Character) end) end
-
-    
--- VOID RAGDOLL TIMER HEAD ONLY LOGIC
-local ragdollGuiEnabled = true
-if State then if State.ragdollGuiEnabled == nil then State.ragdollGuiEnabled = true end ragdollGuiEnabled = State.ragdollGuiEnabled end
-local _ragHeadConn1, _ragHeadConn2 = nil, nil
-local function hookVoidRagdollHead(char)
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    pcall(function() if _ragHeadConn1 then _ragHeadConn1:Disconnect() end end)
-    pcall(function() if _ragHeadConn2 then _ragHeadConn2:Disconnect() end end)
-    _ragHeadConn1 = hum.StateChanged:Connect(function(old,new)
-        if not ragdollGuiEnabled then return end
-        if State and State.ragdollGuiEnabled == false then return end
-        local isRag = (new==Enum.HumanoidStateType.Physics or new==Enum.HumanoidStateType.Ragdoll or new==Enum.HumanoidStateType.FallingDown)
-        if isRag and not hum.PlatformStand then
-            local head = char:FindFirstChild("Head")
-            local bb = head and head:FindFirstChild("RagdollOnlyBB")
-            local lbl = bb and bb:FindFirstChild("RagdollTimerLbl")
-            if lbl then
-                task.spawn(function()
-                    local dur=2.6
-                    local st=tick()
-                    while tick()-st < dur do
-                        local rem = math.max(0, dur - (tick()-st))
-                        if ragdollGuiEnabled and State.ragdollGuiEnabled ~= false and lbl.Parent then
-                            lbl.Text = "RAGDOLL: " .. string.format("%.1f", rem) .. "s"
-                        end
-                        task.wait(0.05)
-                    end
-                    if lbl.Parent then lbl.Text="" end
-                end)
-            end
-        end
-    end)
-    _ragHeadConn2 = hum:GetPropertyChangedSignal("PlatformStand"):Connect(function()
-        if not ragdollGuiEnabled then return end
-        if State and State.ragdollGuiEnabled == false then return end
-        if hum.PlatformStand then
-            local head = char:FindFirstChild("Head")
-            local bb = head and head:FindFirstChild("RagdollOnlyBB")
-            local lbl = bb and bb:FindFirstChild("RagdollTimerLbl")
-            if lbl then
-                task.spawn(function()
-                    local dur=4.5
-                    local st=tick()
-                    while tick()-st < dur do
-                        local rem = math.max(0, dur - (tick()-st))
-                        if ragdollGuiEnabled and State.ragdollGuiEnabled ~= false and lbl.Parent then
-                            lbl.Text = "STONE: " .. string.format("%.1f", rem) .. "s"
-                        end
-                        task.wait(0.05)
-                    end
-                    if lbl.Parent then lbl.Text="" end
-                end)
-            end
-        end
-    end)
-end
-LP.CharacterAdded:Connect(function(c) task.wait(0.5) hookVoidRagdollHead(c) end)
-if LP.Character then task.spawn(function() task.wait(0.6) hookVoidRagdollHead(LP.Character) end) end
-_G.ToggleRagdollGui = function(on) ragdollGuiEnabled=on if State then State.ragdollGuiEnabled=on end end
 
     -- ============================================================
     -- AUTO LEFT / RIGHT - FIXED
