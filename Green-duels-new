@@ -1840,6 +1840,7 @@ local function Main()
         antiLagDefSpecular   = antiLagDefSpecular   or Lighting.EnvironmentSpecularScale
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 1e10
+        Lighting.Brightness = 1
         Lighting.EnvironmentDiffuseScale = 0
         Lighting.EnvironmentSpecularScale = 0
         for _,e in pairs(Lighting:GetChildren()) do
