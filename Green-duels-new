@@ -724,7 +724,12 @@ pcall(function()
     end
 end)
 
--- REMOVED double speed connection (was causing 2x speed - fixed)
+-- Second connection like Void does (Heartbeat as well)
+pcall(function()
+    RunService.Heartbeat:Connect(function()
+        _voidApplyVelocitySpeedExact(getActiveMoveSpeedExact())
+    end)
+end)
 
 -- ====================== ANTI DIE (global — Anti Drop style) EXACT VOID ======================
 local function setupAntiDieExact(char)
@@ -984,7 +989,7 @@ local PRESET_FILE = "DuelsPresets.json"
 local LAST_PRESET_FILE = "DuelsLastPreset.json"
 
 local function buildPresetSnapshot() return {
-    normalSpeed=State.normalSpeed, carrySpeed=State.carrySpeed,
+    normalSpeed=State.normalSpeed, carrySpeed=State.carrySpeed, ragdollTimer=State.ragdollGuiEnabled,
     laggerSpeed=State.laggerSpeed, laggerCarrySpeed=State.laggerCarrySpeed,
     stealRadius=Steal.StealRadius, stealDuration=Steal.StealDuration, stealMode=Steal.StealMode, stealHoldMode=Steal.HoldMode,
     infJump=State.infJumpEnabled, antiRagdoll=State.antiRagdollEnabled,
@@ -2245,6 +2250,23 @@ toggleSetters["antiRagdoll"] = setAntiRag
             toggleSetters["antiLag"] = antiLagSetter
             stretchSetter = makeToggleRow("Stretch Rez", State.stretchedResEnabled, function(on) State.stretchedResEnabled=on; if on then enableStretchRez() else disableStretchRez() end end)
             toggleSetters["stretchedRes"] = stretchSetter
+
+            -- RAGDOLL TIMER TOGGLE (Void style, head only)
+            do
+                local ragdollToggle = makeToggleRow("Ragdoll Timer (Head)", true, function(on)
+                    ragdollGuiEnabled = on
+                    if State then State.ragdollGuiEnabled = on end
+                    if _G.ToggleRagdollGui then _G.ToggleRagdollGui(on) end
+                    requestSave()
+                end)
+                toggleSetters["ragdollTimer"] = ragdollToggle
+                -- set initial state
+                if State and State.ragdollGuiEnabled == false then
+                    ragdollGuiEnabled = false
+                    if ragdollToggle then ragdollToggle(false) end
+                end
+            end
+
             do
                 local fovRow = Instance.new("Frame", currentPage); fovRow.Size = UDim2.new(1,-16,0,42); fovRow.BackgroundColor3=Color3.fromRGB(14,22,16); fovRow.BorderSizePixel=0; fovRow.LayoutOrder=LO(); mkCorner(fovRow,12)
                 local fovStroke = mkStroke(fovRow, Color3.fromRGB(34,76,46),1); fovStroke.Transparency=0.5
@@ -4234,6 +4256,210 @@ Players.PlayerAdded:Connect(function(player)
     task.spawn(function() setupOtherPlayerSpeed(player) end)
 end)
 end)()
+
+
+-- ============================================================
+-- VOID RAGDOLL TIMER - HEAD ONLY (NO TOP BILLBOARD, NO DISCORD)
+-- ============================================================
+local ragdollGuiEnabled = true
+if State then State.ragdollGuiEnabled = true end
+
+local activeRagdollOverheads = {} -- [char] = {endTime, label}
+
+local function setupHeadRagdollSystem()
+    local function onCharacterAdded(char)
+        task.wait(0.3)
+        local head = char:FindFirstChild("Head")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not head or not hrp or not hum then return end
+        if char ~= LP.Character then return end -- ONLY LOCAL PLAYER
+
+        -- Clean old
+        for _, v in ipairs(head:GetChildren()) do
+            if v.Name == "DuelsBB_Other" or v.Name == "DuelsBB_Enhanced" or v.Name == "DuelsBB_VoidHead" then v:Destroy() end
+        end
+
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "DuelsBB_VoidHead"
+        bb.Size = UDim2.new(0, 200, 0, 50)
+        bb.StudsOffset = Vector3.new(0, 3.8, 0)
+        bb.AlwaysOnTop = true
+        bb.Parent = head
+
+        local speedLbl = Instance.new("TextLabel", bb)
+        speedLbl.Name = "SpeedLbl"
+        speedLbl.Size = UDim2.new(1, 0, 0, 22)
+        speedLbl.Position = UDim2.new(0, 0, 0, 0)
+        speedLbl.BackgroundTransparency = 1
+        speedLbl.Text = "Speed: 0.0"
+        speedLbl.TextColor3 = Color3.fromRGB(120,220,255)
+        speedLbl.Font = Enum.Font.GothamBlack
+        speedLbl.TextSize = 15
+        speedLbl.TextStrokeTransparency = 0
+        speedLbl.TextStrokeColor3 = Color3.new(0,0,0)
+
+        local ragdollLbl = Instance.new("TextLabel", bb)
+        ragdollLbl.Name = "RagdollLbl"
+        ragdollLbl.Size = UDim2.new(1, 0, 0, 22)
+        ragdollLbl.Position = UDim2.new(0, 0, 0, 22)
+        ragdollLbl.BackgroundTransparency = 1
+        ragdollLbl.Text = ""
+        ragdollLbl.TextColor3 = Color3.fromRGB(255, 80, 80)
+        ragdollLbl.Font = Enum.Font.GothamBlack
+        ragdollLbl.TextSize = 16
+        ragdollLbl.TextStrokeTransparency = 0
+        ragdollLbl.TextStrokeColor3 = Color3.new(0,0,0)
+
+        -- Speed loop (Void style - shows target speed)
+        task.spawn(function()
+            while char and char.Parent and hrp and hrp.Parent and speedLbl and speedLbl.Parent do
+                pcall(function()
+                    local hspd = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z).Magnitude
+                    if hum and hum.MoveDirection.Magnitude > 0.05 and not hum.PlatformStand then
+                        local target = getActiveMoveSpeedExact and getActiveMoveSpeedExact() or nil
+                        if target and target > 0 and hspd > target * 0.55 then
+                            hspd = target
+                        end
+                    end
+                    speedLbl.Text = string.format("Speed: %.1f", hspd)
+                end)
+                task.wait(0.1)
+            end
+        end)
+
+        -- Store for ragdoll updates
+        activeRagdollOverheads[char] = {lbl = ragdollLbl, endTime = 0, label = ""}
+
+        -- Ragdoll countdown loop
+        task.spawn(function()
+            while char and char.Parent and ragdollLbl and ragdollLbl.Parent do
+                local data = activeRagdollOverheads[char]
+                if data and data.endTime > 0 then
+                    local remaining = math.max(0, data.endTime - tick())
+                    if remaining > 0 then
+                        if ragdollGuiEnabled and (not State or State.ragdollGuiEnabled ~= false) then
+                            ragdollLbl.Text = data.label .. ": " .. string.format("%.1f", remaining) .. "s"
+                        else
+                            ragdollLbl.Text = ""
+                        end
+                    else
+                        ragdollLbl.Text = ""
+                        data.endTime = 0
+                    end
+                end
+                task.wait(0.05)
+            end
+        end)
+    end
+
+    -- Other players - speed only (keep original behavior)
+    local function setupOtherPlayerSpeed(player)
+        if player == LP then return end
+        local function onOtherCharAdded(char)
+            task.wait(0.3)
+            local head = char:FindFirstChild("Head")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not head or not hrp then return end
+            for _, v in ipairs(head:GetChildren()) do
+                if v.Name == "DuelsBB_VoidHead" or v.Name == "DuelsBB_Other" then v:Destroy() end
+            end
+            local bb = Instance.new("BillboardGui", head)
+            bb.Name = "DuelsBB_Other"
+            bb.Size = UDim2.new(0, 160, 0, 24)
+            bb.StudsOffset = Vector3.new(0, 3, 0)
+            bb.AlwaysOnTop = true
+            bb.Parent = head
+            local speedLbl = Instance.new("TextLabel", bb)
+            speedLbl.Name = "SpeedBillLbl"
+            speedLbl.Size = UDim2.new(1, 0, 1, 0)
+            speedLbl.BackgroundTransparency = 1
+            speedLbl.Text = "0.0"
+            speedLbl.TextColor3 = Color3.fromRGB(38, 240, 125)
+            speedLbl.Font = Enum.Font.GothamBlack
+            speedLbl.TextScaled = true
+            speedLbl.TextStrokeTransparency = 0
+            speedLbl.TextStrokeColor3 = Color3.new(0, 0, 0)
+            task.spawn(function()
+                while char and char.Parent and hrp and hrp.Parent and speedLbl and speedLbl.Parent do
+                    pcall(function()
+                        local hspd = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z).Magnitude
+                        speedLbl.Text = string.format("%.1f", hspd)
+                    end)
+                    task.wait(0.1)
+                end
+            end)
+        end
+        if player.Character then task.spawn(function() onOtherCharAdded(player.Character) end) end
+        player.CharacterAdded:Connect(onOtherCharAdded)
+    end
+
+    if LP.Character then task.spawn(function() onCharacterAdded(LP.Character) end) end
+    LP.CharacterAdded:Connect(onCharacterAdded)
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then task.spawn(function() setupOtherPlayerSpeed(p) end) end
+    end
+    Players.PlayerAdded:Connect(function(p) task.spawn(function() if p == LP then onCharacterAdded(p.Character or p.CharacterAdded:Wait()) else setupOtherPlayerSpeed(p) end end) end)
+
+    -- Void exact ragdoll detection
+    local function onHumanoidStateChanged(old,new)
+        if not ragdollGuiEnabled then return end
+        if State and State.ragdollGuiEnabled == false then return end
+        local char = LP.Character; if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+        local isRag = (new == Enum.HumanoidStateType.Physics or new == Enum.HumanoidStateType.Ragdoll or new==Enum.HumanoidStateType.FallingDown)
+        if isRag and not hum.PlatformStand then
+            local data = activeRagdollOverheads[char]
+            if data then
+                data.label = "RAGDOLL"
+                data.endTime = tick() + 2.6
+            end
+        end
+    end
+
+    local function onMedusaStateChanged()
+        if not ragdollGuiEnabled then return end
+        if State and State.ragdollGuiEnabled == false then return end
+        local char = LP.Character; if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.PlatformStand then
+            local data = activeRagdollOverheads[char]
+            if data then
+                data.label = "STONE"
+                data.endTime = tick() + 4.5
+            end
+        end
+    end
+
+    local function hookRagdollTriggers(char)
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            pcall(function() if _G._RagdollStateConn then _G._RagdollStateConn:Disconnect() end end)
+            pcall(function() if _G._RagdollPlatConn then _G._RagdollPlatConn:Disconnect() end end)
+            _G._RagdollStateConn = hum.StateChanged:Connect(onHumanoidStateChanged)
+            _G._RagdollPlatConn = hum:GetPropertyChangedSignal("PlatformStand"):Connect(onMedusaStateChanged)
+        end
+    end
+
+    LP.CharacterAdded:Connect(function(c) task.wait(0.5) hookRagdollTriggers(c) end)
+    if LP.Character then task.spawn(function() task.wait(0.6) hookRagdollTriggers(LP.Character) end) end
+
+    _G.ToggleRagdollGui = function(on)
+        ragdollGuiEnabled = on
+        if State then State.ragdollGuiEnabled = on end
+        if not on then
+            for _, data in pairs(activeRagdollOverheads) do
+                if data.lbl then data.lbl.Text = "" end
+                data.endTime = 0
+            end
+        end
+    end
+end
+
+setupHeadRagdollSystem()
+
+
 
 -- ============ STANDALONE AIMBOT MODE SELECTOR (ALWAYS VISIBLE) ============
 task.spawn(function()
