@@ -724,12 +724,7 @@ pcall(function()
     end
 end)
 
--- Second connection like Void does (Heartbeat as well)
-pcall(function()
-    RunService.Heartbeat:Connect(function()
-        _voidApplyVelocitySpeedExact(getActiveMoveSpeedExact())
-    end)
-end)
+-- REMOVED double speed connection (was causing 2x speed - fixed)
 
 -- ====================== ANTI DIE (global — Anti Drop style) EXACT VOID ======================
 local function setupAntiDieExact(char)
