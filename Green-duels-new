@@ -3253,7 +3253,7 @@ end
         for _,p in ipairs(Players:GetPlayers()) do if p~=LP and p.Character then for _,part in ipairs(p.Character:GetChildren()) do if part:IsA("BasePart") then part.CanCollide=false end end end end
     end)
 
-    -- VOIDVS SPEED REPLACEMENT (Anti-Drop CFrame)
+    -- VOIDVS SPEED REPLACEMENT (Anti-Drop CFrame) - FIXED NO AUTO MOVE
     local FLING_THRESHOLD = 80
     RunService.RenderStepped:Connect(function()
         if not (h and hrp) then return end; if State._tpInProgress then return end
@@ -3264,10 +3264,9 @@ end
         end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
             local md=h.MoveDirection
-            if md.Magnitude > 0.05 then State.lastMoveDir = md end
-            if md.Magnitude <= 0.05 and not State.antiRagdollEnabled then return end
-            local useDir = md.Magnitude > 0.05 and md or State.lastMoveDir
-            if useDir.Magnitude <= 0.05 then return end
+            -- FIX: Only move when joystick is actually used
+            if md.Magnitude <= 0.05 then return end
+            State.lastMoveDir = md
             local spd
             if State.laggerMode==1 then spd=State.laggerSpeed
             elseif State.laggerMode==2 then spd=State.laggerCarrySpeed
@@ -3275,9 +3274,9 @@ end
             local laggerModeEnabled = State.laggerMode ~= 0
             local carryActive = (State.laggerMode == 2) or (State.laggerMode == 0 and State.speedToggled)
             local pureCarry = carryActive and not laggerModeEnabled
-            local u = useDir.Unit
+            local u = md.Unit
             if pureCarry then
-                -- Exact Void Anti-Drop logic
+                -- Exact Void Anti-Drop logic - CFrame step only when moving
                 local step = u * (spd / 60)
                 hrp.CFrame = hrp.CFrame + Vector3.new(step.X, 0, step.Z)
             else
