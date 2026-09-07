@@ -500,12 +500,12 @@ end
 -- STATE
 -- ============================================================
 local State = {
-    normalSpeed=59, carrySpeed=9, laggerSpeed=30, laggerCarrySpeed=15, -- VOID VALUES
+    normalSpeed=59, carrySpeed=9, laggerSpeed=30, laggerCarrySpeed=15, -- VOID EXACT VALUES
     speedToggled=false,
     laggerMode=0,
     infJumpEnabled=true, antiRagdollEnabled=false,
-antiDieEnabled=false,
-antiFlingEnabled=false,
+antiDieEnabled=true,
+antiFlingEnabled=true, -- VOID EXACT: enabled
     guiVisible=true, uiLocked=false,
     isStealing=false, stealStartTime=nil, lastStealTick=0,
     autoLeftEnabled=false, autoRightEnabled=false,
@@ -537,6 +537,131 @@ antiFlingEnabled=false,
     autoTPHeight=20,
     autoTPConn=nil,
 }
+
+
+-- ====================== EXACT VOID SPEED (1:1) ======================
+local FLING_THRESHOLD = 80
+local lastMoveDirExact = Vector3.new(0,0,0)
+
+local function isRagdollStateExact(hum)
+    if not hum then return true end
+    local st=hum:GetState()
+    return hum.PlatformStand or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown
+end
+
+local function getActiveMoveSpeedExact()
+    local laggerModeEnabled = State.laggerMode ~= 0
+    local carryActive = (State.laggerMode == 2) or (State.laggerMode == 0 and State.speedToggled)
+    if laggerModeEnabled then
+        return carryActive and State.laggerCarrySpeed or State.laggerSpeed
+    else
+        return carryActive and State.carrySpeed or State.normalSpeed
+    end
+end
+
+local function _voidApplyVelocitySpeedExact(speed)
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return end
+
+    -- Anti Fling (with Anti Die) - EXACT VOID
+    if State.antiDieEnabled and root.AssemblyLinearVelocity.Magnitude > FLING_THRESHOLD then
+        root.AssemblyLinearVelocity = Vector3.new(0, root.AssemblyLinearVelocity.Y, 0)
+        root.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    if hum.Health <= 0 then return end
+
+    -- don't override combat movement - EXACT VOID CHECK
+    if State.batAimbotToggled or State.autoLeftEnabled or State.autoRightEnabled then
+        return
+    end
+
+    if isRagdollStateExact(hum) then
+        lastMoveDirExact = Vector3.zero
+        return
+    end
+
+    local dir = hum.MoveDirection
+    if dir.Magnitude <= 0.05 then return end
+
+    lastMoveDirExact = dir
+    local u = dir.Unit
+    local s = speed
+    local laggerModeEnabled = State.laggerMode ~= 0
+    local carryActive = (State.laggerMode == 2) or (State.laggerMode == 0 and State.speedToggled)
+    local pureCarry = carryActive and not laggerModeEnabled
+
+    if pureCarry then
+        -- CFrame Step (Carry) — exact Anti Drop logic from Void
+        local step = u * (s / 60)
+        root.CFrame = root.CFrame + Vector3.new(step.X, 0, step.Z)
+    else
+        -- Normal / Lagger Velocity - EXACT VOID
+        root.Velocity = Vector3.new(u.X * s, root.Velocity.Y, u.Z * s)
+    end
+end
+
+local _voidSpeedConnExact = nil
+pcall(function()
+    if RunService.PreSimulation then
+        _voidSpeedConnExact = RunService.PreSimulation:Connect(function()
+            _voidApplyVelocitySpeedExact(getActiveMoveSpeedExact())
+        end)
+    else
+        _voidSpeedConnExact = RunService.Heartbeat:Connect(function()
+            _voidApplyVelocitySpeedExact(getActiveMoveSpeedExact())
+        end)
+    end
+end)
+
+-- Second connection like Void does (Heartbeat as well)
+pcall(function()
+    RunService.Heartbeat:Connect(function()
+        _voidApplyVelocitySpeedExact(getActiveMoveSpeedExact())
+    end)
+end)
+
+-- ====================== ANTI DIE (global — Anti Drop style) EXACT VOID ======================
+local function setupAntiDieExact(char)
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 5)
+    if not hum then return end
+    -- Disconnect old if exists
+    pcall(function()
+        if _G._AntiDieConn then _G._AntiDieConn:Disconnect() end
+    end)
+    _G._AntiDieConn = hum.HealthChanged:Connect(function(hp)
+        if State.antiDieEnabled and hp <= 0 then
+            pcall(function()
+                hum.Health = hum.MaxHealth
+                -- Also prevent ragdoll
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end)
+        end
+    end)
+    -- Also prevent death state
+    hum.StateChanged:Connect(function(_, new)
+        if State.antiDieEnabled and new == Enum.HumanoidStateType.Dead then
+            pcall(function() hum.Health = hum.MaxHealth end)
+        end
+    end)
+end
+
+if LP.Character then task.spawn(function() setupAntiDieExact(LP.Character) end) end
+LP.CharacterAdded:Connect(function(c)
+    task.wait(0.1)
+    setupAntiDieExact(c)
+end)
+
+-- Enable AntiDie by default like Void does (Void has antiDieEnabled=true)
+State.antiDieEnabled = true
+-- ====================== END EXACT VOID ======================
+
+
+
 
 if earlyConfig then
     if earlyConfig.introEnabled ~= nil then State.introEnabled = earlyConfig.introEnabled end
@@ -3253,34 +3378,21 @@ end
         for _,p in ipairs(Players:GetPlayers()) do if p~=LP and p.Character then for _,part in ipairs(p.Character:GetChildren()) do if part:IsA("BasePart") then part.CanCollide=false end end end end
     end)
 
-    -- VOIDVS SPEED REPLACEMENT (Anti-Drop CFrame) - FIXED NO AUTO MOVE
-    local FLING_THRESHOLD = 80
     RunService.RenderStepped:Connect(function()
         if not (h and hrp) then return end; if State._tpInProgress then return end
-        -- Anti Fling
-        if State.antiDieEnabled and hrp.AssemblyLinearVelocity.Magnitude > FLING_THRESHOLD then
-            hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-            hrp.AssemblyAngularVelocity = Vector3.zero
-        end
         if not State.batAimbotToggled and not State.autoLeftEnabled and not State.autoRightEnabled then
             local md=h.MoveDirection
-            -- FIX: Only move when joystick is actually used
-            if md.Magnitude <= 0.05 then return end
-            State.lastMoveDir = md
             local spd
             if State.laggerMode==1 then spd=State.laggerSpeed
             elseif State.laggerMode==2 then spd=State.laggerCarrySpeed
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
-            local laggerModeEnabled = State.laggerMode ~= 0
-            local carryActive = (State.laggerMode == 2) or (State.laggerMode == 0 and State.speedToggled)
-            local pureCarry = carryActive and not laggerModeEnabled
-            local u = md.Unit
-            if pureCarry then
-                -- Exact Void Anti-Drop logic - CFrame step only when moving
-                local step = u * (spd / 60)
-                hrp.CFrame = hrp.CFrame + Vector3.new(step.X, 0, step.Z)
-            else
-                hrp.Velocity = Vector3.new(u.X * spd, hrp.Velocity.Y, u.Z * spd)
+            if md.Magnitude>0 then
+                State.lastMoveDir=md
+                -- DISABLED: now handled by exact Void _voidApplyVelocitySpeedExact
+            elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
+                local anyHeld=false
+                for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
+                -- DISABLED: Void handles it
             end
         end
         pcall(function()
