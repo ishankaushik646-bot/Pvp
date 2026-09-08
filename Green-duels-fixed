@@ -776,8 +776,12 @@ function ensureLinVel()
 end
 
 -- ============================================================
---  SPOOF ASSEMBLYLINEARVELOCITY READS/WRITES
+--  SPOOF ASSEMBLYLINEARVELOCITY READS (Fixed for Drop + Inf Jump)
 -- ============================================================
+-- We only spoof READS to zero for anti-drop detection.
+-- We ALLOW writes so drop and infinite jump can work.
+-- The LinearVelocity engine handles actual movement.
+
 pcall(function()
     if not (getrawmetatable and setreadonly and newcclosure) then return end
     local mt = getrawmetatable(game)
@@ -788,23 +792,21 @@ pcall(function()
             if typeof(self) == "Instance" and self:IsA("BasePart")
                 and self.Name == "HumanoidRootPart"
                 and LP.Character and self:IsDescendantOf(LP.Character) then
+                -- Don't spoof during drop (drop needs real velocity reads)
+                if dropActive then
+                    return oldIndex(self, key)
+                end
+                -- Don't spoof when TP in progress
+                if State._tpInProgress then
+                    return oldIndex(self, key)
+                end
                 return spoofedVelocity
             end
         end
         return oldIndex(self, key)
     end)
-    local oldNewIndex = mt.__newindex
-    mt.__newindex = newcclosure(function(self, key, value)
-        if key == "AssemblyLinearVelocity" or key == "Velocity" then
-            if typeof(self) == "Instance" and self:IsA("BasePart")
-                and self.Name == "HumanoidRootPart"
-                and LP.Character and self:IsDescendantOf(LP.Character) then
-                -- swallow write (anti-drop protection)
-                return
-            end
-        end
-        return oldNewIndex(self, key, value)
-    end)
+    -- FIX: Don't swallow __newindex anymore, let Velocity/AssemblyLinearVelocity writes pass
+    -- This fixes infinite jump and drop which rely on setting Velocity
     setreadonly(mt, true)
 end)
 
@@ -815,7 +817,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- ============================================================
---  MAIN MOVEMENT LOOP (RenderStepped) - ORVYN ENGINE
+--  MAIN MOVEMENT LOOP (RenderStepped) - ORVYN ENGINE (Fixed for Drop)
 -- ============================================================
 local _speedRenderConn = nil
 _speedRenderConn = RunService.RenderStepped:Connect(function()
@@ -824,6 +826,12 @@ _speedRenderConn = RunService.RenderStepped:Connect(function()
     local hum = char:FindFirstChildOfClass("Humanoid")
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hum or not hrp then return end
+
+    -- PAUSE during drop to prevent 20x teleport loop
+    if dropActive then
+        clearLinVel()
+        return
+    end
 
     -- Anti Fling
     if State.antiDieEnabled and hrp.AssemblyLinearVelocity.Magnitude > FLING_THRESHOLD then
@@ -989,18 +997,26 @@ local Keys = {
 -- ========== HOLD INFINITE JUMP ONLY ==========
 -- Simple hold to fly - from your new file
 
+-- FIXED INFINITE JUMP - uses AssemblyLinearVelocity (works with new spoof that allows writes)
 UserInputService.JumpRequest:Connect(function()
     if not State.infJumpEnabled then return end
+    if dropActive or State._tpInProgress then return end
     local char = LP.Character
     if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
     local root = char:FindFirstChild("HumanoidRootPart")
-    if root then
-        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+    if root and hum then
+        -- Use ChangeState for more reliable infinite jump
+        pcall(function()
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
+        end)
     end
 end)
 
 RunService.Heartbeat:Connect(function()
     if not State.infJumpEnabled then return end
+    if dropActive or State._tpInProgress then return end
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -1009,13 +1025,17 @@ RunService.Heartbeat:Connect(function()
     -- Hold jump to keep jumping
     local hum = char:FindFirstChildOfClass("Humanoid")
     local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
-    if jumpHeld and root.Velocity.Y < 30 then
-        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+    if jumpHeld and root.AssemblyLinearVelocity.Y < 30 then
+        pcall(function()
+            root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
+        end)
     end
     
     -- Fall speed limit
-    if root.Velocity.Y < -120 then
-        root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
+    if root.AssemblyLinearVelocity.Y < -120 then
+        pcall(function()
+            root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -120, root.AssemblyLinearVelocity.Z)
+        end)
     end
 end)
 
@@ -1357,6 +1377,8 @@ local function runJumpDrop()
     if stackBtnRefs.drop then stackBtnRefs.drop.setOn(true) end
     local t0 = tick()
     if _dropConn then _dropConn:Disconnect() end
+    -- Clear Orvyn LinVel during drop to prevent conflict
+    pcall(function() clearLinVel() end)
     _dropConn = RunService.Heartbeat:Connect(function()
         local c = LP.Character
         local r = c and c:FindFirstChild("HumanoidRootPart")
