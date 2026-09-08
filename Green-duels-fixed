@@ -997,45 +997,51 @@ local Keys = {
 -- ========== HOLD INFINITE JUMP ONLY ==========
 -- Simple hold to fly - from your new file
 
--- FIXED INFINITE JUMP - uses AssemblyLinearVelocity (works with new spoof that allows writes)
+-- SAFE INFINITE JUMP - No Velocity kill version
+-- This version does NOT set AssemblyLinearVelocity (which was killing you)
+-- It uses Hum:ChangeState + Jump property which is safe in Duels
+
+local _lastInfJump = 0
 UserInputService.JumpRequest:Connect(function()
     if not State.infJumpEnabled then return end
     if dropActive or State._tpInProgress then return end
     local char = LP.Character
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if root and hum then
-        -- Use ChangeState for more reliable infinite jump
-        pcall(function()
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
-        end)
-    end
+    if not hum then return end
+    if hum.Health <= 0 then return end
+    if tick() - _lastInfJump < 0.08 then return end
+    _lastInfJump = tick()
+    pcall(function()
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        -- Small safe boost using Jump property, not Velocity
+        hum.Jump = true
+    end)
 end)
 
-RunService.Heartbeat:Connect(function()
+-- Hold space to keep jumping, with debounce to prevent death
+local _infJumpHoldConn = nil
+if _infJumpHoldConn then _infJumpHoldConn:Disconnect() end
+_infJumpHoldConn = RunService.Heartbeat:Connect(function()
     if not State.infJumpEnabled then return end
     if dropActive or State._tpInProgress then return end
     local char = LP.Character
     if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    -- Hold jump to keep jumping
     local hum = char:FindFirstChildOfClass("Humanoid")
-    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
-    if jumpHeld and root.AssemblyLinearVelocity.Y < 30 then
-        pcall(function()
-            root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
-        end)
-    end
-    
-    -- Fall speed limit
-    if root.AssemblyLinearVelocity.Y < -120 then
-        pcall(function()
-            root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -120, root.AssemblyLinearVelocity.Z)
-        end)
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return end
+    if hum.Health <= 0 then return end
+    -- Don't interfere if on ground or already jumping up fast
+    if hum.FloorMaterial ~= Enum.Material.Air then return end
+    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space)
+    if jumpHeld then
+        if tick() - _lastInfJump >= 0.12 and root.AssemblyLinearVelocity.Y < 10 then
+            _lastInfJump = tick()
+            pcall(function()
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                hum.Jump = true
+            end)
+        end
     end
 end)
 
