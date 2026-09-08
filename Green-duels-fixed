@@ -787,6 +787,7 @@ pcall(function()
     local mt = getrawmetatable(game)
     setreadonly(mt, false)
     local oldIndex = mt.__index
+    _G.OrvynOldIndex = oldIndex -- Save for infinite jump real velocity bypass
     mt.__index = newcclosure(function(self, key)
         if key == "AssemblyLinearVelocity" or key == "Velocity" then
             if typeof(self) == "Instance" and self:IsA("BasePart")
@@ -997,53 +998,69 @@ local Keys = {
 -- ========== HOLD INFINITE JUMP ONLY ==========
 -- Simple hold to fly - from your new file
 
--- SAFE INFINITE JUMP - No Velocity kill version
--- This version does NOT set AssemblyLinearVelocity (which was killing you)
--- It uses Hum:ChangeState + Jump property which is safe in Duels
+-- ========== HOLD INFINITE JUMP ONLY (User Requested Logic - Integrated with Orvyn Bypass) ==========
+-- Using Velocity as requested, but with real velocity read bypass to avoid spoof conflict
 
-local _lastInfJump = 0
+-- Store real velocity reader (bypasses spoof)
+local function getRealVelocity(root)
+    -- Try to get real velocity bypassing spoof
+    if _G.OrvynOldIndex then
+        local ok, val = pcall(function() return _G.OrvynOldIndex(root, "Velocity") end)
+        if ok and typeof(val) == "Vector3" then return val end
+    end
+    -- Fallback try AssemblyLinearVelocity bypass
+    if _G.OrvynOldIndex then
+        local ok, val = pcall(function() return _G.OrvynOldIndex(root, "AssemblyLinearVelocity") end)
+        if ok and typeof(val) == "Vector3" then return val end
+    end
+    return root.Velocity
+end
+
+local _lastInfJumpReal = 0
 UserInputService.JumpRequest:Connect(function()
     if not State.infJumpEnabled then return end
     if dropActive or State._tpInProgress then return end
     local char = LP.Character
     if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    if hum.Health <= 0 then return end
-    if tick() - _lastInfJump < 0.08 then return end
-    _lastInfJump = tick()
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    if tick() - _lastInfJumpReal < 0.05 then return end
+    _lastInfJumpReal = tick()
     pcall(function()
-        hum:ChangeState(Enum.HumanoidStateType.Jumping)
-        -- Small safe boost using Jump property, not Velocity
-        hum.Jump = true
+        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
     end)
 end)
 
--- Hold space to keep jumping, with debounce to prevent death
-local _infJumpHoldConn = nil
-if _infJumpHoldConn then _infJumpHoldConn:Disconnect() end
-_infJumpHoldConn = RunService.Heartbeat:Connect(function()
+RunService.Heartbeat:Connect(function()
     if not State.infJumpEnabled then return end
     if dropActive or State._tpInProgress then return end
     local char = LP.Character
     if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
     local root = char:FindFirstChild("HumanoidRootPart")
-    if not hum or not root then return end
-    if hum.Health <= 0 then return end
-    -- Don't interfere if on ground or already jumping up fast
-    if hum.FloorMaterial ~= Enum.Material.Air then return end
-    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space)
-    if jumpHeld then
-        if tick() - _lastInfJump >= 0.12 and root.AssemblyLinearVelocity.Y < 10 then
-            _lastInfJump = tick()
+    if not root then return end
+    
+    -- Hold jump to keep jumping
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local jumpHeld = UIS:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
+    local realVel = getRealVelocity(root)
+    if jumpHeld and realVel.Y < 30 then
+        if tick() - _lastInfJumpReal >= 0.08 then
+            _lastInfJumpReal = tick()
             pcall(function()
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-                hum.Jump = true
+                root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
             end)
         end
     end
+    
+    -- Fall speed limit
+    if realVel.Y < -120 then
+        pcall(function()
+            root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
+        end)
+    end
 end)
+
+print("Hold Infinite Jump loaded - Hold Space to jump repeatedly! (Orvyn Integrated)")
 
 -- Keep stub for compatibility with old saves that might call it
 _G.AceNormalInfJump = _G.AceNormalInfJump or {}
