@@ -97,22 +97,42 @@ local function stopAntiBat()
         AntiBatConn:Disconnect()
         AntiBatConn = nil
     end
-end
 
 
-local function startJumpHoldLoop()
-    if JumpHoldConn then JumpHoldConn:Disconnect() end
-    JumpHoldConn = RunService.Heartbeat:Connect(function()
-        if not InfiniteJumpHoldEnabled or not IsJumpingHold then return end
-        local char = LocalPlayer.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
-        end
-    end)
-end
+-- ========== HOLD INFINITE JUMP ONLY (REPLACED) ==========
+-- JumpRequest for instant jump
+UserInputService.JumpRequest:Connect(function()
+    if not InfiniteJumpEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if root then
+        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+    end
+end)
 
+-- Main Hold Infinite Jump Loop with fall speed limit
+if JumpHoldConn then JumpHoldConn:Disconnect() end
+JumpHoldConn = RunService.Heartbeat:Connect(function()
+    if not InfiniteJumpEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
+    if jumpHeld and root.Velocity.Y < 30 then
+        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+    end
+    
+    -- Fall speed limit
+    if root.Velocity.Y < -120 then
+        root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
+    end
+end)
+
+-- Keep IsJumpingHold for compatibility
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.Space or input.UserInputType == Enum.UserInputType.Touch then
@@ -126,15 +146,13 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
-UserInputService.JumpRequest:Connect(function()
-    if not InfiniteJumpEnabled then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if root then
-        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
-    end
-end)
+local function startJumpHoldLoop()
+    -- Compatibility stub - logic is now in Heartbeat above
+end
+-- ========== END HOLD INFINITE JUMP ==========
+
+
+end
 
 
 local function startAntiRagdoll()
