@@ -491,8 +491,16 @@ end
 
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
-local function applyImpulseForVelocity(hrp, desiredVelocity)
-    if not hrp or not desiredVelocity then return end
+local function applyImpulseForVelocity(root, vel)
+    pcall(function()
+        if _linVel and _linVel.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
+            -- Use Orvyn LinearVelocity
+            _linVel.PlaneVelocity = Vector2.new(vel.X, vel.Z)
+        else
+            root.AssemblyLinearVelocity = vel
+        end
+    end)
+end
     hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
 end
 
@@ -814,13 +822,8 @@ pcall(function()
     end)
     local oldNewIndex = mt.__newindex
     mt.__newindex = newcclosure(function(self, key, value)
-        if key == "AssemblyLinearVelocity" or key == "Velocity" then
-            if typeof(self) == "Instance" and self:IsA("BasePart")
-                and self.Name == "HumanoidRootPart"
-                and LP.Character and self:IsDescendantOf(LP.Character) then
-                return
-            end
-        end
+        -- Allow all writes through so Jump Drop & Infinite Jump still work
+        -- We only spoof READS to 0 for anti-cheat bypass
         return oldNewIndex(self, key, value)
     end)
     setreadonly(mt, true)
@@ -1006,7 +1009,9 @@ UserInputService.JumpRequest:Connect(function()
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if root then
+        pcall(function() clearLinVel() end)
         root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
     end
 end)
 
@@ -1021,7 +1026,9 @@ RunService.Heartbeat:Connect(function()
     local hum = char:FindFirstChildOfClass("Humanoid")
     local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
     if jumpHeld and root.Velocity.Y < 30 then
+        pcall(function() clearLinVel() end)
         root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
     end
     
     -- Fall speed limit
@@ -1360,6 +1367,9 @@ local dropActive = false
 
 local function runJumpDrop()
     if dropActive then return end
+    pcall(function() if _linVel then _linVel.MaxForce = 0 end end)
+    task.wait()
+    pcall(function() if _linVel then _linVel.MaxForce = 1e6 end end)
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -2954,18 +2964,28 @@ toggleSetters["antiRagdoll"] = setAntiRag
     -- ============================================================
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
-    local function applyImpulseForVelocity(hrp, desiredVelocity)
-    if not hrp or not desiredVelocity then return end
+    local function applyImpulseForVelocity(root, vel)
+    pcall(function()
+        if _linVel and _linVel.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
+            -- Use Orvyn LinearVelocity
+            _linVel.PlaneVelocity = Vector2.new(vel.X, vel.Z)
+        else
+            root.AssemblyLinearVelocity = vel
+        end
+    end)
+end
     hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
 end
 
     stopAutoLeft = function()
         if alConn then alConn:Disconnect(); alConn = nil end; alPhase = 1
+        pcall(function() clearLinVel() end)
         local char = LP.Character; if char then local hum2 = char:FindFirstChildOfClass("Humanoid"); if hum2 then pcall(function() hum2:Move(Vector3.zero, false) end) end end
         if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end
     end
     stopAutoRight = function()
         if arConn then arConn:Disconnect(); arConn = nil end; arPhase = 1
+        pcall(function() clearLinVel() end)
         local char = LP.Character; if char then local hum2 = char:FindFirstChildOfClass("Humanoid"); if hum2 then pcall(function() hum2:Move(Vector3.zero, false) end) end end
         if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end
     end
@@ -4441,7 +4461,7 @@ local function setupOtherPlayerSpeed(player)
         task.spawn(function()
             while char and char.Parent and hrp and hrp.Parent and speedLbl and speedLbl.Parent do
                 pcall(function()
-                    local hspd = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z).Magnitude
+                    local hspd = 0; pcall(function() local isLocal = LP.Character and hrp:IsDescendantOf(LP.Character); if isLocal and _linVel and _linVel.Parent then hspd = Vector2.new(_linVel.PlaneVelocity.X, _linVel.PlaneVelocity.Y).Magnitude else hspd = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z).Magnitude if hspd < 0.1 then hspd = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z).Magnitude end end end)
                     speedLbl.Text = string.format("%.1f", hspd)
                 end)
                 task.wait(0.1)
