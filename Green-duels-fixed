@@ -72,6 +72,103 @@ end))
 
 
 -- ============================================================
+-- NEW LINEAR VELOCITY ENGINE - REPLACED FROM STANDALONE
+-- ============================================================
+local _linVel, _linVelAtt0, _linVelAtt1, _linVelChar = nil, nil, nil, nil
+
+local function destroyLinVel()
+    if _linVel then pcall(_linVel.Destroy, _linVel) end
+    if _linVelAtt0 then pcall(_linVelAtt0.Destroy, _linVelAtt0) end
+    if _linVelAtt1 then pcall(_linVelAtt1.Destroy, _linVelAtt1) end
+    _linVel, _linVelAtt0, _linVelAtt1, _linVelChar = nil, nil, nil, nil
+end
+
+function setupLinearVelocity(char)
+    destroyLinVel()
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        local ok, res = pcall(function() return char:WaitForChild("HumanoidRootPart", 5) end)
+        if ok then hrp = res end
+    end
+    if not hrp then return end
+    local att0 = Instance.new("Attachment")
+    att0.Name = "OrvynLinVelAtt0"
+    att0.Parent = hrp
+    local att1 = Instance.new("Attachment")
+    att1.Name = "OrvynLinVelAtt1"
+    att1.Parent = hrp
+    local lv = Instance.new("LinearVelocity")
+    lv.Name = "OrvynLinVel"
+    lv.Attachment0 = att0
+    lv.Attachment1 = att1
+    lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+    lv.PrimaryTangentAxis = Vector3.new(1, 0, 0)
+    lv.SecondaryTangentAxis = Vector3.new(0, 0, 1)
+    lv.RelativeTo = Enum.ActuatorRelativeTo.World
+    lv.MaxForce = 1e6
+    lv.PlaneVelocity = Vector2.new(0, 0)
+    lv.Parent = hrp
+    _linVel = lv
+    _linVelAtt0 = att0
+    _linVelAtt1 = att1
+    _linVelChar = char
+end
+
+function setLinVelXZ(x, z)
+    if _linVel and _linVel.Parent then
+        pcall(function()
+            _linVel.PlaneVelocity = Vector2.new(x, z)
+        end)
+    end
+end
+
+function clearLinVel()
+    if _linVel and _linVel.Parent then
+        pcall(function()
+            _linVel.PlaneVelocity = Vector2.new(0, 0)
+        end)
+    end
+end
+
+function ensureLinVel()
+    local char = LP.Character
+    if not char then return false end
+    if _linVel and _linVel.Parent and _linVelChar == char then
+        return true
+    end
+    setupLinearVelocity(char)
+    return _linVel ~= nil and _linVel.Parent ~= nil
+end
+
+-- Hook for respawn
+LP.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    pcall(setupLinearVelocity, char)
+end)
+task.defer(function()
+    if LP.Character then
+        task.wait(0.3)
+        pcall(setupLinearVelocity, LP.Character)
+    end
+end)
+
+-- Dummy keep old function name so other parts of duels don't error
+local function applyImpulseForVelocity(hrp, desiredVelocity)
+    if not hrp or not desiredVelocity then return end
+    local flat = Vector3.new(desiredVelocity.X, 0, desiredVelocity.Z)
+    if flat.Magnitude < 0.01 then
+        clearLinVel()
+        return
+    end
+    setLinVelXZ(flat.X, flat.Z)
+end
+
+
+
+
+
+-- ============================================================
 -- FIX: Missing variables
 -- ============================================================
 local DROP_TYPES = {
@@ -517,23 +614,7 @@ end
 
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
-local function applyImpulseForVelocity(hrp, desiredVelocity)
-    if not hrp or not desiredVelocity then return end
-    local flat = Vector3.new(desiredVelocity.X, 0, desiredVelocity.Z)
-    local spd = flat.Magnitude
-    if spd < 0.05 then
-        spoofedVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-        hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        return
-    end
-    local dir = flat.Unit
-    pcall(function()
-        if hrp.SetNetworkOwner then hrp:SetNetworkOwner(LP) end
-    end)
-    spoofedVelocity = Vector3.zero -- keep zero spoof
-    hrp.AssemblyLinearVelocity = Vector3.new(dir.X * spd, hrp.AssemblyLinearVelocity.Y, dir.Z * spd)
-end
+-- REMOVED OLD applyImpulseForVelocity - replaced with LinearVelocity
 
 -- ============================================================
 -- STATE
@@ -2488,23 +2569,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
     -- ============================================================
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
-    local function applyImpulseForVelocity(hrp, desiredVelocity)
-    if not hrp or not desiredVelocity then return end
-    local flat = Vector3.new(desiredVelocity.X, 0, desiredVelocity.Z)
-    local spd = flat.Magnitude
-    if spd < 0.05 then
-        spoofedVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-        hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        return
-    end
-    local dir = flat.Unit
-    pcall(function()
-        if hrp.SetNetworkOwner then hrp:SetNetworkOwner(LP) end
-    end)
-    spoofedVelocity = Vector3.zero -- keep zero spoof
-    hrp.AssemblyLinearVelocity = Vector3.new(dir.X * spd, hrp.AssemblyLinearVelocity.Y, dir.Z * spd)
-end
+    -- REMOVED OLD applyImpulseForVelocity - replaced with LinearVelocity
 
     stopAutoLeft = function()
         if alConn then alConn:Disconnect(); alConn = nil end; alPhase = 1
@@ -3315,11 +3380,19 @@ end
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                applyImpulseForVelocity(hrp, Vector3.new(md.X*spd, hrp.AssemblyLinearVelocity.Y, md.Z*spd))
+                ensureLinVel()
+                setLinVelXZ(md.X*spd, md.Z*spd)
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then applyImpulseForVelocity(hrp, Vector3.new(State.lastMoveDir.X*spd, hrp.AssemblyLinearVelocity.Y, State.lastMoveDir.Z*spd)) end
+                if anyHeld then 
+                    ensureLinVel()
+                    setLinVelXZ(State.lastMoveDir.X*spd, State.lastMoveDir.Z*spd)
+                else
+                    clearLinVel()
+                end
+            else
+                clearLinVel()
             end
         end
         pcall(function()
