@@ -27,6 +27,7 @@ if not request then return end
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
+_G.DuelsV2_Running = nil
 if _G.DuelsV2_Running then return end
 _G.DuelsV2_Running = true
 
@@ -492,16 +493,15 @@ end
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
 local function applyImpulseForVelocity(root, vel)
+    if not root or not vel then return end
     pcall(function()
         if _linVel and _linVel.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
-            -- Use Orvyn LinearVelocity
             _linVel.PlaneVelocity = Vector2.new(vel.X, vel.Z)
         else
             root.AssemblyLinearVelocity = vel
+            root.Velocity = Vector3.new(vel.X, root.Velocity.Y, vel.Z)
         end
     end)
-end
-    hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
 end
 
 -- ============================================================
@@ -652,7 +652,6 @@ local function setupRagdollTriggers(char)
         hum:GetPropertyChangedSignal("PlatformStand"):Connect(onStoneStateChanged)
     end
 end
-
 
 
 -- ====================== ORVYN SPEED - REPLACED (LinearVelocity Anti-Drop) ======================
@@ -949,6 +948,7 @@ local function setupAntiDieExact(char)
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 5)
     if not hum then return end
+    -- Disconnect old if exists
     pcall(function()
         if _G._AntiDieConn then _G._AntiDieConn:Disconnect() end
     end)
@@ -956,10 +956,12 @@ local function setupAntiDieExact(char)
         if State.antiDieEnabled and hp <= 0 then
             pcall(function()
                 hum.Health = hum.MaxHealth
+                -- Also prevent ragdoll
                 hum:ChangeState(Enum.HumanoidStateType.GettingUp)
             end)
         end
     end)
+    -- Also prevent death state
     hum.StateChanged:Connect(function(_, new)
         if State.antiDieEnabled and new == Enum.HumanoidStateType.Dead then
             pcall(function() hum.Health = hum.MaxHealth end)
@@ -973,8 +975,9 @@ LP.CharacterAdded:Connect(function(c)
     setupAntiDieExact(c)
 end)
 
+-- Enable AntiDie by default like Void does (Void has antiDieEnabled=true)
 State.antiDieEnabled = true
--- ====================== END ANTI DIE ======================
+-- ====================== END EXACT VOID ======================
 
 
 
@@ -2965,16 +2968,15 @@ toggleSetters["antiRagdoll"] = setAntiRag
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
     local function applyImpulseForVelocity(root, vel)
+    if not root or not vel then return end
     pcall(function()
         if _linVel and _linVel.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
-            -- Use Orvyn LinearVelocity
             _linVel.PlaneVelocity = Vector2.new(vel.X, vel.Z)
         else
             root.AssemblyLinearVelocity = vel
+            root.Velocity = Vector3.new(vel.X, root.Velocity.Y, vel.Z)
         end
     end)
-end
-    hrp.Velocity = Vector3.new(desiredVelocity.X, hrp.Velocity.Y, desiredVelocity.Z)
 end
 
     stopAutoLeft = function()
