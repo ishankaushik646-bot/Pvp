@@ -27,6 +27,7 @@ if not request then return end
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
+_G.DuelsV2_Running = nil
 if _G.DuelsV2_Running then return end
 _G.DuelsV2_Running = true
 
@@ -42,130 +43,7 @@ local Workspace = game:GetService("Workspace")
 
 local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
 
--- FIXED SPOOF - ZERO SPOOF FOR DUELS V2 (from new file but adapted)
-local spoofedVelocity = Vector3.zero
-
--- Force zero every frame like new file
-RunService.Heartbeat:Connect(function()
-    spoofedVelocity = Vector3.zero
-end)
-
-local _oldIndex; _oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
-    if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") then
-        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and LP.Character and self:IsDescendantOf(LP.Character) then
-            return spoofedVelocity -- always zero to server
-        end
-    end
-    return _oldIndex(self, key)
-end))
-
-local _oldNewIndex; _oldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(self, key, value)
-    if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") then
-        if typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and LP.Character and self:IsDescendantOf(LP.Character) then
-            -- swallow external writes, keep spoofed as zero
-            return
-        end
-    end
-    -- allow internal writes (your velocity) to go through
-    return _oldNewIndex(self, key, value)
-end))
-
-
--- ============================================================
--- NEW LINEAR VELOCITY ENGINE - REPLACED FROM STANDALONE
--- ============================================================
-local _linVel, _linVelAtt0, _linVelAtt1, _linVelChar = nil, nil, nil, nil
-
-local function destroyLinVel()
-    if _linVel then pcall(_linVel.Destroy, _linVel) end
-    if _linVelAtt0 then pcall(_linVelAtt0.Destroy, _linVelAtt0) end
-    if _linVelAtt1 then pcall(_linVelAtt1.Destroy, _linVelAtt1) end
-    _linVel, _linVelAtt0, _linVelAtt1, _linVelChar = nil, nil, nil, nil
-end
-
-function setupLinearVelocity(char)
-    destroyLinVel()
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        local ok, res = pcall(function() return char:WaitForChild("HumanoidRootPart", 5) end)
-        if ok then hrp = res end
-    end
-    if not hrp then return end
-    local att0 = Instance.new("Attachment")
-    att0.Name = "OrvynLinVelAtt0"
-    att0.Parent = hrp
-    local att1 = Instance.new("Attachment")
-    att1.Name = "OrvynLinVelAtt1"
-    att1.Parent = hrp
-    local lv = Instance.new("LinearVelocity")
-    lv.Name = "OrvynLinVel"
-    lv.Attachment0 = att0
-    lv.Attachment1 = att1
-    lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
-    lv.PrimaryTangentAxis = Vector3.new(1, 0, 0)
-    lv.SecondaryTangentAxis = Vector3.new(0, 0, 1)
-    lv.RelativeTo = Enum.ActuatorRelativeTo.World
-    lv.MaxForce = 1e6
-    lv.PlaneVelocity = Vector2.new(0, 0)
-    lv.Parent = hrp
-    _linVel = lv
-    _linVelAtt0 = att0
-    _linVelAtt1 = att1
-    _linVelChar = char
-end
-
-function setLinVelXZ(x, z)
-    if _linVel and _linVel.Parent then
-        pcall(function()
-            _linVel.PlaneVelocity = Vector2.new(x, z)
-        end)
-    end
-end
-
-function clearLinVel()
-    if _linVel and _linVel.Parent then
-        pcall(function()
-            _linVel.PlaneVelocity = Vector2.new(0, 0)
-        end)
-    end
-end
-
-function ensureLinVel()
-    local char = LP.Character
-    if not char then return false end
-    if _linVel and _linVel.Parent and _linVelChar == char then
-        return true
-    end
-    setupLinearVelocity(char)
-    return _linVel ~= nil and _linVel.Parent ~= nil
-end
-
--- Hook for respawn
-LP.CharacterAdded:Connect(function(char)
-    task.wait(0.5)
-    pcall(setupLinearVelocity, char)
-end)
-task.defer(function()
-    if LP.Character then
-        task.wait(0.3)
-        pcall(setupLinearVelocity, LP.Character)
-    end
-end)
-
--- Dummy keep old function name so other parts of duels don't error
-local function applyImpulseForVelocity(hrp, desiredVelocity)
-    if not hrp or not desiredVelocity then return end
-    local flat = Vector3.new(desiredVelocity.X, 0, desiredVelocity.Z)
-    if flat.Magnitude < 0.01 then
-        clearLinVel()
-        return
-    end
-    setLinVelXZ(flat.X, flat.Z)
-end
-
-
-
+-- [ORVYN LOGIC - SPOOF REMOVED]
 
 
 -- ============================================================
@@ -430,8 +308,8 @@ local function setupTPBatCharacter(char)
     if tpBatToggled then startTPBat() end
 end
 
-LP.CharacterAdded:Connect(setupTPBatCharacter)
-if LP.Character then task.spawn(function() setupTPBatCharacter(LP.Character) end) end
+LP.CharacterAdded:Connect(function(char) setupTPBatCharacter(char); task.wait(0.4); pcall(function() setupRagdollTriggers(char) end) end)
+if LP.Character then task.spawn(function() setupTPBatCharacter(LP.Character); task.wait(0.5); pcall(function() setupRagdollTriggers(LP.Character) end) end) end
 
 -- ============================================================
 -- MIRROR TP DOWN (FROM ACE DUELS - ADDED)
@@ -614,18 +492,28 @@ end
 
 -- ============================================================
 -- Helper for infinite jump (top-level, used before Main)
--- REMOVED OLD applyImpulseForVelocity - replaced with LinearVelocity
+local function applyImpulseForVelocity(root, vel)
+    if not root or not vel then return end
+    pcall(function()
+        if _linVel and _linVel.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
+            _linVel.PlaneVelocity = Vector2.new(vel.X, vel.Z)
+        else
+            root.AssemblyLinearVelocity = vel
+            root.Velocity = Vector3.new(vel.X, root.Velocity.Y, vel.Z)
+        end
+    end)
+end
 
 -- ============================================================
 -- STATE
 -- ============================================================
 local State = {
-    normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
+    normalSpeed=59, carrySpeed=9, laggerSpeed=30, laggerCarrySpeed=15, -- VOID EXACT VALUES
     speedToggled=false,
     laggerMode=0,
     infJumpEnabled=true, antiRagdollEnabled=false,
-antiDieEnabled=false,
-antiFlingEnabled=false,
+antiDieEnabled=true,
+antiFlingEnabled=true, -- VOID EXACT: enabled
     guiVisible=true, uiLocked=false,
     isStealing=false, stealStartTime=nil, lastStealTick=0,
     autoLeftEnabled=false, autoRightEnabled=false,
@@ -658,6 +546,442 @@ antiFlingEnabled=false,
     autoTPConn=nil,
 }
 
+
+
+-- ====================== VOIDS RAGDOLL GUI / TIMER ======================
+local ragdollGuiEnabled = true
+local activeRagdollBillboard=nil
+local activeStoneBillboard=nil
+
+local function addShimmerToLabel(lbl,c1,c2)
+    local gr=Instance.new("UIGradient",lbl)
+    gr.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,c1 or Color3.fromRGB(200,200,200)),ColorSequenceKeypoint.new(0.5,c2 or Color3.fromRGB(255,255,255)),ColorSequenceKeypoint.new(1,c1 or Color3.fromRGB(200,200,200))})
+    gr.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0.3,0),NumberSequenceKeypoint.new(0.5,0,0),NumberSequenceKeypoint.new(1,0.3,0)})
+    return gr
+end
+
+local function createRagdollBillboard(duration,labelText)
+    if not ragdollGuiEnabled then return nil end
+    local WHITE=Color3.fromRGB(255,255,255)
+    local BG=Color3.fromRGB(12,5,10)
+    local W,H=210,80
+    local guiName="MoveeRagdollTimer_"..labelText
+    pcall(function()
+        local cg=game:GetService("CoreGui"); local old=cg:FindFirstChild(guiName); if old then old:Destroy() end
+        local pg=LP:FindFirstChild("PlayerGui"); if pg then local o=pg:FindFirstChild(guiName); if o then o:Destroy() end end
+    end)
+    local sg=Instance.new("ScreenGui")
+    sg.Name=guiName; sg.ResetOnSpawn=false; sg.IgnoreGuiInset=true; sg.DisplayOrder=25
+    pcall(function() if syn and syn.protect_gui then syn.protect_gui(sg) end end)
+    if not pcall(function() sg.Parent=game:GetService("CoreGui") end) then sg.Parent=LP:WaitForChild("PlayerGui") end
+    local card=Instance.new("Frame",sg)
+    card.Size=UDim2.new(0,W,0,H); card.Position=UDim2.new(0.5,-W/2,0,58)
+    card.BackgroundColor3=BG; card.BackgroundTransparency=1
+    card.BorderSizePixel=0; card.ZIndex=30; card.Active=true
+    Instance.new("UICorner",card).CornerRadius=UDim.new(0,14)
+    local stroke=Instance.new("UIStroke",card)
+    stroke.Color=WHITE; stroke.Thickness=3; stroke.Transparency=1
+    task.spawn(function()
+        local t=0
+        while stroke and stroke.Parent do
+            t=t+0.05
+            stroke.Transparency=0.02+math.abs(math.sin(t*2.5))*0.25
+            task.wait(0.04)
+        end
+    end)
+    local titleLbl=Instance.new("TextLabel",card)
+    titleLbl.Size=UDim2.new(1,-16,0,28); titleLbl.Position=UDim2.new(0,8,0,6)
+    titleLbl.BackgroundTransparency=1
+    titleLbl.Text=(labelText=="RAGDOLL" and "RAGDOLL TIMER" or (labelText=="STONE" and "STONE TIMER" or labelText.." TIMER"))
+    titleLbl.TextColor3=WHITE; titleLbl.Font=Enum.Font.GothamBlack; titleLbl.TextSize=13
+    titleLbl.TextXAlignment=Enum.TextXAlignment.Center; titleLbl.ZIndex=32
+    local divider=Instance.new("Frame",card)
+    divider.Size=UDim2.new(1,-20,0,1); divider.Position=UDim2.new(0,10,0,34)
+    divider.BackgroundColor3=WHITE; divider.BackgroundTransparency=0.5; divider.BorderSizePixel=0; divider.ZIndex=31
+    local timerLbl=Instance.new("TextLabel",card)
+    timerLbl.Size=UDim2.new(1,0,0,H-38); timerLbl.Position=UDim2.new(0,0,0,36)
+    timerLbl.BackgroundTransparency=1; timerLbl.Text=string.format("%.1f",duration).."s"
+    timerLbl.TextColor3=WHITE; timerLbl.Font=Enum.Font.GothamBlack; timerLbl.TextSize=24
+    timerLbl.TextXAlignment=Enum.TextXAlignment.Center; timerLbl.ZIndex=32
+    local shimmer=addShimmerToLabel(timerLbl,WHITE,WHITE)
+    task.spawn(function() local t=0; while timerLbl and timerLbl.Parent do t=t+0.04; shimmer.Offset=Vector2.new(math.sin(t)*0.5,0); task.wait(0.04) end end)
+    local dragStart,dragStartPos,dragging=nil,nil,false
+    card.InputBegan:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+            dragging=true; dragStart=inp.Position; dragStartPos=card.Position
+            inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(inp)
+        if dragging and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
+            local dd=inp.Position-dragStart
+            card.Position=UDim2.new(dragStartPos.X.Scale,dragStartPos.X.Offset+dd.X,dragStartPos.Y.Scale,dragStartPos.Y.Offset+dd.Y)
+        end
+    end)
+    local startTime=tick(); local conn
+    conn=RunService.Heartbeat:Connect(function()
+        local remaining=math.max(0,duration-(tick()-startTime))
+        if remaining<=0 then conn:Disconnect(); pcall(function() sg:Destroy() end)
+        elseif timerLbl and timerLbl.Parent then timerLbl.Text=string.format("%.1f",remaining).."s" end
+    end)
+    return sg
+end
+
+local function onHumanoidStateChanged(old,new)
+    local char=LP.Character; if not char then return end
+    local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    local isRag=(new==Enum.HumanoidStateType.Physics or new==Enum.HumanoidStateType.Ragdoll or new==Enum.HumanoidStateType.FallingDown)
+    if isRag and not hum.PlatformStand and not activeRagdollBillboard then
+        activeRagdollBillboard=createRagdollBillboard(2.6,"RAGDOLL")
+        task.delay(2.6,function() if activeRagdollBillboard then pcall(function() activeRagdollBillboard:Destroy() end); activeRagdollBillboard=nil end end)
+    end
+end
+local function onStoneStateChanged()
+    local char=LP.Character; if not char then return end
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    if hum and hum.PlatformStand and not activeStoneBillboard then
+        activeStoneBillboard=createRagdollBillboard(4.5,"STONE")
+        task.delay(4.5,function() if activeStoneBillboard then pcall(function() activeStoneBillboard:Destroy() end); activeStoneBillboard=nil end end)
+    end
+end
+local function setupRagdollTriggers(char)
+    char=char or LP.Character; if not char then return end
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.StateChanged:Connect(onHumanoidStateChanged)
+        hum:GetPropertyChangedSignal("PlatformStand"):Connect(onStoneStateChanged)
+    end
+end
+
+
+-- ====================== ORVYN SPEED - REPLACED (LinearVelocity Anti-Drop) ======================
+-- Values synced to State
+NS = State.normalSpeed                -- Normal speed
+CS = State.carrySpeed                 -- Carry speed
+LAGGER_SPEED = State.laggerSpeed      -- Lagger normal
+LAGGER_CARRY_SPEED = State.laggerCarrySpeed -- Lagger carry
+
+speedMode = State.speedToggled      -- true = use CS (Carry)
+laggerToggled = (State.laggerMode ~= 0)
+laggerPhase = State.laggerMode      -- 0=off, 1=Lagger normal, 2=Lagger carry
+
+autoCarrySpeedEnabled = false
+antiRagdollEnabled = true
+
+local function syncOrvynGlobals()
+    NS = State.normalSpeed
+    CS = State.carrySpeed
+    LAGGER_SPEED = State.laggerSpeed
+    LAGGER_CARRY_SPEED = State.laggerCarrySpeed
+    speedMode = State.speedToggled
+    laggerToggled = (State.laggerMode ~= 0)
+    laggerPhase = State.laggerMode
+end
+
+-- Keep globals in sync when State changes (called from toggle functions later, plus periodic)
+task.spawn(function()
+    while task.wait(0.25) do
+        if not _G.DuelsV2_Running then break end
+        syncOrvynGlobals()
+    end
+end)
+
+-- ============================================================
+--  HELPER FUNCTIONS
+-- ============================================================
+local MOVE_KEYS = {
+    [Enum.KeyCode.W] = true, [Enum.KeyCode.A] = true,
+    [Enum.KeyCode.S] = true, [Enum.KeyCode.D] = true,
+    [Enum.KeyCode.Up] = true, [Enum.KeyCode.Left] = true,
+    [Enum.KeyCode.Down] = true, [Enum.KeyCode.Right] = true,
+}
+
+local function isRagdollState(hum)
+    if not hum then return true end
+    local st = hum:GetState()
+    return hum.PlatformStand == true
+        or st == Enum.HumanoidStateType.Physics
+        or st == Enum.HumanoidStateType.Ragdoll
+        or st == Enum.HumanoidStateType.FallingDown
+end
+
+-- Core speed decision - Orvyn logic reading State
+local function getActiveMoveSpeed()
+    local laggerOn = (State.laggerMode ~= 0)
+    local laggerCarry = laggerOn and (State.laggerMode == 2)
+    if State.speedToggled and not laggerOn then
+        return tonumber(State.carrySpeed) or 30
+    end
+    if laggerOn then
+        if laggerCarry then
+            return tonumber(State.laggerCarrySpeed) or 20
+        end
+        return tonumber(State.laggerSpeed) or 40
+    end
+    return tonumber(State.normalSpeed) or 60
+end
+
+-- Compatibility wrapper - old name used elsewhere
+local function getActiveMoveSpeedExact()
+    return getActiveMoveSpeed()
+end
+
+-- ============================================================
+--  LINEAR VELOCITY (ANTI-DROP ENGINE)
+-- ============================================================
+local _linVel, _linVelAtt0, _linVelAtt1, _linVelChar = nil, nil, nil, nil
+local spoofedVelocity = Vector3.zero
+
+local function destroyLinVel()
+    if _linVel then pcall(function() _linVel:Destroy() end) end
+    if _linVelAtt0 then pcall(function() _linVelAtt0:Destroy() end) end
+    if _linVelAtt1 then pcall(function() _linVelAtt1:Destroy() end) end
+    _linVel, _linVelAtt0, _linVelAtt1, _linVelChar = nil, nil, nil, nil
+end
+
+local function setupLinearVelocity(char)
+    destroyLinVel()
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        local ok, res = pcall(function() return char:WaitForChild("HumanoidRootPart", 5) end)
+        if ok then hrp = res end
+    end
+    if not hrp then return end
+
+    local att0 = Instance.new("Attachment")
+    att0.Name = "OrvynLinVelAtt0"
+    att0.Parent = hrp
+
+    local att1 = Instance.new("Attachment")
+    att1.Name = "OrvynLinVelAtt1"
+    att1.Parent = hrp
+
+    local lv = Instance.new("LinearVelocity")
+    lv.Name = "OrvynLinVel"
+    lv.Attachment0 = att0
+    lv.Attachment1 = att1
+    lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+    lv.PrimaryTangentAxis = Vector3.new(1, 0, 0)
+    lv.SecondaryTangentAxis = Vector3.new(0, 0, 1)
+    lv.RelativeTo = Enum.ActuatorRelativeTo.World
+    lv.MaxForce = 1e6
+    lv.PlaneVelocity = Vector2.new(0, 0)
+    lv.Parent = hrp
+
+    _linVel = lv
+    _linVelAtt0 = att0
+    _linVelAtt1 = att1
+    _linVelChar = char
+end
+
+local function setLinVelXZ(x, z)
+    if _linVel and _linVel.Parent then
+        pcall(function()
+            _linVel.PlaneVelocity = Vector2.new(x, z)
+        end)
+    end
+end
+
+local function clearLinVel()
+    if _linVel and _linVel.Parent then
+        pcall(function()
+            _linVel.PlaneVelocity = Vector2.new(0, 0)
+        end)
+    end
+end
+
+local function ensureLinVel()
+    local char = LP.Character
+    if not char then return false end
+    if _linVel and _linVel.Parent and _linVelChar == char then
+        return true
+    end
+    setupLinearVelocity(char)
+    return _linVel ~= nil and _linVel.Parent ~= nil
+end
+
+-- ============================================================
+--  SPOOF ASSEMBLYLINEARVELOCITY READS/WRITES
+-- ============================================================
+pcall(function()
+    if not (getrawmetatable and setreadonly and newcclosure) then return end
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+    local oldIndex = mt.__index
+    mt.__index = newcclosure(function(self, key)
+        if key == "AssemblyLinearVelocity" or key == "Velocity" then
+            if typeof(self) == "Instance" and self:IsA("BasePart")
+                and self.Name == "HumanoidRootPart"
+                and LP.Character and self:IsDescendantOf(LP.Character) then
+                return spoofedVelocity
+            end
+        end
+        return oldIndex(self, key)
+    end)
+    local oldNewIndex = mt.__newindex
+    mt.__newindex = newcclosure(function(self, key, value)
+        -- Allow all writes through so Jump Drop & Infinite Jump still work
+        -- We only spoof READS to 0 for anti-cheat bypass
+        return oldNewIndex(self, key, value)
+    end)
+    setreadonly(mt, true)
+end)
+
+RunService.Heartbeat:Connect(function()
+    spoofedVelocity = Vector3.zero
+end)
+
+-- ============================================================
+--  MAIN MOVEMENT LOOP (RenderStepped) - Orvyn
+-- ============================================================
+local lastMoveDir = Vector3.zero
+local lastMoveDirExact = Vector3.zero
+local _speedRenderConn = nil
+local _voidSpeedConnExact = nil
+local FLING_THRESHOLD = 80
+
+local function _voidApplyVelocitySpeedExact(speed)
+    -- Kept for compatibility, but actual movement is done via LinearVelocity
+    -- This function now just does anti-fling
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return end
+    if State.antiDieEnabled and root.AssemblyLinearVelocity.Magnitude > FLING_THRESHOLD then
+        pcall(function()
+            root.AssemblyLinearVelocity = Vector3.new(0, root.AssemblyLinearVelocity.Y, 0)
+            root.AssemblyAngularVelocity = Vector3.zero
+        end)
+    end
+end
+
+_speedRenderConn = RunService.RenderStepped:Connect(function()
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return end
+
+    if isRagdollState(hum) then
+        lastMoveDir = Vector3.zero
+        lastMoveDirExact = Vector3.zero
+        clearLinVel()
+        return
+    end
+
+    -- Skip when aimbot/auto-path active (they handle movement)
+    if State.batAimbotToggled or State.autoLeftEnabled or State.autoRightEnabled then
+        return
+    end
+
+    if hum.Health <= 0 then return end
+
+    ensureLinVel()
+
+    local md = hum.MoveDirection
+    local spd = getActiveMoveSpeed()
+
+    if md.Magnitude > 0.05 then
+        lastMoveDir = md
+        lastMoveDirExact = md
+        setLinVelXZ(md.X * spd, md.Z * spd)
+    elseif antiRagdollEnabled and lastMoveDir.Magnitude > 0 then
+        local anyHeld = false
+        for key in pairs(MOVE_KEYS) do
+            if UIS:IsKeyDown(key) then
+                anyHeld = true
+                break
+            end
+        end
+        if anyHeld then
+            setLinVelXZ(lastMoveDir.X * spd, lastMoveDir.Z * spd)
+        else
+            clearLinVel()
+        end
+    else
+        clearLinVel()
+    end
+end)
+
+-- Character respawn: re-setup LinearVelocity
+LP.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    pcall(setupLinearVelocity, char)
+end)
+
+task.defer(function()
+    if LP.Character then
+        task.wait(0.3)
+        pcall(setupLinearVelocity, LP.Character)
+    end
+end)
+
+-- Toggles for compatibility with standalone version
+function toggleCarryMode()
+    if State.laggerMode ~= 0 then
+        State.laggerMode = 0
+        State.speedToggled = true
+    else
+        State.speedToggled = not State.speedToggled
+    end
+    syncOrvynGlobals()
+end
+
+function toggleLaggerMode()
+    if State.laggerMode ~= 0 then
+        State.laggerMode = 0
+        State.speedToggled = false
+    else
+        local fromCarry = State.speedToggled
+        State.laggerMode = fromCarry and 2 or 1
+        State.speedToggled = false
+    end
+    syncOrvynGlobals()
+end
+
+-- ====================== END ORVYN SPEED ======================
+
+-- ====================== ANTI DIE (global — Anti Drop style) EXACT VOID ======================
+local function setupAntiDieExact(char)
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 5)
+    if not hum then return end
+    -- Disconnect old if exists
+    pcall(function()
+        if _G._AntiDieConn then _G._AntiDieConn:Disconnect() end
+    end)
+    _G._AntiDieConn = hum.HealthChanged:Connect(function(hp)
+        if State.antiDieEnabled and hp <= 0 then
+            pcall(function()
+                hum.Health = hum.MaxHealth
+                -- Also prevent ragdoll
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end)
+        end
+    end)
+    -- Also prevent death state
+    hum.StateChanged:Connect(function(_, new)
+        if State.antiDieEnabled and new == Enum.HumanoidStateType.Dead then
+            pcall(function() hum.Health = hum.MaxHealth end)
+        end
+    end)
+end
+
+if LP.Character then task.spawn(function() setupAntiDieExact(LP.Character) end) end
+LP.CharacterAdded:Connect(function(c)
+    task.wait(0.1)
+    setupAntiDieExact(c)
+end)
+
+-- Enable AntiDie by default like Void does (Void has antiDieEnabled=true)
+State.antiDieEnabled = true
+-- ====================== END EXACT VOID ======================
+
+
+
+
 if earlyConfig then
     if earlyConfig.introEnabled ~= nil then State.introEnabled = earlyConfig.introEnabled end
     if earlyConfig.stealMode and (earlyConfig.stealMode=="normal" or earlyConfig.stealMode=="semi") then
@@ -688,7 +1012,9 @@ UserInputService.JumpRequest:Connect(function()
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if root then
+        pcall(function() clearLinVel() end)
         root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
     end
 end)
 
@@ -703,7 +1029,9 @@ RunService.Heartbeat:Connect(function()
     local hum = char:FindFirstChildOfClass("Humanoid")
     local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
     if jumpHeld and root.Velocity.Y < 30 then
+        pcall(function() clearLinVel() end)
         root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 55, root.AssemblyLinearVelocity.Z)
     end
     
     -- Fall speed limit
@@ -852,13 +1180,21 @@ local Steal = {
     AutoStealEnabled=true, 
     StealRadius=55, 
     StealDuration=0.25, 
-    StealMode="normal", -- "normal" or "semi" (semi = weekly auto grab)
+    StealMode="normal", -- "normal" or "semi" or "void"
     Data={},
     HalfFireRange=10, 
     HalfHoldMin=1.3, 
     HalfHoldMax=2.6, 
     HalfEntryDelay=0.3,
-    SemiRadius=62
+    SemiRadius=62,
+    HoldMode=1,
+}
+
+local VOID_HOLD_CFG = {
+    [1] = { threshold = 0.90, nearDist = 14, label = "90%" },
+    [2] = { threshold = 0.85, nearDist = 12, label = "85%" },
+    [3] = { threshold = 0.80, nearDist = 11, label = "80%" },
+    [4] = { threshold = 0.75, nearDist = 10, label = "75%" },
 }
 
 -- ============================================================
@@ -871,7 +1207,7 @@ local LAST_PRESET_FILE = "DuelsLastPreset.json"
 local function buildPresetSnapshot() return {
     normalSpeed=State.normalSpeed, carrySpeed=State.carrySpeed,
     laggerSpeed=State.laggerSpeed, laggerCarrySpeed=State.laggerCarrySpeed,
-    stealRadius=Steal.StealRadius, stealDuration=Steal.StealDuration, stealMode=Steal.StealMode,
+    stealRadius=Steal.StealRadius, stealDuration=Steal.StealDuration, stealMode=Steal.StealMode, holdMode=Steal.HoldMode, stretchedResEnabled=State.stretchedResEnabled, stretchFOV=State.stretchFOV, stealHoldMode=Steal.HoldMode,
     infJump=State.infJumpEnabled, antiRagdoll=State.antiRagdollEnabled,
     antiDie=State.antiDieEnabled, antiFling=State.antiFlingEnabled,
     medusaCounter=State.medusaCounterEnabled, batCounter=State.batCounterEnabled,
@@ -1027,13 +1363,16 @@ end
 -- ============================================================
 -- JUMP DROP ONLY (Safe - No Crasher)
 -- ============================================================
-local DROP_ASCEND_DURATION = 0.22
-local DROP_ASCEND_SPEED = 160
+local DROP_ASCEND_DURATION = 0.2
+local DROP_ASCEND_SPEED = 150 -- voids exact
 local _dropConn = nil
 local dropActive = false
 
 local function runJumpDrop()
     if dropActive then return end
+    pcall(function() if _linVel then _linVel.MaxForce = 0 end end)
+    task.wait()
+    pcall(function() if _linVel then _linVel.MaxForce = 1e6 end end)
     local char = LP.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -1271,7 +1610,7 @@ startAntiDie = function()
             end
             if hrp and not dropActive and hrp.Position.Y < -100 then
                 hrp.CFrame = CFrame.new(0,25,0)
-                spoofedVelocity = Vector3.zero
+                
             end
             task.wait(0.5)
         end
@@ -1294,10 +1633,10 @@ startAntiFling = function()
         if dropActive then return end
         local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-        if hrp.AssemblyLinearVelocity.Magnitude > 160 then
-            hrp.AssemblyLinearVelocity = Vector3.zero
+        if hrp.Velocity.Magnitude > 160 then
+            hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
             hrp.AssemblyAngularVelocity = Vector3.zero
-            spoofedVelocity = Vector3.zero
+            
         end
     end)
 end
@@ -1697,7 +2036,9 @@ local function Main()
 
     local function _applyAntiLagObj(obj)
         pcall(function()
-            if obj:IsA("BasePart") then
+            if obj:IsA("Accessory") or obj:IsA("Hat") then
+                obj:Destroy()
+            elseif obj:IsA("BasePart") then
                 obj.Material = Enum.Material.Plastic; obj.Reflectance = 0; obj.CastShadow = false
             elseif obj:IsA("Decal") or obj:IsA("Texture") then
                 obj.Transparency = 1
@@ -1718,6 +2059,7 @@ local function Main()
         antiLagDefSpecular   = antiLagDefSpecular   or Lighting.EnvironmentSpecularScale
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 1e10
+        Lighting.Brightness = 1
         Lighting.EnvironmentDiffuseScale = 0
         Lighting.EnvironmentSpecularScale = 0
         for _,e in pairs(Lighting:GetChildren()) do
@@ -1939,7 +2281,7 @@ local function Main()
         page.LayoutOrder = 2
     end
 
-    -- Auto Steal Page - WITH SEMI STEAL SELECTOR (Native UI)
+    -- Auto Steal Page - WITH VOID STEAL + HOLD AT % (from Voids)
     do
         local page = buildPage("Auto Steal", function()
             makeGap(2); makeSectionHeader("Auto Steal"); makeGap(2)
@@ -1947,8 +2289,7 @@ local function Main()
             toggleSetters["autoSteal"] = setInstaGrab
             
             makeGap(8); makeSectionHeader("Choose Steal Type"); makeGap(2)
-            -- FIXED: Robust selector - no nil refs, proper mutual exclusive logic
-            local normalToggle, semiToggle
+            local normalToggle, semiToggle, voidToggle
             local updatingStealMode = false
 
             local function setStealMode(mode)
@@ -1958,6 +2299,7 @@ local function Main()
                 pcall(function()
                     if normalToggle then normalToggle(mode=="normal") end
                     if semiToggle then semiToggle(mode=="semi") end
+                    if voidToggle then voidToggle(mode=="void") end
                 end)
                 print("[Duels] Steal Mode:", string.upper(mode))
                 if requestSave then requestSave() end
@@ -1967,7 +2309,7 @@ local function Main()
 
             normalToggle = makeToggleRow("Normal Steal", Steal.StealMode=="normal", function(on)
                 if updatingStealMode then return end
-                if on then setStealMode("normal") else setStealMode("semi") end
+                if on then setStealMode("normal") else setStealMode("void") end
             end)
 
             semiToggle = makeToggleRow("Semi Steal [Weekly Grab]", Steal.StealMode=="semi", function(on)
@@ -1975,10 +2317,66 @@ local function Main()
                 if on then setStealMode("semi") else setStealMode("normal") end
             end)
 
+            voidToggle = makeToggleRow("Void Steal [Hold %]", Steal.StealMode=="void", function(on)
+                if updatingStealMode then return end
+                if on then setStealMode("void") else setStealMode("normal") end
+            end)
+
             toggleSetters["normalSteal"] = normalToggle
             toggleSetters["semiSteal"] = semiToggle
-            -- expose setter for config load
+            toggleSetters["voidSteal"] = voidToggle
             _G._SetStealMode = setStealMode
+
+            makeGap(6); makeSectionHeader("Hold At %"); makeGap(2)
+            local pctRow = Instance.new("Frame", currentPage)
+            pctRow.Size = UDim2.new(1,-16,0,38)
+            pctRow.BackgroundTransparency = 1
+            pctRow.LayoutOrder = LO()
+            local pctLay = Instance.new("UIListLayout", pctRow)
+            pctLay.FillDirection = Enum.FillDirection.Horizontal
+            pctLay.Padding = UDim.new(0,6)
+            pctLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
+            pctLay.SortOrder = Enum.SortOrder.LayoutOrder
+
+            local pctBtns = {}
+            local function refreshPctButtons()
+                for mode, cfg in pairs(VOID_HOLD_CFG) do
+                    local b = pctBtns[mode]
+                    if b then
+                        local on = (Steal.HoldMode == mode)
+                        b.BackgroundColor3 = on and C.accent or Color3.fromRGB(14,22,16)
+                        b.TextColor3 = on and Color3.fromRGB(0,20,8) or C.rowLabel
+                        if b:FindFirstChild("UIStroke") then
+                            b:FindFirstChild("UIStroke").Color = on and C.accent or C.rowBorder
+                        end
+                    end
+                end
+            end
+
+            for mode = 1, 4 do
+                local cfg = VOID_HOLD_CFG[mode]
+                local b = Instance.new("TextButton", pctRow)
+                b.Size = UDim2.new(0,58,0,32)
+                b.BackgroundColor3 = Color3.fromRGB(14,22,16)
+                b.BorderSizePixel = 0
+                b.Text = cfg.label
+                b.TextColor3 = C.rowLabel
+                b.Font = Enum.Font.GothamBold
+                b.TextSize = 13
+                b.AutoButtonColor = false
+                b.LayoutOrder = mode
+                mkCorner(b, 8)
+                mkStroke(b, C.rowBorder, 1)
+                b.MouseButton1Click:Connect(function()
+                    Steal.HoldMode = mode
+                    refreshPctButtons()
+                    if requestSave then requestSave() end
+                    print("[Duels] Void Hold At:", cfg.label)
+                end)
+                pctBtns[mode] = b
+            end
+            refreshPctButtons()
+            _G._RefreshHoldPct = refreshPctButtons
 
             makeGap(6); makeSectionHeader("Steal Config"); makeGap(2)
             stealRadBox = makeInputRow("Steal Radius", Steal.StealRadius, function(n) if n then n=math.floor(n); if n>=1 and n<=500 then Steal.StealRadius=n; Steal.SemiRadius=n end end end)
@@ -2067,9 +2465,9 @@ toggleSetters["antiRagdoll"] = setAntiRag
     do
         local page = buildPage("Visual", function()
             makeGap(2); makeSectionHeader("Performance"); makeGap(2)
-            antiLagSetter = makeToggleRow("Anti-Lag (recommended)", State.antiLagEnabled, function(on) State.antiLagEnabled=on; if on then enableAntiLag() else disableAntiLag() end end)
+            antiLagSetter = makeToggleRow("Anti-Lag (recommended)", State.antiLagEnabled, function(on) State.antiLagEnabled=on; if on then enableAntiLag() else disableAntiLag() end if requestSave then requestSave() end end)
             toggleSetters["antiLag"] = antiLagSetter
-            stretchSetter = makeToggleRow("Stretch Rez", State.stretchedResEnabled, function(on) State.stretchedResEnabled=on; if on then enableStretchRez() else disableStretchRez() end end)
+            stretchSetter = makeToggleRow("Stretch Rez", State.stretchedResEnabled, function(on) State.stretchedResEnabled=on; if on then enableStretchRez() else disableStretchRez() end if requestSave then requestSave() end end)
             toggleSetters["stretchedRes"] = stretchSetter
             do
                 local fovRow = Instance.new("Frame", currentPage); fovRow.Size = UDim2.new(1,-16,0,42); fovRow.BackgroundColor3=Color3.fromRGB(14,22,16); fovRow.BorderSizePixel=0; fovRow.LayoutOrder=LO(); mkCorner(fovRow,12)
@@ -2282,7 +2680,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
 
     local stealPctLbl = Instance.new("TextLabel", progressBg)
     stealPctLbl.Size = UDim2.new(0,50,1,0); stealPctLbl.Position = UDim2.new(1,-58,0,0)
-    stealPctLbl.BackgroundTransparency=1; stealPctLbl.Text="0%"; stealPctLbl.TextColor3=Color3.fromRGB(46,200,120)
+    stealPctLbl.BackgroundTransparency=1; stealPctLbl.Text="0%"; stealPctLbl.TextColor3=Color3.fromRGB(255,255,255)
     stealPctLbl.Font = Enum.Font.GothamBlack; stealPctLbl.TextSize=13; stealPctLbl.TextXAlignment=Enum.TextXAlignment.Right
     stealPctLbl.ZIndex = 5
 
@@ -2569,15 +2967,27 @@ toggleSetters["antiRagdoll"] = setAntiRag
     -- ============================================================
     -- AUTO LEFT / RIGHT - FIXED
     -- ============================================================
-    -- REMOVED OLD applyImpulseForVelocity - replaced with LinearVelocity
+    local function applyImpulseForVelocity(root, vel)
+    if not root or not vel then return end
+    pcall(function()
+        if _linVel and _linVel.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
+            _linVel.PlaneVelocity = Vector2.new(vel.X, vel.Z)
+        else
+            root.AssemblyLinearVelocity = vel
+            root.Velocity = Vector3.new(vel.X, root.Velocity.Y, vel.Z)
+        end
+    end)
+end
 
     stopAutoLeft = function()
         if alConn then alConn:Disconnect(); alConn = nil end; alPhase = 1
+        pcall(function() clearLinVel() end)
         local char = LP.Character; if char then local hum2 = char:FindFirstChildOfClass("Humanoid"); if hum2 then pcall(function() hum2:Move(Vector3.zero, false) end) end end
         if stackBtnRefs.autoLeft then stackBtnRefs.autoLeft.setOn(false) end
     end
     stopAutoRight = function()
         if arConn then arConn:Disconnect(); arConn = nil end; arPhase = 1
+        pcall(function() clearLinVel() end)
         local char = LP.Character; if char then local hum2 = char:FindFirstChildOfClass("Humanoid"); if hum2 then pcall(function() hum2:Move(Vector3.zero, false) end) end end
         if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end
     end
@@ -3136,7 +3546,6 @@ toggleSetters["antiRagdoll"] = setAntiRag
         stealStartTick=tick()
         
         if Steal.StealMode=="semi" then
-            -- SEMI STEAL = Weekly Auto Grab logic
             if stealProgressConn then stealProgressConn:Disconnect() end
             stealProgressConn=RunService.Heartbeat:Connect(function()
                 if not isStealing or not stealStartTick then return end
@@ -3162,8 +3571,72 @@ toggleSetters["antiRagdoll"] = setAntiRag
                 if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
                 resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
             end)
+        elseif Steal.StealMode=="void" then
+            local cfg = VOID_HOLD_CFG[Steal.HoldMode or 1] or VOID_HOLD_CFG[1]
+            local threshold = cfg.threshold
+            local nearDist = cfg.nearDist
+            local totalTime = 1.3
+            local timeToThreshold = totalTime * threshold
+            local timeAfterThreshold = totalTime - timeToThreshold
+            local startTime = tick()
+            if stealProgressConn then stealProgressConn:Disconnect() end
+            stealProgressConn=RunService.Heartbeat:Connect(function()
+                if not isStealing then return end
+                local elapsed = tick() - startTime
+                local pct = math.clamp(elapsed / totalTime, 0, 1)
+                if pct > threshold then pct = threshold end
+                updateProgressBar(pct)
+            end)
+            task.spawn(function()
+                for _,fn in ipairs(data.hold) do task.spawn(fn) end
+                while tick() - startTime < timeToThreshold do
+                    if not Steal.AutoStealEnabled or not prompt.Parent then
+                        if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                        resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+                        return
+                    end
+                    task.wait()
+                end
+                updateProgressBar(threshold)
+                local stillNear = false
+                if _getPromptDist(prompt) <= nearDist then stillNear = true end
+                if not stillNear then
+                    local holdStart = tick()
+                    while tick() - holdStart < 4 do
+                        if not Steal.AutoStealEnabled or not prompt.Parent then
+                            if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                            resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+                            return
+                        end
+                        updateProgressBar(threshold)
+                        if _getPromptDist(prompt) <= nearDist then stillNear = true; break end
+                        task.wait()
+                    end
+                    if not stillNear then
+                        if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                        resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+                        return
+                    end
+                end
+                local resumeTime = tick()
+                while tick() - resumeTime < timeAfterThreshold do
+                    if not Steal.AutoStealEnabled or not prompt.Parent then
+                        if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                        resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+                        return
+                    end
+                    local fin = (tick() - resumeTime) / math.max(timeAfterThreshold, 0.01)
+                    local pct = threshold + fin * (1 - threshold)
+                    updateProgressBar(pct)
+                    task.wait()
+                end
+                updateProgressBar(1)
+                for _,fn in ipairs(data.trigger) do task.spawn(fn) end
+                task.wait(0.05)
+                if stealProgressConn then stealProgressConn:Disconnect(); stealProgressConn=nil end
+                resetProgressBar(); data.ready=true; isStealing=false; State.isStealing=false
+            end)
         else
-            -- NORMAL STEAL
             local startTime=tick(); local duration=Steal.StealDuration
             if stealProgressConn then stealProgressConn:Disconnect() end
             stealProgressConn=RunService.Heartbeat:Connect(function()
@@ -3380,19 +3853,11 @@ toggleSetters["antiRagdoll"] = setAntiRag
             else spd=State.speedToggled and State.carrySpeed or State.normalSpeed end
             if md.Magnitude>0 then
                 State.lastMoveDir=md
-                ensureLinVel()
-                setLinVelXZ(md.X*spd, md.Z*spd)
+                -- DISABLED: now handled by exact Void _voidApplyVelocitySpeedExact
             elseif State.antiRagdollEnabled and State.lastMoveDir.Magnitude>0 then
                 local anyHeld=false
                 for key in pairs(MOVE_KEYS) do if UIS:IsKeyDown(key) then anyHeld=true; break end end
-                if anyHeld then 
-                    ensureLinVel()
-                    setLinVelXZ(State.lastMoveDir.X*spd, State.lastMoveDir.Z*spd)
-                else
-                    clearLinVel()
-                end
-            else
-                clearLinVel()
+                -- DISABLED: Void handles it
             end
         end
         pcall(function()
@@ -3603,6 +4068,8 @@ toggleSetters["antiRagdoll"] = setAntiRag
                 mirrorTPDownEnabled = mirrorTPDownEnabled,
                 safeMode = State.safeModeEnabled,
                 stealMode = Steal.StealMode,
+                holdMode = Steal.HoldMode,
+                holdAtPercent = Steal.HoldMode,
                 aimbotMode = State.aimbotMode,
             }
             local encoded = HttpService:JSONEncode(cfg)
@@ -3708,7 +4175,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
         end
 
         -- RESTORE STEAL MODE (Normal / Semi) - FIXED SAVE/LOAD
-        if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi") then
+        if decErr.stealMode and (decErr.stealMode == "normal" or decErr.stealMode == "semi" or decErr.stealMode == "void") then
             Steal.StealMode = decErr.stealMode
             print("[Duels] Restored Steal Mode:", Steal.StealMode)
             pcall(function()
@@ -3722,6 +4189,18 @@ toggleSetters["antiRagdoll"] = setAntiRag
         else
             -- if config had no stealMode (old config), keep current but log
             print("[Duels] No stealMode in config, using:", Steal.StealMode)
+        end
+
+        -- RESTORE HOLD AT % (FIXED SAVE/LOAD)
+        if decErr.holdMode ~= nil or decErr.holdAtPercent ~= nil then
+            local restored = decErr.holdMode or decErr.holdAtPercent
+            if type(restored) == "number" and VOID_HOLD_CFG[restored] then
+                Steal.HoldMode = restored
+                print("[Duels] Restored HoldMode:", Steal.HoldMode, VOID_HOLD_CFG[Steal.HoldMode].label)
+                pcall(function()
+                    if _G._RefreshHoldPct then _G._RefreshHoldPct() end
+                end)
+            end
         end
 
         local bools = {
@@ -3885,7 +4364,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
                     if d.laggerCarrySpeed then State.laggerCarrySpeed=d.laggerCarrySpeed; if laggerCarryBox then laggerCarryBox.Text=tostring(d.laggerCarrySpeed) end end
                     if d.stealRadius then Steal.StealRadius=d.stealRadius; if stealRadBox and not stealRadBox:IsFocused() then stealRadBox.Text=tostring(Steal.StealRadius) end end
                     if d.stealDuration then Steal.StealDuration=d.stealDuration; if stealDurBox then stealDurBox.Text=tostring(Steal.StealDuration) end end
-                    if d.stealMode and (d.stealMode=="normal" or d.stealMode=="semi") then
+                    if d.stealMode and (d.stealMode=="normal" or d.stealMode=="semi" or d.stealMode=="void") then
                         Steal.StealMode=d.stealMode
                         -- update toggles if they exist
                         pcall(function()
@@ -3984,7 +4463,7 @@ local function setupOtherPlayerSpeed(player)
         task.spawn(function()
             while char and char.Parent and hrp and hrp.Parent and speedLbl and speedLbl.Parent do
                 pcall(function()
-                    local hspd = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z).Magnitude
+                    local hspd = 0; pcall(function() local isLocal = LP.Character and hrp:IsDescendantOf(LP.Character); if isLocal and _linVel and _linVel.Parent then hspd = Vector2.new(_linVel.PlaneVelocity.X, _linVel.PlaneVelocity.Y).Magnitude else hspd = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z).Magnitude if hspd < 0.1 then hspd = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z).Magnitude end end end)
                     speedLbl.Text = string.format("%.1f", hspd)
                 end)
                 task.wait(0.1)
