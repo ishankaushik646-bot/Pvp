@@ -99,40 +99,48 @@ local function stopAntiBat()
     end
 
 
--- ========== HOLD INFINITE JUMP ONLY (REPLACED) ==========
--- JumpRequest for instant jump
-UserInputService.JumpRequest:Connect(function()
-    if not InfiniteJumpEnabled then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if root then
-        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
-    end
-end)
+-- ========== HOLD INFINITE JUMP ONLY (REPLACED & FIXED) ==========
+local InfiniteJumpRequestConn = nil
 
--- Main Hold Infinite Jump Loop with fall speed limit
-if JumpHoldConn then JumpHoldConn:Disconnect() end
-JumpHoldConn = RunService.Heartbeat:Connect(function()
-    if not InfiniteJumpEnabled then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
+local function startHoldInfiniteJump()
+    if JumpHoldConn then JumpHoldConn:Disconnect() end
+    if InfiniteJumpRequestConn then InfiniteJumpRequestConn:Disconnect() end
     
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
-    if jumpHeld and root.Velocity.Y < 30 then
-        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
-    end
+    InfiniteJumpRequestConn = UserInputService.JumpRequest:Connect(function()
+        if not InfiniteJumpEnabled then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+        end
+    end)
     
-    -- Fall speed limit
-    if root.Velocity.Y < -120 then
-        root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
-    end
-end)
+    JumpHoldConn = RunService.Heartbeat:Connect(function()
+        if not InfiniteJumpEnabled then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true) or IsJumpingHold
+        if jumpHeld and root.Velocity.Y < 30 then
+            root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
+        end
+        
+        if root.Velocity.Y < -120 then
+            root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
+        end
+    end)
+end
 
--- Keep IsJumpingHold for compatibility
+local function stopHoldInfiniteJump()
+    if JumpHoldConn then JumpHoldConn:Disconnect() JumpHoldConn = nil end
+    if InfiniteJumpRequestConn then InfiniteJumpRequestConn:Disconnect() InfiniteJumpRequestConn = nil end
+end
+
+-- Compatibility + mobile support
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.Space or input.UserInputType == Enum.UserInputType.Touch then
@@ -147,13 +155,11 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 local function startJumpHoldLoop()
-    -- Compatibility stub - logic is now in Heartbeat above
+    if InfiniteJumpEnabled then
+        startHoldInfiniteJump()
+    end
 end
 -- ========== END HOLD INFINITE JUMP ==========
-
-
-end
-
 
 local function startAntiRagdoll()
     if AntiRagdollConn then return end
@@ -656,7 +662,12 @@ end
 local function setInfJump(on)
     InfiniteJumpEnabled = on == true
     InfiniteJumpHoldEnabled = InfiniteJumpEnabled
-    if not InfiniteJumpHoldEnabled then IsJumpingHold = false end
+    if InfiniteJumpEnabled then
+        startHoldInfiniteJump()
+    else
+        stopHoldInfiniteJump()
+        IsJumpingHold = false
+    end
     setToggle(InfToggleDot, InfToggleBg, InfiniteJumpEnabled)
     updateStatus()
     saveConfig()
