@@ -494,8 +494,11 @@ end
 local function applyImpulseForVelocity(root, vel)
     if not root or not vel then return end
     pcall(function()
-        if _linVel and _linVel.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
-            _linVel.PlaneVelocity = Vector2.new(vel.X, vel.Z)
+        local lv = _linVel or _G._linVel
+        if lv and lv.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
+            -- AutoLeft/Right uses this - world locked
+            lv.MaxForce = math.huge
+            lv.PlaneVelocity = Vector2.new(vel.X, vel.Z)
         else
             root.AssemblyLinearVelocity = vel
             root.Velocity = Vector3.new(vel.X, root.Velocity.Y, vel.Z)
@@ -823,7 +826,6 @@ _speedRenderConn = RunService.RenderStepped:Connect(function()
     end
 
     if State.batAimbotToggled or State.autoLeftEnabled or State.autoRightEnabled then
-        clearLinVel()
         return
     end
 
@@ -2969,8 +2971,11 @@ toggleSetters["antiRagdoll"] = setAntiRag
     local function applyImpulseForVelocity(root, vel)
     if not root or not vel then return end
     pcall(function()
-        if _linVel and _linVel.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
-            _linVel.PlaneVelocity = Vector2.new(vel.X, vel.Z)
+        local lv = _linVel or _G._linVel
+        if lv and lv.Parent and LP.Character and root:IsDescendantOf(LP.Character) then
+            -- AutoLeft/Right uses this - world locked
+            lv.MaxForce = math.huge
+            lv.PlaneVelocity = Vector2.new(vel.X, vel.Z)
         else
             root.AssemblyLinearVelocity = vel
             root.Velocity = Vector3.new(vel.X, root.Velocity.Y, vel.Z)
@@ -2986,7 +2991,7 @@ end
     end
     stopAutoRight = function()
         if arConn then arConn:Disconnect(); arConn = nil end; arPhase = 1
-        pcall(function() clearLinVel() end)
+        pcall(function() local lv = _linVel or _G._linVel; if lv then lv.PlaneVelocity = Vector2.new(0,0) end end)
         local char = LP.Character; if char then local hum2 = char:FindFirstChildOfClass("Humanoid"); if hum2 then pcall(function() hum2:Move(Vector3.zero, false) end) end end
         if stackBtnRefs.autoRight then stackBtnRefs.autoRight.setOn(false) end
     end
