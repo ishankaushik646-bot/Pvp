@@ -653,19 +653,15 @@ local function setupRagdollTriggers(char)
 end
 
 
--- ====================== ORVYN SPEED - REPLACED (LinearVelocity Anti-Drop) ======================
--- Values synced to State
-NS = State.normalSpeed                -- Normal speed
-CS = State.carrySpeed                 -- Carry speed
-LAGGER_SPEED = State.laggerSpeed      -- Lagger normal
-LAGGER_CARRY_SPEED = State.laggerCarrySpeed -- Lagger carry
+-- ====================== ORVYN SPEED - FINAL SMOOTH (World-Locked, No Wobble) ======================
+NS = State.normalSpeed
+CS = State.carrySpeed
+LAGGER_SPEED = State.laggerSpeed
+LAGGER_CARRY_SPEED = State.laggerCarrySpeed
 
-speedMode = State.speedToggled      -- true = use CS (Carry)
+speedMode = State.speedToggled
 laggerToggled = (State.laggerMode ~= 0)
-laggerPhase = State.laggerMode      -- 0=off, 1=Lagger normal, 2=Lagger carry
-
-autoCarrySpeedEnabled = false
-antiRagdollEnabled = true
+laggerPhase = State.laggerMode
 
 local function syncOrvynGlobals()
     NS = State.normalSpeed
@@ -677,23 +673,12 @@ local function syncOrvynGlobals()
     laggerPhase = State.laggerMode
 end
 
--- Keep globals in sync when State changes (called from toggle functions later, plus periodic)
 task.spawn(function()
     while task.wait(0.25) do
         if not _G.DuelsV2_Running then break end
         syncOrvynGlobals()
     end
 end)
-
--- ============================================================
---  HELPER FUNCTIONS
--- ============================================================
-local MOVE_KEYS = {
-    [Enum.KeyCode.W] = true, [Enum.KeyCode.A] = true,
-    [Enum.KeyCode.S] = true, [Enum.KeyCode.D] = true,
-    [Enum.KeyCode.Up] = true, [Enum.KeyCode.Left] = true,
-    [Enum.KeyCode.Down] = true, [Enum.KeyCode.Right] = true,
-}
 
 local function isRagdollState(hum)
     if not hum then return true end
@@ -704,7 +689,6 @@ local function isRagdollState(hum)
         or st == Enum.HumanoidStateType.FallingDown
 end
 
--- Core speed decision - Orvyn logic reading State
 local function getActiveMoveSpeed()
     local laggerOn = (State.laggerMode ~= 0)
     local laggerCarry = laggerOn and (State.laggerMode == 2)
@@ -720,22 +704,22 @@ local function getActiveMoveSpeed()
     return tonumber(State.normalSpeed) or 60
 end
 
--- Compatibility wrapper - old name used elsewhere
 local function getActiveMoveSpeedExact()
     return getActiveMoveSpeed()
 end
 
 -- ============================================================
---  LINEAR VELOCITY (ANTI-DROP ENGINE)
+--  LINEAR VELOCITY - WORLD LOCKED (No Wobble)
 -- ============================================================
-_G._linVel = nil; local _linVel, _linVelAtt0, _linVelAtt1, _linVelChar = nil, nil, nil, nil
+local _linVel, _linVelAtt0, _linVelChar = nil, nil, nil
+_G._linVel = nil
 local spoofedVelocity = Vector3.zero
 
 local function destroyLinVel()
     if _linVel then pcall(function() _linVel:Destroy() end) end
     if _linVelAtt0 then pcall(function() _linVelAtt0:Destroy() end) end
-    if _linVelAtt1 then pcall(function() _linVelAtt1:Destroy() end) end
-    _linVel, _linVelAtt0, _linVelAtt1, _linVelChar = nil, nil, nil, nil; _G._linVel = nil
+    _linVel, _linVelAtt0, _linVelChar = nil, nil, nil
+    _G._linVel = nil
 end
 
 local function setupLinearVelocity(char)
@@ -748,45 +732,38 @@ local function setupLinearVelocity(char)
     end
     if not hrp then return end
 
-    local att0 = Instance.new("Attachment")
-    att0.Name = "OrvynLinVelAtt0"
-    att0.Parent = hrp
-
-    local att1 = Instance.new("Attachment")
-    att1.Name = "OrvynLinVelAtt1"
-    att1.Parent = hrp
+    local att = Instance.new("Attachment")
+    att.Name = "OrvynLinVelAtt"
+    att.Parent = hrp
 
     local lv = Instance.new("LinearVelocity")
     lv.Name = "OrvynLinVel"
-    lv.Attachment0 = att0
-    lv.Attachment1 = att1
+    lv.Attachment0 = att
     lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+    -- WORLD-LOCKED plane - prevents wobble when char rotates
+    lv.RelativeTo = Enum.ActuatorRelativeTo.World
     lv.PrimaryTangentAxis = Vector3.new(1, 0, 0)
     lv.SecondaryTangentAxis = Vector3.new(0, 0, 1)
-    lv.RelativeTo = Enum.ActuatorRelativeTo.World
-    lv.MaxForce = 1e6
+    lv.MaxForce = math.huge
     lv.PlaneVelocity = Vector2.new(0, 0)
     lv.Parent = hrp
 
-    _linVel = lv; _G._linVel = lv
-    _linVelAtt0 = att0
-    _linVelAtt1 = att1
+    _linVel = lv
+    _G._linVel = lv
+    _linVelAtt0 = att
     _linVelChar = char
 end
 
 local function setLinVelXZ(x, z)
     if _linVel and _linVel.Parent then
-        pcall(function()
-            _linVel.PlaneVelocity = Vector2.new(x, z)
-        end)
+        -- Direct set - no lerp, no jitter
+        _linVel.PlaneVelocity = Vector2.new(x, z)
     end
 end
 
 local function clearLinVel()
     if _linVel and _linVel.Parent then
-        pcall(function()
-            _linVel.PlaneVelocity = Vector2.new(0, 0)
-        end)
+        _linVel.PlaneVelocity = Vector2.new(0, 0)
     end
 end
 
@@ -800,9 +777,7 @@ local function ensureLinVel()
     return _linVel ~= nil and _linVel.Parent ~= nil
 end
 
--- ============================================================
---  SPOOF ASSEMBLYLINEARVELOCITY READS/WRITES
--- ============================================================
+-- Spoof reads only
 pcall(function()
     if not (getrawmetatable and setreadonly and newcclosure) then return end
     local mt = getrawmetatable(game)
@@ -820,8 +795,6 @@ pcall(function()
     end)
     local oldNewIndex = mt.__newindex
     mt.__newindex = newcclosure(function(self, key, value)
-        -- Allow all writes through so Jump Drop & Infinite Jump still work
-        -- We only spoof READS to 0 for anti-cheat bypass
         return oldNewIndex(self, key, value)
     end)
     setreadonly(mt, true)
@@ -832,29 +805,9 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- ============================================================
---  MAIN MOVEMENT LOOP (RenderStepped) - Orvyn
+--  MAIN MOVEMENT - NO WOBBLE
 -- ============================================================
-local lastMoveDir = Vector3.zero
-local lastMoveDirExact = Vector3.zero
 local _speedRenderConn = nil
-local _voidSpeedConnExact = nil
-local FLING_THRESHOLD = 80
-
-local function _voidApplyVelocitySpeedExact(speed)
-    -- Kept for compatibility, but actual movement is done via LinearVelocity
-    -- This function now just does anti-fling
-    local char = LP.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not hum or not root then return end
-    if State.antiDieEnabled and root.AssemblyLinearVelocity.Magnitude > FLING_THRESHOLD then
-        pcall(function()
-            root.AssemblyLinearVelocity = Vector3.new(0, root.AssemblyLinearVelocity.Y, 0)
-            root.AssemblyAngularVelocity = Vector3.zero
-        end)
-    end
-end
 
 _speedRenderConn = RunService.RenderStepped:Connect(function()
     if dropActive then return end
@@ -865,47 +818,28 @@ _speedRenderConn = RunService.RenderStepped:Connect(function()
     if not hum or not hrp then return end
 
     if isRagdollState(hum) then
-        lastMoveDir = Vector3.zero
-        lastMoveDirExact = Vector3.zero
         clearLinVel()
         return
     end
 
-    -- Skip when aimbot/auto-path active (they handle movement)
     if State.batAimbotToggled or State.autoLeftEnabled or State.autoRightEnabled then
+        clearLinVel()
         return
     end
 
     if hum.Health <= 0 then return end
-
-    ensureLinVel()
+    if not ensureLinVel() then return end
 
     local md = hum.MoveDirection
-    local spd = getActiveMoveSpeed()
-
-    if md.Magnitude > 0.05 then
-        lastMoveDir = md
-        lastMoveDirExact = md
+    if md.Magnitude > 0.01 then
+        local spd = getActiveMoveSpeed()
+        -- World-locked, no wobble - directly use MoveDirection XZ
         setLinVelXZ(md.X * spd, md.Z * spd)
-    elseif antiRagdollEnabled and lastMoveDir.Magnitude > 0 then
-        local anyHeld = false
-        for key in pairs(MOVE_KEYS) do
-            if UIS:IsKeyDown(key) then
-                anyHeld = true
-                break
-            end
-        end
-        if anyHeld then
-            setLinVelXZ(lastMoveDir.X * spd, lastMoveDir.Z * spd)
-        else
-            clearLinVel()
-        end
     else
         clearLinVel()
     end
 end)
 
--- Character respawn: re-setup LinearVelocity
 LP.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     pcall(setupLinearVelocity, char)
@@ -918,7 +852,6 @@ task.defer(function()
     end
 end)
 
--- Toggles for compatibility with standalone version
 function toggleCarryMode()
     if State.laggerMode ~= 0 then
         State.laggerMode = 0
@@ -941,7 +874,7 @@ function toggleLaggerMode()
     syncOrvynGlobals()
 end
 
--- ====================== END ORVYN SPEED ======================
+-- ====================== END ORVYN SPEED FINAL ======================
 
 -- ====================== ANTI DIE (global — Anti Drop style) EXACT VOID ======================
 local function setupAntiDieExact(char)
@@ -1374,74 +1307,128 @@ local function runJumpDrop()
     dropActive = true
     if stackBtnRefs.drop then stackBtnRefs.drop.setOn(true) end
 
-    -- Disable Orvyn speed during drop to prevent lagback / death
+    -- Save anti states and disable them during drop to prevent death
+    local oldAntiDie = State.antiDieEnabled
+    local oldAntiFling = State.antiFlingEnabled
+    local oldAntiRag = State.antiRagdollEnabled
+    State.antiDieEnabled = false
+    State.antiFlingEnabled = false
+    State.antiRagdollEnabled = false
+
+    -- Disable LinVel
     local wasLinVel = _linVel ~= nil
     pcall(function() destroyLinVel() end)
     
     local char = LP.Character
-    if not char then dropActive = false; return end
+    if not char then 
+        dropActive = false
+        State.antiDieEnabled = oldAntiDie
+        State.antiFlingEnabled = oldAntiFling
+        State.antiRagdollEnabled = oldAntiRag
+        if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
+        return 
+    end
     local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then dropActive = false; return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not root or not hum then 
+        dropActive = false
+        State.antiDieEnabled = oldAntiDie
+        State.antiFlingEnabled = oldAntiFling
+        State.antiRagdollEnabled = oldAntiRag
+        if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
+        return 
+    end
+
+    -- Prevent death during ascend
+    pcall(function()
+        hum.Health = hum.MaxHealth
+        hum:ChangeState(Enum.HumanoidStateType.Running)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+    end)
 
     local t0 = tick()
     if _dropConn then _dropConn:Disconnect() end
     _dropConn = RunService.Heartbeat:Connect(function()
         local c = LP.Character
         local r = c and c:FindFirstChild("HumanoidRootPart")
-        if not r then
+        local h = c and c:FindFirstChildOfClass("Humanoid")
+        if not r or not h then
             if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
             dropActive = false
+            State.antiDieEnabled = oldAntiDie
+            State.antiFlingEnabled = oldAntiFling
+            State.antiRagdollEnabled = oldAntiRag
+            pcall(function() h:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end)
             if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
-            if wasLinVel then pcall(setupLinearVelocity, c) end
+            if wasLinVel and LP.Character then pcall(setupLinearVelocity, LP.Character) end
             return
         end
         if not dropActive then
             if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
+            State.antiDieEnabled = oldAntiDie
+            State.antiFlingEnabled = oldAntiFling
+            State.antiRagdollEnabled = oldAntiRag
+            pcall(function() h:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end)
             if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
-            if wasLinVel then pcall(setupLinearVelocity, c) end
+            if wasLinVel and LP.Character then pcall(setupLinearVelocity, LP.Character) end
             return
         end
         if tick() - t0 >= DROP_ASCEND_DURATION then
             if _dropConn then _dropConn:Disconnect(); _dropConn = nil end
             pcall(function()
+                -- Ensure full health before landing
+                h.Health = h.MaxHealth
+                h:ChangeState(Enum.HumanoidStateType.Physics)
+                
                 local rp = RaycastParams.new()
                 rp.FilterDescendantsInstances = {c}
                 rp.FilterType = Enum.RaycastFilterType.Exclude
-                local rr = workspace:Raycast(r.Position, Vector3.new(0, -3000, 0), rp)
+                local rr = workspace:Raycast(r.Position, Vector3.new(0, -5000, 0), rp)
                 if rr then
-                    local hum = c:FindFirstChildOfClass("Humanoid")
-                    local off = ((hum and hum.HipHeight) or 2) + (r.Size.Y / 2)
-                    -- Perfect safe landing - no velocity, no death
+                    local off = (h.HipHeight or 2) + (r.Size.Y / 2) + 0.5
+                    -- Zero all velocities to prevent fall damage
                     r.AssemblyLinearVelocity = Vector3.zero
                     r.AssemblyAngularVelocity = Vector3.zero
                     r.Velocity = Vector3.zero
-                    -- Small delay to avoid anti-cheat
-                    task.wait(0.03)
-                    r.CFrame = CFrame.new(r.Position.X, rr.Position.Y + off + 0.2, r.Position.Z)
-                    if hum then
-                        hum:ChangeState(Enum.HumanoidStateType.Landed)
-                        task.wait(0.05)
-                        hum:ChangeState(Enum.HumanoidStateType.Running)
-                    end
+                    r.Anchored = true
+                    task.wait(0.05)
+                    r.CFrame = CFrame.new(r.Position.X, rr.Position.Y + off, r.Position.Z)
+                    task.wait(0.05)
+                    r.Anchored = false
+                    r.AssemblyLinearVelocity = Vector3.zero
+                    r.Velocity = Vector3.zero
+                    -- Reset humanoid states
+                    h:ChangeState(Enum.HumanoidStateType.GettingUp)
+                    task.wait(0.05)
+                    h.Health = h.MaxHealth
+                    h:ChangeState(Enum.HumanoidStateType.Running)
+                else
+                    -- No ground found, just stop velocities
+                    r.AssemblyLinearVelocity = Vector3.zero
+                    r.Velocity = Vector3.zero
                 end
+                h:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
             end)
             dropActive = false
             if stackBtnRefs.drop then stackBtnRefs.drop.setOn(false) end
-            -- Re-enable Orvyn speed after drop
-            task.wait(0.1)
+            task.wait(0.2)
+            State.antiDieEnabled = oldAntiDie
+            State.antiFlingEnabled = oldAntiFling
+            State.antiRagdollEnabled = oldAntiRag
             if wasLinVel and LP.Character then
                 pcall(setupLinearVelocity, LP.Character)
             end
             return
         end
-        -- Ascend - use Velocity like original Void perfect method
-        local current = r.AssemblyLinearVelocity
-        local targetY = math.clamp(DROP_ASCEND_SPEED, 80, 120)
-        if current.Y < targetY then
-            -- Direct velocity set for smooth ascend (no impulse lag)
-            r.AssemblyLinearVelocity = Vector3.new(r.AssemblyLinearVelocity.X, targetY, r.AssemblyLinearVelocity.Z)
-            r.Velocity = Vector3.new(r.Velocity.X, targetY, r.Velocity.Z)
-        end
+        -- Safe ascend
+        pcall(function()
+            if h.Health < h.MaxHealth then h.Health = h.MaxHealth end
+            local targetY = math.clamp(DROP_ASCEND_SPEED, 80, 120)
+            if r.AssemblyLinearVelocity.Y < targetY then
+                r.AssemblyLinearVelocity = Vector3.new(r.AssemblyLinearVelocity.X, targetY, r.AssemblyLinearVelocity.Z)
+                r.Velocity = Vector3.new(r.Velocity.X, targetY, r.Velocity.Z)
+            end
+        end)
     end)
 end
 
