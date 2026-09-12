@@ -1,928 +1,729 @@
---[[
-    BLIND ANTI TP  –  with NEXUS-style desync anti-anti
-    -------------------------------------------------
-    UI: Blind Anti TP glass card + settings panel + lock + scale
-    Feature: fake replication root (DavidDesyncRoot) desync
-    leaked by anas
-]]
+repeat task.wait() until game:IsLoaded()
 
-local Players           = game:GetService("Players")
-local RunService        = game:GetService("RunService")
-local UserInputService  = game:GetService("UserInputService")
-local TweenService      = game:GetService("TweenService")
-local HttpService       = game:GetService("HttpService")
-local NetworkClient     = game:GetService("NetworkClient")
-local Workspace         = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
 
-local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer", 10)
-if not LP then return end
-local pg = LP:WaitForChild("PlayerGui")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local environment = (type(getgenv) == "function" and getgenv()) or _G
 
--- ============================================================
---  RUNTIME (survives re-exec)
--- ============================================================
-local environment = (getgenv and getgenv()) or _G
-local RUNTIME_KEY = "BlindAntiTP_Runtime"
+local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+local UI_SCALE = isMobile and 0.9 or 1.15
+local BASE_WIDTH = 268 * UI_SCALE
+local BASE_HEIGHT = 178 * UI_SCALE
+local MINIMIZED_HEIGHT = 44 * UI_SCALE
+local FONT_SCALE = UI_SCALE
 
-local previous = environment[RUNTIME_KEY]
-if type(previous) == "table" and type(previous.destroy) == "function" then
-    pcall(previous.destroy)
+local COLORS = {
+	Base = Color3.fromRGB(255, 241, 246),
+	Card = Color3.fromRGB(255, 255, 255),
+	Accent = Color3.fromRGB(255, 133, 165),
+	On = Color3.fromRGB(255, 118, 154),
+	Off = Color3.fromRGB(213, 176, 189),
+	Text = Color3.fromRGB(92, 48, 66),
+	Sub = Color3.fromRGB(146, 108, 124),
+	Stroke = Color3.fromRGB(255, 170, 195),
+}
+
+pcall(function()
+	for _, name in ipairs({ "NSFW Hub", "Cursed Hub", "Cursed Hub Anti Bat" }) do
+		local old = PlayerGui:FindFirstChild(name)
+		if old then old:Destroy() end
+	end
+end)
+
+pcall(function()
+	local prev = environment.__NSFW_ANTITP_RUNTIME
+	if type(prev) == "table" and type(prev.destroy) == "function" then
+		pcall(prev.destroy)
+	end
+end)
+
+local AntiTpEnabled = false
+local Bind = Enum.KeyCode.F
+
+local function tween(obj, time, props)
+	local t = TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
+	t:Play()
+	return t
 end
+
+local function saveConfig()
+	pcall(function()
+		if not writefile then return end
+		writefile("NSFW_AntiTPBat_Config.json", HttpService:JSONEncode({
+			AntiTpBat = AntiTpEnabled,
+			Bind = Bind.Name,
+		}))
+	end)
+end
+
+local function loadConfig()
+	pcall(function()
+		if not isfile or not isfile("NSFW_AntiTPBat_Config.json") then return end
+		local data = HttpService:JSONDecode(readfile("NSFW_AntiTPBat_Config.json"))
+		if type(data) ~= "table" then return end
+		if data.AntiTpBat ~= nil then AntiTpEnabled = data.AntiTpBat == true end
+		if type(data.Bind) == "string" then
+			local ok, code = pcall(function() return Enum.KeyCode[data.Bind] end)
+			if ok and typeof(code) == "EnumItem" then Bind = code end
+		end
+	end)
+end
+
+local function fetchBytes(url)
+	local requestFn = rawget(environment, "request")
+		or rawget(environment, "http_request")
+		or rawget(environment, "httprequest")
+	if type(requestFn) ~= "function" then
+		local syn = rawget(environment, "syn")
+		if type(syn) == "table" then requestFn = rawget(syn, "request") end
+	end
+	if type(requestFn) ~= "function" then
+		local http = rawget(environment, "http")
+		if type(http) == "table" then requestFn = rawget(http, "request") end
+	end
+	if type(requestFn) == "function" then
+		local ok, res = pcall(requestFn, { Url = url, Method = "GET" })
+		if ok and type(res) == "table" then
+			local body = res.Body or res.body
+			if type(body) == "string" and #body > 0 then return body end
+		end
+	end
+	local ok, body = pcall(function() return game:HttpGet(url) end)
+	if ok and type(body) == "string" and #body > 0 then return body end
+	return nil
+end
+
+local function resolveBackground()
+	local toAsset = rawget(environment, "getcustomasset")
+	if type(toAsset) ~= "function" then
+		toAsset = rawget(environment, "getsynasset")
+	end
+	if type(toAsset) ~= "function" then return nil end
+
+	local fresh = false
+	if isfile and isfile("NSFW_AntiTPBat/background.png") then
+		if type(getfilesize) == "function" then
+			local ok, size = pcall(getfilesize, "NSFW_AntiTPBat/background.png")
+			if ok and type(size) == "number" and size > 1024 then fresh = true end
+		else
+			fresh = true
+		end
+	end
+
+	if fresh then
+		local ok, asset = pcall(toAsset, "NSFW_AntiTPBat/background.png")
+		if ok and type(asset) == "string" and #asset > 0 then return asset end
+	end
+
+	local data = fetchBytes("https://files.catbox.moe/8htxh4.png")
+	if type(data) ~= "string" or #data < 1024 then return nil end
+
+	if type(writefile) ~= "function" then return nil end
+	if makefolder and not (isfolder and isfolder("NSFW_AntiTPBat")) then
+		pcall(makefolder, "NSFW_AntiTPBat")
+	end
+
+	local wrote = pcall(writefile, "NSFW_AntiTPBat/background.png", data)
+	if wrote and isfile and isfile("NSFW_AntiTPBat/background.png") then
+		local ok, asset = pcall(toAsset, "NSFW_AntiTPBat/background.png")
+		if ok and type(asset) == "string" and #asset > 0 then return asset end
+	end
+	return nil
+end
+
+local FAKE_ROOT_Y = 1e8
+local FAKE_ROOT_VELOCITY = Vector3.zero
 
 local runtime = {
-    alive          = true,
-    enabled        = false,
-    character      = nil,
-    rootPart       = nil,
-    fakeRoot       = nil,
-    repRootOwner   = nil,
-    stepConnection = nil,
-    connections    = {},
-    settingsRestore = {},
+	alive = true,
+	enabled = false,
+	character = nil,
+	rootPart = nil,
+	fakeRoot = nil,
+	stepConnection = nil,
 }
-environment[RUNTIME_KEY] = runtime
-
--- ============================================================
---  HELPERS
--- ============================================================
-local function trackedConnect(signal, cb)
-    local c = signal:Connect(cb)
-    table.insert(runtime.connections, c)
-    return c
-end
-
-local function disconnect(c)
-    if c then pcall(function() c:Disconnect() end) end
-end
-
-local function newInstance(class, props, parent)
-    local obj = Instance.new(class)
-    for k, v in pairs(props or {}) do obj[k] = v end
-    if parent then obj.Parent = parent end
-    return obj
-end
+environment.__NSFW_ANTITP_RUNTIME = runtime
 
 local function findGlobalFunction(...)
-    for i = 1, select("#", ...) do
-        local name = select(i, ...)
-        local v = rawget(environment, name)
-        if type(v) == "function" then return v end
-    end
-    return nil
+	for i = 1, select("#", ...) do
+		local name = select(i, ...)
+		local v = rawget(environment, name)
+		if type(v) == "function" then return v end
+		v = rawget(_G, name)
+		if type(v) == "function" then return v end
+	end
+	return nil
+end
+
+local function setHidden(instance, property, value)
+	if not instance then return false end
+	local setter = findGlobalFunction("sethiddenproperty", "set_hidden_property", "sethiddenprop")
+	if setter then
+		local ok = pcall(setter, instance, property, value)
+		if ok then return true end
+	end
+	return pcall(function() instance[property] = value end)
+end
+
+local function getHidden(instance, property)
+	if not instance then return false, nil end
+	local getter = findGlobalFunction("gethiddenproperty", "get_hidden_property", "gethiddenprop")
+	if getter then
+		local ok, value = pcall(getter, instance, property)
+		if ok then return true, value end
+	end
+	local ok, value = pcall(function() return instance[property] end)
+	return ok, value
 end
 
 local function isBasePart(inst)
-    if not inst then return false end
-    local ok, res = pcall(function() return inst:IsA("BasePart") end)
-    return ok and res
+	if not inst then return false end
+	local ok, r = pcall(function() return inst:IsA("BasePart") end)
+	return ok and r == true
 end
-
-local function setHidden(inst, prop, value)
-    if not inst then return false end
-    local setter = findGlobalFunction(
-        "sethiddenproperty", "set_hidden_property",
-        "sethiddenprop", "set_hidden_prop")
-    if setter then
-        local ok = pcall(setter, inst, prop, value)
-        if ok then return true end
-    end
-    return pcall(function() inst[prop] = value end)
-end
-
-local function getHidden(inst, prop)
-    if not inst then return false, nil end
-    local getter = findGlobalFunction(
-        "gethiddenproperty", "get_hidden_property",
-        "gethiddenprop", "get_hidden_prop")
-    if getter then
-        local ok, val = pcall(getter, inst, prop)
-        if ok then return true, val end
-    end
-    local ok, val = pcall(function() return inst[prop] end)
-    return ok, val
-end
-
-local function rememberSetting(inst, prop)
-    local ok, val = pcall(function() return inst[prop] end)
-    if ok then
-        table.insert(runtime.settingsRestore, {
-            instance = inst, property = prop, value = val
-        })
-    end
-end
-
-local function applyPublicSetting(inst, prop, value)
-    if not inst then return false end
-    rememberSetting(inst, prop)
-    return pcall(function() inst[prop] = value end)
-end
-
--- ============================================================
---  ANTI-ANTI  (NEXUS desync)
--- ============================================================
-local FAKE_ROOT_NAME     = "DavidDesyncRoot"
-local FAKE_ROOT_Y        = -5000
-local FAKE_ROOT_VELOCITY = Vector3.new(0, -1000, 0)
 
 local function getCurrentRoot(character)
-    character = character or LP.Character
-    if not character then return nil end
-    local ok, root = pcall(function()
-        return character:FindFirstChild("HumanoidRootPart")
-    end)
-    if ok and isBasePart(root) then return root end
-    return nil
-end
-
-local function configurePhysics()
-    setHidden(LP, "MaximumSimulationRadius", math.huge)
-    setHidden(LP, "SimulationRadius", math.huge)
-
-    pcall(function()
-        local ns = settings().Network
-        applyPublicSetting(ns, "InterpolationThrottling",
-            Enum.InterpolationThrottlingMode.Disabled)
-    end)
-    pcall(function()
-        local ps = settings().Physics
-        applyPublicSetting(ps, "PhysicsEnvironmentalThrottle",
-            Enum.EnviromentalPhysicsThrottle.Disabled)
-        applyPublicSetting(ps, "AllowSleep", false)
-    end)
-    pcall(function()
-        NetworkClient:SetOutgoingKBPSLimit(math.huge)
-    end)
-end
-configurePhysics()
-
-local function fakeRootIsUsable()
-    local fake = runtime.fakeRoot
-    if not isBasePart(fake) then return false end
-    local ok, parent = pcall(function() return fake.Parent end)
-    return ok and parent ~= nil
+	character = character or LocalPlayer.Character
+	if not character then return nil end
+	local ok, root = pcall(function() return character:FindFirstChild("HumanoidRootPart") end)
+	if ok and isBasePart(root) then return root end
+	return nil
 end
 
 local function destroyFakeRoot()
-    local fake = runtime.fakeRoot
-    runtime.fakeRoot = nil
-    if fake then pcall(function() fake:Destroy() end) end
+	if runtime.fakeRoot then
+		pcall(function() runtime.fakeRoot:Destroy() end)
+		runtime.fakeRoot = nil
+	end
 end
 
 local function restoreReplicationRoot()
-    local owner = runtime.repRootOwner or runtime.rootPart
-    if isBasePart(owner) then
-        setHidden(owner, "PhysicsRepRootPart", owner)
-    end
-    runtime.repRootOwner = nil
+	local root = runtime.rootPart
+	if isBasePart(root) then
+		setHidden(root, "PhysicsRepRootPart", root)
+	end
 end
 
 local function createFakeRoot(rootPart)
-    destroyFakeRoot()
-    local fake = newInstance("Part", {
-        Name                   = FAKE_ROOT_NAME,
-        Size                   = Vector3.new(2, 2, 1),
-        Anchored               = true,
-        CanCollide             = false,
-        CanTouch               = false,
-        CanQuery               = false,
-        Transparency           = 1,
-        CFrame                 = CFrame.new(0, FAKE_ROOT_Y, 0),
-        AssemblyLinearVelocity = FAKE_ROOT_VELOCITY,
-    }, Workspace)
-
-    local ok, pos = pcall(function() return rootPart.Position end)
-    if ok then
-        fake.CFrame = CFrame.new(pos.X, FAKE_ROOT_Y, pos.Z)
-    end
-    runtime.fakeRoot = fake
-    return fake
+	destroyFakeRoot()
+	if not isBasePart(rootPart) then return nil end
+	local fake = Instance.new("Part")
+	fake.Name = "NSFWFakeRepRoot"
+	fake.Size = Vector3.new(2, 2, 1)
+	fake.Transparency = 1
+	fake.Anchored = true
+	fake.CanCollide = false
+	fake.CanQuery = false
+	fake.CanTouch = false
+	fake.Massless = true
+	fake.CFrame = CFrame.new(rootPart.Position.X, FAKE_ROOT_Y, rootPart.Position.Z)
+	fake.Parent = workspace
+	runtime.fakeRoot = fake
+	return fake
 end
 
 local function assignFakeReplicationRoot(rootPart, fake)
-    if not isBasePart(rootPart) or not isBasePart(fake) then
-        return false
-    end
-    setHidden(rootPart, "PhysicsRepRootPart", rootPart)
-    runtime.repRootOwner = rootPart
-    return setHidden(rootPart, "PhysicsRepRootPart", fake)
+	if not isBasePart(rootPart) or not isBasePart(fake) then return end
+	setHidden(rootPart, "PhysicsRepRootPart", fake)
 end
 
 local function stepDesync()
-    if not runtime.alive or not runtime.enabled then return end
-
-    local root = runtime.rootPart
-    if not isBasePart(root) then
-        root = getCurrentRoot(runtime.character)
-        runtime.rootPart = root
-    end
-    if not root then return end
-
-    if not fakeRootIsUsable() then
-        local fake = createFakeRoot(root)
-        assignFakeReplicationRoot(root, fake)
-        return
-    end
-
-    local fake = runtime.fakeRoot
-    local ok, rootPos, fakePos = pcall(function()
-        return root.Position, fake.Position
-    end)
-    if ok and (
-        math.abs(rootPos.X - fakePos.X) > 0.01
-        or math.abs(rootPos.Z - fakePos.Z) > 0.01
-        or math.abs(fakePos.Y - FAKE_ROOT_Y) > 0.01
-    ) then
-        pcall(function()
-            fake.CFrame = CFrame.new(rootPos.X, FAKE_ROOT_Y, rootPos.Z)
-        end)
-    end
-
-    pcall(function()
-        fake.Anchored = true
-        fake.AssemblyLinearVelocity = FAKE_ROOT_VELOCITY
-    end)
-
-    local got, current = getHidden(root, "PhysicsRepRootPart")
-    if not got or current ~= fake then
-        setHidden(root, "PhysicsRepRootPart", fake)
-    end
+	if not runtime.enabled or not runtime.alive then return end
+	local root = runtime.rootPart
+	if not isBasePart(root) or not root.Parent then
+		root = getCurrentRoot(runtime.character)
+		runtime.rootPart = root
+		if not root then return end
+	end
+	if not isBasePart(runtime.fakeRoot) or not runtime.fakeRoot.Parent then
+		local fake = createFakeRoot(root)
+		if fake then assignFakeReplicationRoot(root, fake) end
+		return
+	end
+	local fake = runtime.fakeRoot
+	local ok, rootPos, fakePos = pcall(function()
+		return root.Position, fake.Position
+	end)
+	if ok and (
+		math.abs(rootPos.X - fakePos.X) > 0.01
+		or math.abs(rootPos.Z - fakePos.Z) > 0.01
+		or math.abs(fakePos.Y - FAKE_ROOT_Y) > 0.01
+	) then
+		pcall(function()
+			fake.CFrame = CFrame.new(rootPos.X, FAKE_ROOT_Y, rootPos.Z)
+		end)
+	end
+	pcall(function()
+		fake.Anchored = true
+		fake.AssemblyLinearVelocity = FAKE_ROOT_VELOCITY
+	end)
+	local got, current = getHidden(root, "PhysicsRepRootPart")
+	if not got or current ~= fake then
+		setHidden(root, "PhysicsRepRootPart", fake)
+	end
 end
 
 local function stopStepConnection()
-    disconnect(runtime.stepConnection)
-    runtime.stepConnection = nil
+	if runtime.stepConnection then
+		pcall(function() runtime.stepConnection:Disconnect() end)
+		runtime.stepConnection = nil
+	end
 end
 
 local function startStepConnection()
-    stopStepConnection()
-    runtime.stepConnection = RunService.Stepped:Connect(stepDesync)
+	stopStepConnection()
+	runtime.stepConnection = RunService.Stepped:Connect(stepDesync)
+end
+
+local function setAntiTp(on)
+	on = on == true
+	runtime.enabled = on
+	if on then
+		runtime.character = LocalPlayer.Character
+		local root = getCurrentRoot(runtime.character)
+		runtime.rootPart = root
+		if not root then
+			runtime.enabled = false
+			AntiTpEnabled = false
+			saveConfig()
+			return false
+		end
+		local fake = createFakeRoot(root)
+		assignFakeReplicationRoot(root, fake)
+		startStepConnection()
+	else
+		stopStepConnection()
+		restoreReplicationRoot()
+		destroyFakeRoot()
+	end
+	AntiTpEnabled = runtime.enabled
+	saveConfig()
+	return AntiTpEnabled
 end
 
 local function bindCharacter(character)
-    local oldRoot = runtime.rootPart
-    runtime.character = character
-    runtime.rootPart  = getCurrentRoot(character)
-
-    if runtime.enabled then
-        if isBasePart(oldRoot) and oldRoot ~= runtime.rootPart then
-            setHidden(oldRoot, "PhysicsRepRootPart", oldRoot)
-        end
-        destroyFakeRoot()
-
-        local root = runtime.rootPart
-        if not root and character then
-            local ok, waited = pcall(function()
-                return character:WaitForChild("HumanoidRootPart", 8)
-            end)
-            if ok and isBasePart(waited) then
-                root = waited
-                runtime.rootPart = root
-            end
-        end
-
-        if root then
-            local fake = createFakeRoot(root)
-            assignFakeReplicationRoot(root, fake)
-            startStepConnection()
-        end
-    end
+	runtime.character = character
+	runtime.rootPart = getCurrentRoot(character)
+	if runtime.enabled then
+		destroyFakeRoot()
+		local root = runtime.rootPart
+		if not root and character then
+			local ok, waited = pcall(function()
+				return character:WaitForChild("HumanoidRootPart", 8)
+			end)
+			if ok and isBasePart(waited) then
+				root = waited
+				runtime.rootPart = root
+			end
+		end
+		if root then
+			local fake = createFakeRoot(root)
+			assignFakeReplicationRoot(root, fake)
+			startStepConnection()
+		end
+	end
 end
 
-bindCharacter(LP.Character)
-trackedConnect(LP.CharacterAdded, function(char)
-    task.defer(bindCharacter, char)
+LocalPlayer.CharacterAdded:Connect(function(char)
+	task.defer(bindCharacter, char)
 end)
+if LocalPlayer.Character then bindCharacter(LocalPlayer.Character) end
 
-local function enableAntiAnti()
-    local root = getCurrentRoot(runtime.character)
-    runtime.rootPart = root
-    if not root then return false end
-    local fake = createFakeRoot(root)
-    assignFakeReplicationRoot(root, fake)
-    startStepConnection()
-    return true
-end
-
-local function disableAntiAnti()
-    stopStepConnection()
-    restoreReplicationRoot()
-    destroyFakeRoot()
-end
-
--- ============================================================
---  GUI PARENTING
--- ============================================================
-local function parentGui(gui)
-    local function try(target)
-        pcall(function() gui.Parent = target end)
-        return gui.Parent ~= nil
-    end
-    if try(pg) then return true end
-    pcall(function()
-        if typeof(gethui) == "function" then
-            local h = gethui()
-            if h and try(h) then return true end
-        end
-    end)
-    if try(game:GetService("CoreGui")) then return true end
-    return false
-end
-
--- Clean old
-pcall(function()
-    local old = pg:FindFirstChild("BlindAntiTP")
-    if old then old:Destroy() end
-    pcall(function()
-        local o2 = game:GetService("CoreGui"):FindFirstChild("BlindAntiTP")
-        if o2 then o2:Destroy() end
-    end)
-end)
-
--- ============================================================
---  BUILD UI
--- ============================================================
-local BlindAntiTP = Instance.new("ScreenGui")
-BlindAntiTP.Name = "BlindAntiTP"
-BlindAntiTP.IgnoreGuiInset = true
-BlindAntiTP.ResetOnSpawn = false
-BlindAntiTP.DisplayOrder = 999
-BlindAntiTP.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-BlindAntiTP.Parent = pg
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "NSFW Hub"
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
 
 local Main = Instance.new("Frame")
 Main.Name = "Main"
 Main.Active = true
-Main.Position = UDim2.new(0.5, -160, 0.5, -85)
-Main.Size = UDim2.new(0, 320, 0, 170)
-Main.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
-Main.BackgroundTransparency = 0.1
+Main.ClipsDescendants = true
+Main.AnchorPoint = Vector2.new(0.5, 0.5)
+Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+Main.Size = UDim2.new(0, BASE_WIDTH, 0, BASE_HEIGHT)
+Main.BackgroundColor3 = COLORS.Base
 Main.BorderSizePixel = 0
-Main.Parent = BlindAntiTP
+Main.Parent = ScreenGui
 
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 10)
-    c.Parent = Main
-end
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 14 * UI_SCALE)
+MainCorner.Parent = Main
 
-local Background = Instance.new("ImageLabel")
-Background.Name = "Background"
-Background.ZIndex = 0
-Background.Size = UDim2.new(1, 0, 1, 0)
-Background.BackgroundTransparency = 1
-Background.Image = "rbxassetid://116223373187390"
-Background.ImageTransparency = 0.3
-Background.ScaleType = Enum.ScaleType.Crop
-Background.Parent = Main
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = COLORS.Stroke
+MainStroke.Thickness = 1 * UI_SCALE
+MainStroke.Transparency = 0.45
+MainStroke.Parent = Main
 
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 10)
-    c.Parent = Background
-end
+local BgImage = Instance.new("ImageLabel")
+BgImage.Name = "Background"
+BgImage.Size = UDim2.new(1, 0, 1, 0)
+BgImage.BackgroundTransparency = 1
+BgImage.Image = ""
+BgImage.ImageTransparency = 0.32
+BgImage.ScaleType = Enum.ScaleType.Crop
+BgImage.Parent = Main
 
-local UIScale = Instance.new("UIScale")
-UIScale.Name = "UIScale"
-UIScale.Scale = 0.85
-UIScale.Parent = Main
+local BgCorner = Instance.new("UICorner")
+BgCorner.CornerRadius = UDim.new(0, 14 * UI_SCALE)
+BgCorner.Parent = BgImage
 
-local Header = Instance.new("Frame")
-Header.Name = "Header"
-Header.ZIndex = 10
-Header.Position = UDim2.new(0, 14, 0, 5)
-Header.Size = UDim2.new(1, -18, 0, 36)
-Header.BackgroundTransparency = 1
-Header.Parent = Main
+local Veil = Instance.new("Frame")
+Veil.Name = "Veil"
+Veil.Size = UDim2.new(1, 0, 1, 0)
+Veil.BackgroundColor3 = COLORS.Base
+Veil.BackgroundTransparency = 0.42
+Veil.BorderSizePixel = 0
+Veil.Parent = Main
+
+local VeilCorner = Instance.new("UICorner")
+VeilCorner.CornerRadius = UDim.new(0, 14 * UI_SCALE)
+VeilCorner.Parent = Veil
+
+task.spawn(function()
+	local asset = resolveBackground()
+	if asset then
+		BgImage.Image = asset
+	end
+end)
+
+local TopBar = Instance.new("Frame")
+TopBar.Name = "TopBar"
+TopBar.ZIndex = 4
+TopBar.Size = UDim2.new(1, 0, 0, 44 * UI_SCALE)
+TopBar.BackgroundTransparency = 1
+TopBar.Parent = Main
 
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
-Title.ZIndex = 11
-Title.Position = UDim2.new(0, 2, 0, 0)
-Title.Size = UDim2.new(1, -160, 1, 0)
+Title.ZIndex = 5
+Title.Position = UDim2.new(0, 14 * UI_SCALE, 0, 9 * UI_SCALE)
+Title.Size = UDim2.new(0, 150 * UI_SCALE, 0, 16 * UI_SCALE)
 Title.BackgroundTransparency = 1
-Title.Text = "BLIND ANTI TP"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 13
+Title.Text = "NSFW HUB"
+Title.TextColor3 = COLORS.Text
 Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 13 * FONT_SCALE
 Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = Header
+Title.Parent = TopBar
 
-local Credit = Instance.new("TextLabel")
-Credit.Name = "Credit"
-Credit.ZIndex = 11
-Credit.Position = UDim2.new(0, 2, 0, 18)
-Credit.Size = UDim2.new(1, -160, 0, 14)
-Credit.BackgroundTransparency = 1
-Credit.Text = "fucked by anas"
-Credit.TextColor3 = Color3.fromRGB(180, 180, 200)
-Credit.TextSize = 9
-Credit.Font = Enum.Font.GothamBold
-Credit.TextXAlignment = Enum.TextXAlignment.Left
-Credit.Parent = Header
+local SubTitle = Instance.new("TextLabel")
+SubTitle.Name = "SubTitle"
+SubTitle.ZIndex = 5
+SubTitle.Position = UDim2.new(0, 14 * UI_SCALE, 0, 25 * UI_SCALE)
+SubTitle.Size = UDim2.new(0, 150 * UI_SCALE, 0, 12 * UI_SCALE)
+SubTitle.BackgroundTransparency = 1
+SubTitle.Text = "Anti TP Bat"
+SubTitle.TextColor3 = COLORS.Sub
+SubTitle.Font = Enum.Font.Gotham
+SubTitle.TextSize = 10 * FONT_SCALE
+SubTitle.TextXAlignment = Enum.TextXAlignment.Left
+SubTitle.Parent = TopBar
 
-local SettingsBtn = Instance.new("TextButton")
-SettingsBtn.Name = "SettingsBtn"
-SettingsBtn.ZIndex = 12
-SettingsBtn.AnchorPoint = Vector2.new(1, 0.5)
-SettingsBtn.Position = UDim2.new(1, -68, 0.5, 0)
-SettingsBtn.Size = UDim2.new(0, 26, 0, 22)
-SettingsBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-SettingsBtn.BackgroundTransparency = 0.3
-SettingsBtn.BorderSizePixel = 0
-SettingsBtn.Text = "⚙️"
-SettingsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-SettingsBtn.TextSize = 13
-SettingsBtn.Font = Enum.Font.GothamBold
-SettingsBtn.AutoButtonColor = false
-SettingsBtn.Parent = Header
-
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 5)
-    c.Parent = SettingsBtn
+local function makeTopButton(name, glyph, xOffset)
+	local btn = Instance.new("TextButton")
+	btn.Name = name
+	btn.ZIndex = 5
+	btn.AnchorPoint = Vector2.new(1, 0.5)
+	btn.Position = UDim2.new(1, xOffset * UI_SCALE, 0.5, 0)
+	btn.Size = UDim2.new(0, 24 * UI_SCALE, 0, 24 * UI_SCALE)
+	btn.BackgroundColor3 = COLORS.Card
+	btn.BackgroundTransparency = 0.35
+	btn.BorderSizePixel = 0
+	btn.Text = glyph
+	btn.TextColor3 = COLORS.Text
+	btn.TextSize = 12 * FONT_SCALE
+	btn.Font = Enum.Font.GothamBold
+	btn.AutoButtonColor = false
+	btn.Parent = TopBar
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7 * UI_SCALE)
+	btn.MouseEnter:Connect(function()
+		tween(btn, 0.15, { BackgroundTransparency = 0.12 })
+	end)
+	btn.MouseLeave:Connect(function()
+		tween(btn, 0.15, { BackgroundTransparency = 0.35 })
+	end)
+	return btn
 end
 
-local LockBtn = Instance.new("TextButton")
-LockBtn.Name = "LockBtn"
-LockBtn.ZIndex = 12
-LockBtn.AnchorPoint = Vector2.new(1, 0.5)
-LockBtn.Position = UDim2.new(1, -38, 0.5, 0)
-LockBtn.Size = UDim2.new(0, 26, 0, 22)
-LockBtn.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
-LockBtn.BackgroundTransparency = 0.25
-LockBtn.BorderSizePixel = 0
-LockBtn.Text = "🔓"
-LockBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-LockBtn.TextSize = 13
-LockBtn.Font = Enum.Font.GothamBold
-LockBtn.AutoButtonColor = false
-LockBtn.Parent = Header
+local MinBtn = makeTopButton("MinBtn", "-", -42 * UI_SCALE)
+local CloseBtn = makeTopButton("CloseBtn", "x", -12 * UI_SCALE)
 
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 5)
-    c.Parent = LockBtn
+local function makeRow(name, y, height)
+	local row = Instance.new("Frame")
+	row.Name = name
+	row.ZIndex = 4
+	row.Position = UDim2.new(0, 12 * UI_SCALE, 0, y * UI_SCALE)
+	row.Size = UDim2.new(1, -24 * UI_SCALE, 0, height * UI_SCALE)
+	row.BackgroundColor3 = COLORS.Card
+	row.BackgroundTransparency = 0.22
+	row.BorderSizePixel = 0
+	row.Parent = Main
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10 * UI_SCALE)
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = COLORS.Stroke
+	stroke.Thickness = 1 * UI_SCALE
+	stroke.Transparency = 0.6
+	stroke.Parent = row
+
+	local label = Instance.new("TextLabel")
+	label.Name = "Label"
+	label.ZIndex = 6
+	label.Position = UDim2.new(0, 12 * UI_SCALE, 0, 0)
+	label.Size = UDim2.new(0, 140 * UI_SCALE, 1, 0)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = COLORS.Text
+	label.Font = Enum.Font.GothamSemibold
+	label.TextSize = 12 * FONT_SCALE
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = row
+	return row, label
 end
 
-local Content = Instance.new("Frame")
-Content.Name = "Content"
-Content.ZIndex = 5
-Content.ClipsDescendants = true
-Content.Position = UDim2.new(0, 16, 0, 44)
-Content.Size = UDim2.new(1, -24, 1, -50)
-Content.BackgroundTransparency = 1
-Content.Parent = Main
+local ToggleRow, ToggleLabel = makeRow("ToggleRow", 52 * UI_SCALE, 40 * UI_SCALE)
+ToggleLabel.Text = "Anti TP Bat"
 
-do
-    local lay = Instance.new("UIListLayout")
-    lay.Padding = UDim.new(0, 7)
-    lay.SortOrder = Enum.SortOrder.LayoutOrder
-    lay.Parent = Content
+local SwitchBg = Instance.new("Frame")
+SwitchBg.Name = "SwitchBg"
+SwitchBg.ZIndex = 6
+SwitchBg.AnchorPoint = Vector2.new(1, 0.5)
+SwitchBg.Position = UDim2.new(1, -12 * UI_SCALE, 0.5, 0)
+SwitchBg.Size = UDim2.new(0, 48 * UI_SCALE, 0, 24 * UI_SCALE)
+SwitchBg.BackgroundColor3 = COLORS.Off
+SwitchBg.BorderSizePixel = 0
+SwitchBg.Parent = ToggleRow
+Instance.new("UICorner", SwitchBg).CornerRadius = UDim.new(0, 12 * UI_SCALE)
+
+local SwitchKnob = Instance.new("Frame")
+SwitchKnob.Name = "SwitchKnob"
+SwitchKnob.ZIndex = 7
+SwitchKnob.Position = UDim2.new(0, 3 * UI_SCALE, 0.5, -9 * UI_SCALE)
+SwitchKnob.Size = UDim2.new(0, 18 * UI_SCALE, 0, 18 * UI_SCALE)
+SwitchKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+SwitchKnob.BorderSizePixel = 0
+SwitchKnob.Parent = SwitchBg
+Instance.new("UICorner", SwitchKnob).CornerRadius = UDim.new(1, 0)
+
+local SwitchHit = Instance.new("TextButton")
+SwitchHit.Name = "SwitchHit"
+SwitchHit.ZIndex = 8
+SwitchHit.Size = UDim2.new(1, 0, 1, 0)
+SwitchHit.BackgroundTransparency = 1
+SwitchHit.Text = ""
+SwitchHit.AutoButtonColor = false
+SwitchHit.Parent = ToggleRow
+
+local BindRow, BindLabel = makeRow("BindRow", 100 * UI_SCALE, 40 * UI_SCALE)
+BindLabel.Text = "Toggle Keybind"
+
+local BindButton = Instance.new("TextButton")
+BindButton.Name = "BindButton"
+BindButton.ZIndex = 6
+BindButton.AnchorPoint = Vector2.new(1, 0.5)
+BindButton.Position = UDim2.new(1, -12 * UI_SCALE, 0.5, 0)
+BindButton.Size = UDim2.new(0, 96 * UI_SCALE, 0, 24 * UI_SCALE)
+BindButton.BackgroundColor3 = COLORS.Card
+BindButton.BackgroundTransparency = 0.1
+BindButton.BorderSizePixel = 0
+BindButton.Text = "F"
+BindButton.TextColor3 = COLORS.Text
+BindButton.TextSize = 11 * FONT_SCALE
+BindButton.Font = Enum.Font.GothamBold
+BindButton.AutoButtonColor = false
+BindButton.Parent = BindRow
+
+local BindCorner = Instance.new("UICorner")
+BindCorner.CornerRadius = UDim.new(0, 8 * UI_SCALE)
+BindCorner.Parent = BindButton
+
+local BindStroke = Instance.new("UIStroke")
+BindStroke.Color = COLORS.Accent
+BindStroke.Thickness = 1 * UI_SCALE
+BindStroke.Transparency = 0.4
+BindStroke.Parent = BindButton
+
+local StatusRow = Instance.new("Frame")
+StatusRow.Name = "StatusRow"
+StatusRow.ZIndex = 4
+StatusRow.Position = UDim2.new(0, 12 * UI_SCALE, 1, -30 * UI_SCALE)
+StatusRow.Size = UDim2.new(1, -24 * UI_SCALE, 0, 14 * UI_SCALE)
+StatusRow.BackgroundTransparency = 1
+StatusRow.Parent = Main
+
+local StatusDot = Instance.new("Frame")
+StatusDot.Name = "StatusDot"
+StatusDot.ZIndex = 6
+StatusDot.AnchorPoint = Vector2.new(0, 0.5)
+StatusDot.Position = UDim2.new(0, 2 * UI_SCALE, 0.5, 0)
+StatusDot.Size = UDim2.new(0, 8 * UI_SCALE, 0, 8 * UI_SCALE)
+StatusDot.BackgroundColor3 = COLORS.Off
+StatusDot.BorderSizePixel = 0
+StatusDot.Parent = StatusRow
+Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Name = "StatusText"
+StatusText.ZIndex = 6
+StatusText.Position = UDim2.new(0, 16 * UI_SCALE, 0, 0)
+StatusText.Size = UDim2.new(1, -16 * UI_SCALE, 1, 0)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "Inactive"
+StatusText.TextColor3 = COLORS.Sub
+StatusText.Font = Enum.Font.Gotham
+StatusText.TextSize = 10 * FONT_SCALE
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.Parent = StatusRow
+
+local KEY_ALIASES = {
+	ButtonA = "A", ButtonB = "B", ButtonX = "X", ButtonY = "Y",
+	ButtonL1 = "LB", ButtonR1 = "RB", ButtonL2 = "LT", ButtonR2 = "RT",
+	ButtonL3 = "LS", ButtonR3 = "RS",
+	ButtonStart = "Start", ButtonSelect = "Select",
+	DPadUp = "D-Up", DPadDown = "D-Down", DPadLeft = "D-Left", DPadRight = "D-Right",
+	LeftControl = "L-Ctrl", RightControl = "R-Ctrl",
+	LeftShift = "L-Shift", RightShift = "R-Shift",
+	LeftAlt = "L-Alt", RightAlt = "R-Alt",
+	Return = "Enter", Escape = "Esc", Backspace = "Back",
+	Insert = "Ins", Delete = "Del",
+	PageUp = "PgUp", PageDown = "PgDn",
+	CapsLock = "Caps", Tab = "Tab", Space = "Space",
+	Zero = "0", One = "1", Two = "2", Three = "3", Four = "4",
+	Five = "5", Six = "6", Seven = "7", Eight = "8", Nine = "9",
+}
+
+local function formatKey(code)
+	local name = code.Name
+	return KEY_ALIASES[name] or name
 end
 
-local AntiAntiRow = Instance.new("Frame")
-AntiAntiRow.Name = "AntiAntiRow"
-AntiAntiRow.ZIndex = 5
-AntiAntiRow.LayoutOrder = 1
-AntiAntiRow.Size = UDim2.new(1, 0, 0, 44)
-AntiAntiRow.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
-AntiAntiRow.BackgroundTransparency = 0.35
-AntiAntiRow.BorderSizePixel = 0
-AntiAntiRow.Parent = Content
-
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 7)
-    c.Parent = AntiAntiRow
+local function refresh()
+	local on = AntiTpEnabled
+	local color = on and COLORS.On or COLORS.Off
+	tween(SwitchBg, 0.18, { BackgroundColor3 = color })
+	tween(SwitchKnob, 0.18, { Position = on and UDim2.new(1, -21 * UI_SCALE, 0.5, -9 * UI_SCALE) or UDim2.new(0, 3 * UI_SCALE, 0.5, -9 * UI_SCALE) })
+	StatusDot.BackgroundColor3 = color
+	StatusText.Text = on and "Active" or "Inactive"
+	StatusText.TextColor3 = on and COLORS.On or COLORS.Sub
 end
 
-local Label = Instance.new("TextLabel")
-Label.Name = "Label"
-Label.ZIndex = 6
-Label.Position = UDim2.new(0, 12, 0, 5)
-Label.Size = UDim2.new(1, -70, 0, 17)
-Label.BackgroundTransparency = 1
-Label.Text = "Enable Anti Anti TP"
-Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-Label.TextSize = 12
-Label.Font = Enum.Font.GothamBold
-Label.TextXAlignment = Enum.TextXAlignment.Left
-Label.Parent = AntiAntiRow
-
-local Status = Instance.new("TextLabel")
-Status.Name = "Status"
-Status.ZIndex = 6
-Status.Position = UDim2.new(0, 12, 0, 23)
-Status.Size = UDim2.new(1, -70, 0, 14)
-Status.BackgroundTransparency = 1
-Status.Text = "OFF"
-Status.TextColor3 = Color3.fromRGB(130, 130, 140)
-Status.TextSize = 9
-Status.Font = Enum.Font.GothamBold
-Status.TextXAlignment = Enum.TextXAlignment.Left
-Status.Parent = AntiAntiRow
-
-local Toggle = Instance.new("Frame")
-Toggle.Name = "Toggle"
-Toggle.ZIndex = 7
-Toggle.AnchorPoint = Vector2.new(1, 0.5)
-Toggle.Position = UDim2.new(1, -10, 0.5, 0)
-Toggle.Size = UDim2.new(0, 42, 0, 21)
-Toggle.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
-Toggle.BorderSizePixel = 0
-Toggle.Parent = AntiAntiRow
-
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 10)
-    c.Parent = Toggle
+local function toggleAntiTp()
+	setAntiTp(not AntiTpEnabled)
+	refresh()
 end
 
-local Knob = Instance.new("Frame")
-Knob.Name = "Knob"
-Knob.ZIndex = 8
-Knob.Position = UDim2.new(0, 3, 0, 3)
-Knob.Size = UDim2.new(0, 15, 0, 15)
-Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-Knob.BorderSizePixel = 0
-Knob.Parent = Toggle
+SwitchHit.MouseButton1Click:Connect(toggleAntiTp)
 
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(1, 0)
-    c.Parent = Knob
-end
+local Capturing = false
 
-local ToggleHit = Instance.new("TextButton")
-ToggleHit.Name = "ToggleHit"
-ToggleHit.ZIndex = 9
-ToggleHit.Size = UDim2.new(1, 0, 1, 0)
-ToggleHit.BackgroundTransparency = 1
-ToggleHit.BorderSizePixel = 0
-ToggleHit.Text = ""
-ToggleHit.AutoButtonColor = false
-ToggleHit.Parent = AntiAntiRow
-
-local KeybindRow = Instance.new("Frame")
-KeybindRow.Name = "KeybindRow"
-KeybindRow.ZIndex = 5
-KeybindRow.LayoutOrder = 2
-KeybindRow.Size = UDim2.new(1, 0, 0, 44)
-KeybindRow.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
-KeybindRow.BackgroundTransparency = 0.35
-KeybindRow.BorderSizePixel = 0
-KeybindRow.Parent = Content
-
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 7)
-    c.Parent = KeybindRow
-end
-
-local Label2 = Instance.new("TextLabel")
-Label2.Name = "Label"
-Label2.ZIndex = 6
-Label2.Position = UDim2.new(0, 12, 0, 0)
-Label2.Size = UDim2.new(1, -90, 1, 0)
-Label2.BackgroundTransparency = 1
-Label2.Text = "Keybind"
-Label2.TextColor3 = Color3.fromRGB(255, 255, 255)
-Label2.TextSize = 12
-Label2.Font = Enum.Font.GothamBold
-Label2.TextXAlignment = Enum.TextXAlignment.Left
-Label2.Parent = KeybindRow
-
-local KeybindBtn = Instance.new("TextButton")
-KeybindBtn.Name = "KeybindBtn"
-KeybindBtn.ZIndex = 7
-KeybindBtn.AnchorPoint = Vector2.new(1, 0.5)
-KeybindBtn.Position = UDim2.new(1, -10, 0.5, 0)
-KeybindBtn.Size = UDim2.new(0, 72, 0, 24)
-KeybindBtn.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
-KeybindBtn.BackgroundTransparency = 0.3
-KeybindBtn.BorderSizePixel = 0
-KeybindBtn.Text = "RightShift"
-KeybindBtn.TextColor3 = Color3.fromRGB(210, 210, 225)
-KeybindBtn.TextSize = 10
-KeybindBtn.Font = Enum.Font.GothamBlack
-KeybindBtn.AutoButtonColor = false
-KeybindBtn.Parent = KeybindRow
-
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 5)
-    c.Parent = KeybindBtn
-end
-
-local SettingsPanel = Instance.new("Frame")
-SettingsPanel.Name = "SettingsPanel"
-SettingsPanel.ZIndex = 20
-SettingsPanel.ClipsDescendants = true
-SettingsPanel.Position = UDim2.new(1, 6, 0, 0)
-SettingsPanel.Size = UDim2.new(0, 0, 1, 0)
-SettingsPanel.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
-SettingsPanel.BackgroundTransparency = 0.05
-SettingsPanel.BorderSizePixel = 0
-SettingsPanel.Parent = Main
-
-do
-    local c = Instance.new("UICorner")
-    c.Parent = SettingsPanel
-end
-
-local Background2 = Instance.new("ImageLabel")
-Background2.Name = "Background"
-Background2.ZIndex = 0
-Background2.Size = UDim2.new(1, 0, 1, 0)
-Background2.BackgroundTransparency = 1
-Background2.Image = "rbxassetid://116223373187390"
-Background2.ImageTransparency = 0.45
-Background2.ScaleType = Enum.ScaleType.Crop
-Background2.Parent = SettingsPanel
-
-do
-    local c = Instance.new("UICorner")
-    c.Parent = Background2
-end
-
-local SettingsTitle = Instance.new("TextLabel")
-SettingsTitle.Name = "SettingsTitle"
-SettingsTitle.ZIndex = 21
-SettingsTitle.Position = UDim2.new(0, 12, 0, 10)
-SettingsTitle.Size = UDim2.new(1, -16, 0, 20)
-SettingsTitle.BackgroundTransparency = 1
-SettingsTitle.Text = "Settings"
-SettingsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-SettingsTitle.TextSize = 12
-SettingsTitle.Font = Enum.Font.GothamBlack
-SettingsTitle.TextXAlignment = Enum.TextXAlignment.Left
-SettingsTitle.Parent = SettingsPanel
-
-local Divider = Instance.new("Frame")
-Divider.Name = "Divider"
-Divider.ZIndex = 21
-Divider.Position = UDim2.new(0, 10, 0, 34)
-Divider.Size = UDim2.new(1, -20, 0, 1)
-Divider.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-Divider.BorderSizePixel = 0
-Divider.Parent = SettingsPanel
-
-local ScaleLabel = Instance.new("TextLabel")
-ScaleLabel.Name = "ScaleLabel"
-ScaleLabel.ZIndex = 21
-ScaleLabel.Position = UDim2.new(0, 12, 0, 44)
-ScaleLabel.Size = UDim2.new(1, -16, 0, 16)
-ScaleLabel.BackgroundTransparency = 1
-ScaleLabel.Text = "GUI Scale"
-ScaleLabel.TextColor3 = Color3.fromRGB(130, 130, 140)
-ScaleLabel.TextSize = 10
-ScaleLabel.Font = Enum.Font.GothamBold
-ScaleLabel.TextXAlignment = Enum.TextXAlignment.Left
-ScaleLabel.Parent = SettingsPanel
-
-local ScaleRow = Instance.new("Frame")
-ScaleRow.Name = "ScaleRow"
-ScaleRow.ZIndex = 21
-ScaleRow.Position = UDim2.new(0, 10, 0, 64)
-ScaleRow.Size = UDim2.new(1, -20, 0, 30)
-ScaleRow.BackgroundTransparency = 1
-ScaleRow.Parent = SettingsPanel
-
-local ScaleDec = Instance.new("TextButton")
-ScaleDec.Name = "ScaleDec"
-ScaleDec.ZIndex = 22
-ScaleDec.Position = UDim2.new(0, 0, 0.5, -13)
-ScaleDec.Size = UDim2.new(0, 26, 0, 26)
-ScaleDec.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
-ScaleDec.BackgroundTransparency = 0.15
-ScaleDec.BorderSizePixel = 0
-ScaleDec.Text = "−"
-ScaleDec.TextColor3 = Color3.fromRGB(255, 255, 255)
-ScaleDec.TextSize = 16
-ScaleDec.Font = Enum.Font.GothamBlack
-ScaleDec.AutoButtonColor = false
-ScaleDec.Parent = ScaleRow
-
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 5)
-    c.Parent = ScaleDec
-end
-
-local ScaleValue = Instance.new("TextLabel")
-ScaleValue.Name = "ScaleValue"
-ScaleValue.ZIndex = 22
-ScaleValue.AnchorPoint = Vector2.new(0.5, 0.5)
-ScaleValue.Position = UDim2.new(0.5, 0, 0.5, 0)
-ScaleValue.Size = UDim2.new(0, 50, 1, 0)
-ScaleValue.BackgroundTransparency = 1
-ScaleValue.Text = "0.85"
-ScaleValue.TextColor3 = Color3.fromRGB(255, 255, 255)
-ScaleValue.TextSize = 13
-ScaleValue.Font = Enum.Font.GothamBlack
-ScaleValue.Parent = ScaleRow
-
-local ScaleInc = Instance.new("TextButton")
-ScaleInc.Name = "ScaleInc"
-ScaleInc.ZIndex = 22
-ScaleInc.AnchorPoint = Vector2.new(1, 0)
-ScaleInc.Position = UDim2.new(1, 0, 0.5, -13)
-ScaleInc.Size = UDim2.new(0, 26, 0, 26)
-ScaleInc.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
-ScaleInc.BackgroundTransparency = 0.15
-ScaleInc.BorderSizePixel = 0
-ScaleInc.Text = "+"
-ScaleInc.TextColor3 = Color3.fromRGB(255, 255, 255)
-ScaleInc.TextSize = 16
-ScaleInc.Font = Enum.Font.GothamBlack
-ScaleInc.AutoButtonColor = false
-ScaleInc.Parent = ScaleRow
-
-do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 5)
-    c.Parent = ScaleInc
-end
-
--- ============================================================
---  STATE + FUNCTIONALITY
--- ============================================================
-local settingsOpen = false
-local locked       = false
-local currentScale = 0.85
-local currentKey   = Enum.KeyCode.RightShift
-local lastToggleAt = -1
-local DEBOUNCE     = 0.15
-
-local function applyVisual(on)
-    if on then
-        Status.Text = "ACTIVE"
-        Status.TextColor3 = Color3.fromRGB(100, 255, 140)
-        Toggle.BackgroundColor3 = Color3.fromRGB(40, 120, 70)
-        TweenService:Create(Knob, TweenInfo.new(0.15), {
-            Position = UDim2.new(1, -18, 0, 3)
-        }):Play()
-    else
-        Status.Text = "OFF"
-        Status.TextColor3 = Color3.fromRGB(130, 130, 140)
-        Toggle.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
-        TweenService:Create(Knob, TweenInfo.new(0.15), {
-            Position = UDim2.new(0, 3, 0, 3)
-        }):Play()
-    end
-end
-
-local function setEnabled(value)
-    value = value == true
-    if not runtime.alive then return false end
-    if runtime.enabled == value then
-        applyVisual(value)
-        return value
-    end
-
-    runtime.enabled = value
-    applyVisual(value)
-
-    if value then
-        if not enableAntiAnti() then
-            runtime.enabled = false
-            applyVisual(false)
-            return false
-        end
-    else
-        disableAntiAnti()
-    end
-    return runtime.enabled
-end
-
-local function safeToggle()
-    local now = os.clock()
-    if now - lastToggleAt < DEBOUNCE then return end
-    lastToggleAt = now
-    setEnabled(not runtime.enabled)
-end
-
--- Dragging
-local dragging, dragStart, startPos
-
-Header.InputBegan:Connect(function(input)
-    if locked then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging  = true
-        dragStart = input.Position
-        startPos  = Main.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
+BindButton.MouseButton1Click:Connect(function()
+	if Capturing then return end
+	Capturing = true
+	BindButton.Text = "Press key..."
+	BindStroke.Color = COLORS.On
+	BindButton.BackgroundColor3 = COLORS.On
 end)
 
-UserInputService.InputChanged:Connect(function(input)
-    if locked or not dragging then return end
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch then
-        local delta = input.Position - dragStart
-        Main.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
-        )
-    end
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if Capturing then
+		if input.KeyCode ~= Enum.KeyCode.Unknown then
+			Bind = input.KeyCode
+			Capturing = false
+			BindButton.Text = formatKey(Bind)
+			BindButton.BackgroundColor3 = COLORS.Card
+			BindStroke.Color = COLORS.Accent
+			saveConfig()
+		end
+		return
+	end
+	if gameProcessed then return end
+	if input.KeyCode == Bind then
+		toggleAntiTp()
+	end
 end)
 
--- Lock
-LockBtn.MouseButton1Click:Connect(function()
-    locked = not locked
-    LockBtn.Text = locked and "🔒" or "🔓"
-    LockBtn.BackgroundColor3 = locked
-        and Color3.fromRGB(60, 20, 20)
-        or  Color3.fromRGB(16, 16, 20)
+local minimized = false
+MinBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	if minimized then
+		ToggleRow.Visible = false
+		BindRow.Visible = false
+		StatusRow.Visible = false
+		tween(Main, 0.25, { Size = UDim2.new(0, BASE_WIDTH, 0, MINIMIZED_HEIGHT) })
+		MinBtn.Text = "+"
+	else
+		ToggleRow.Visible = true
+		BindRow.Visible = true
+		StatusRow.Visible = true
+		tween(Main, 0.25, { Size = UDim2.new(0, BASE_WIDTH, 0, BASE_HEIGHT) })
+		MinBtn.Text = "-"
+	end
 end)
 
--- Settings panel
-SettingsBtn.MouseButton1Click:Connect(function()
-    settingsOpen = not settingsOpen
-    local target = settingsOpen
-        and UDim2.new(0, 180, 1, 0)
-        or  UDim2.new(0, 0, 1, 0)
-    TweenService:Create(SettingsPanel, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Size = target
-    }):Play()
+CloseBtn.MouseButton1Click:Connect(function()
+	tween(Main, 0.2, { Size = UDim2.new(0, BASE_WIDTH, 0, 0) })
+	task.delay(0.22, function()
+		runtime.destroy()
+	end)
 end)
 
--- Scale
-local function updateScale(newScale)
-    currentScale = math.clamp(newScale, 0.5, 1.5)
-    UIScale.Scale = currentScale
-    ScaleValue.Text = string.format("%.2f", currentScale)
+do
+	local dragging, dragStart, startPos, releaseConn
+	TopBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = Main.Position
+			releaseConn = input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+					if releaseConn then
+						releaseConn:Disconnect()
+						releaseConn = nil
+					end
+				end
+			end)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if not dragging then return end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			local delta = input.Position - dragStart
+			Main.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
 end
 
-ScaleInc.MouseButton1Click:Connect(function()
-    updateScale(currentScale + 0.05)
-end)
-ScaleDec.MouseButton1Click:Connect(function()
-    updateScale(currentScale - 0.05)
-end)
+loadConfig()
+BindButton.Text = formatKey(Bind)
+refresh()
 
--- Toggle
-ToggleHit.MouseButton1Click:Connect(safeToggle)
-
--- Keybind rebind
-KeybindBtn.MouseButton1Click:Connect(function()
-    KeybindBtn.Text = "..."
-    local conn
-    conn = UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            currentKey = input.KeyCode
-            KeybindBtn.Text = input.KeyCode.Name
-            conn:Disconnect()
-        end
-    end)
-end)
-
--- Hotkey
-trackedConnect(UserInputService.InputBegan, function(input, gp)
-    if gp then return end
-    if input.UserInputType == Enum.UserInputType.Keyboard
-        and input.KeyCode == currentKey then
-        safeToggle()
-    end
-end)
-
--- ============================================================
---  CLEANUP
--- ============================================================
-local function destroy()
-    if not runtime.alive then return end
-    runtime.alive = false
-    runtime.enabled = false
-
-    stopStepConnection()
-    restoreReplicationRoot()
-    destroyFakeRoot()
-
-    for _, c in ipairs(runtime.connections) do
-        disconnect(c)
-    end
-    table.clear(runtime.connections)
-
-    for i = #runtime.settingsRestore, 1, -1 do
-        local e = runtime.settingsRestore[i]
-        pcall(function() e.instance[e.property] = e.value end)
-    end
-    table.clear(runtime.settingsRestore)
-
-    pcall(function() BlindAntiTP:Destroy() end)
-
-    if environment[RUNTIME_KEY] == runtime then
-        environment[RUNTIME_KEY] = nil
-    end
+if AntiTpEnabled then
+	task.defer(function()
+		setAntiTp(true)
+		refresh()
+	end)
 end
-runtime.destroy = destroy
-runtime.gui = BlindAntiTP
 
--- Final parent
-parentGui(BlindAntiTP)
+runtime.destroy = function()
+	runtime.alive = false
+	runtime.enabled = false
+	stopStepConnection()
+	restoreReplicationRoot()
+	destroyFakeRoot()
+	pcall(function() ScreenGui:Destroy() end)
+	if environment.__NSFW_ANTITP_RUNTIME == runtime then
+		environment.__NSFW_ANTITP_RUNTIME = nil
+	end
+end
