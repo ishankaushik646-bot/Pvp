@@ -511,7 +511,7 @@ local State = {
     normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
     speedToggled=false,
     laggerMode=0,
-    infJumpEnabled=true, antiRagdollEnabled=false,
+    infJumpEnabled=true, antiDropEnabled=false, antiRagdollEnabled=false,
 antiDieEnabled=false,
 antiFlingEnabled=false,
     guiVisible=true, uiLocked=false,
@@ -565,38 +565,17 @@ local Keys = {
 }
 
 -- ============================================================
--- INFINITE JUMP (Hold Mode - Replaced Logic)
+-- INFINITE JUMP (404 Anti Drop Logic - Hold Jump)
 -- ============================================================
--- ========== HOLD INFINITE JUMP ONLY ==========
--- Simple hold to fly - from your new file
-
-UserInputService.JumpRequest:Connect(function()
-    if not State.infJumpEnabled then return end
-    local char = LP.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if root then
-        root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
-    end
-end)
-
+-- 404 version: uses hum.Jump check only, no JumpRequest, prevents drop flag
 RunService.Heartbeat:Connect(function()
     if not State.infJumpEnabled then return end
     local char = LP.Character
     if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    -- Hold jump to keep jumping
     local hum = char:FindFirstChildOfClass("Humanoid")
-    local jumpHeld = UserInputService:IsKeyDown(Enum.KeyCode.Space) or (hum and hum.Jump == true)
-    if jumpHeld and root.Velocity.Y < 30 then
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if root and hum and hum.Jump then
         root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
-    end
-    
-    -- Fall speed limit
-    if root.Velocity.Y < -120 then
-        root.Velocity = Vector3.new(root.Velocity.X, -120, root.Velocity.Z)
     end
 end)
 
@@ -768,7 +747,7 @@ local function buildPresetSnapshot() return {
     normalSpeed=State.normalSpeed, carrySpeed=State.carrySpeed,
     laggerSpeed=State.laggerSpeed, laggerCarrySpeed=State.laggerCarrySpeed,
     stealRadius=Steal.StealRadius, stealDuration=Steal.StealDuration, stealMode=Steal.StealMode, holdMode=Steal.HoldMode, stretchedResEnabled=State.stretchedResEnabled, stretchFOV=State.stretchFOV, stealHoldMode=Steal.HoldMode,
-    infJump=State.infJumpEnabled, antiRagdoll=State.antiRagdollEnabled,
+    infJump=State.infJumpEnabled, antiDrop=State.antiDropEnabled, antiRagdoll=State.antiRagdollEnabled,
     antiDie=State.antiDieEnabled, antiFling=State.antiFlingEnabled,
     medusaCounter=State.medusaCounterEnabled, batCounter=State.batCounterEnabled,
     autoSteal=Steal.AutoStealEnabled,
@@ -816,11 +795,11 @@ local alPhase, arPhase = 1, 1
 
 local Conns={autoSteal=nil,antiRag=nil,autoLeft=nil,autoRight=nil,aimbot=nil,anchor={},progress=nil,batCounter=nil, autoTP=nil}
 local h,hrp
-local setAutoLeft,setAutoRight,setInfJump,setAntiRag
+local setAutoLeft,setAutoRight,setInfJump,setAntiDrop,setAntiRag
 local setMedusaCounter,setAimbot,setAutoSwing
 local setLagger,setLaggerCarry,setDropBrainrot,setInstaGrab
 local setNukeOpt,setRemoveAcc,setNoCam
-local setupMedusaCounter,stopMedusaCounter,startAntiRagdoll,stopAntiRagdoll,startAntiDie,stopAntiDie,startAntiFling,stopAntiFling
+local setupMedusaCounter,stopMedusaCounter,startAntiDrop,stopAntiDrop,startAntiRagdoll,stopAntiRagdoll,startAntiDie,stopAntiDie,startAntiFling,stopAntiFling
 local startAutoSteal,stopAutoSteal
 local startAutoLeft,stopAutoLeft,startAutoRight,stopAutoRight
 local saveConfig,loadConfig,runDrop,stopDrop,runTPDown
@@ -1006,6 +985,126 @@ end
 -- ============================================================
 -- ANTI RAGDOLL (Improved with constraints removal)
 -- ============================================================
+
+-- ============================================================
+-- ANTI DROP (404 Logic - Ported)
+-- ============================================================
+local antiDropMT = nil
+local antiDropOldIdx, antiDropOldNewIdx = nil, nil
+local antiDropSpoofedVelocity = Vector3.zero
+local antiDropActive = false
+local antiDropBillboardGui = nil
+local antiDropBillboardFrame = nil
+local antiDropUpdater = nil
+local antiDropCharConn = nil
+
+local function createAntiDropBillboard(char)
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    if antiDropBillboardGui then antiDropBillboardGui:Destroy() end
+    if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
+    antiDropBillboardGui = Instance.new("ScreenGui")
+    antiDropBillboardGui.Name = "404AntiDropBillboard_DuelsV2"
+    antiDropBillboardGui.ResetOnSpawn = false
+    antiDropBillboardGui.IgnoreGuiInset = true
+    antiDropBillboardGui.Parent = game:GetService("CoreGui")
+    antiDropBillboardFrame = Instance.new("Frame", antiDropBillboardGui)
+    antiDropBillboardFrame.Size = UDim2.new(0, 180, 0, 50)
+    antiDropBillboardFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    antiDropBillboardFrame.BackgroundTransparency = 0.3
+    antiDropBillboardFrame.BorderSizePixel = 0
+    Instance.new("UICorner", antiDropBillboardFrame).CornerRadius = UDim.new(0,8)
+    local txt1 = Instance.new("TextLabel", antiDropBillboardFrame)
+    txt1.Size = UDim2.new(1,0,0.5,0)
+    txt1.BackgroundTransparency = 1
+    txt1.Text = "ANTI DROP"
+    txt1.TextColor3 = Color3.fromRGB(255,255,255)
+    txt1.Font = Enum.Font.GothamBlack
+    txt1.TextSize = 18
+    local txt2 = Instance.new("TextLabel", antiDropBillboardFrame)
+    txt2.Size = UDim2.new(1,0,0.5,0)
+    txt2.Position = UDim2.new(0,0,0.5,0)
+    txt2.BackgroundTransparency = 1
+    txt2.Text = "discord.gg/ExmMtVmxBY"
+    txt2.TextColor3 = Color3.fromRGB(255,255,255)
+    txt2.Font = Enum.Font.GothamBold
+    txt2.TextSize = 12
+    local camera = Workspace.CurrentCamera
+    antiDropUpdater = RunService.Heartbeat:Connect(function()
+        if not antiDropBillboardGui or not antiDropBillboardGui.Parent then
+            if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
+            return
+        end
+        if not head or not head.Parent then
+            antiDropBillboardFrame.Visible = false
+            return
+        end
+        local pos, onScreen = camera:WorldToScreenPoint(head.Position)
+        if onScreen then
+            antiDropBillboardFrame.Position = UDim2.new(0, pos.X - 90, 0, pos.Y - 30)
+            antiDropBillboardFrame.Visible = true
+        else
+            antiDropBillboardFrame.Visible = false
+        end
+    end)
+end
+
+local function destroyAntiDropBillboard()
+    if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
+    if antiDropBillboardGui then antiDropBillboardGui:Destroy(); antiDropBillboardGui=nil; antiDropBillboardFrame=nil end
+end
+
+local startAntiDrop, stopAntiDrop
+startAntiDrop = function()
+    if antiDropActive then return end
+    local mt = getrawmetatable(game)
+    if not mt then warn("[Duels] getrawmetatable not available for Anti Drop"); return end
+    antiDropMT = mt
+    antiDropOldIdx = mt.__index
+    antiDropOldNewIdx = mt.__newindex
+    setreadonly(mt, false)
+    mt.__index = newcclosure(function(self, key)
+        if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") and typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and self:IsDescendantOf(LP.Character) then
+            return antiDropSpoofedVelocity
+        end
+        return antiDropOldIdx(self, key)
+    end)
+    mt.__newindex = newcclosure(function(self, key, value)
+        if not checkcaller() and (key == "AssemblyLinearVelocity" or key == "Velocity") and typeof(self) == "Instance" and self:IsA("BasePart") and self.Name == "HumanoidRootPart" and self:IsDescendantOf(LP.Character) then
+            antiDropSpoofedVelocity = value
+            return
+        end
+        return antiDropOldNewIdx(self, key, value)
+    end)
+    setreadonly(mt, true)
+    antiDropActive = true
+    if LP.Character then createAntiDropBillboard(LP.Character) end
+    if antiDropCharConn then antiDropCharConn:Disconnect() end
+    antiDropCharConn = LP.CharacterAdded:Connect(function(c)
+        if State.antiDropEnabled then task.wait(0.1); createAntiDropBillboard(c) end
+    end)
+    print("[Duels] Anti Drop ON (404 logic)")
+end
+
+stopAntiDrop = function()
+    if not antiDropActive then return end
+    if antiDropMT and antiDropOldIdx then
+        setreadonly(antiDropMT, false)
+        antiDropMT.__index = antiDropOldIdx
+        antiDropMT.__newindex = antiDropOldNewIdx
+        setreadonly(antiDropMT, true)
+        antiDropOldIdx=nil; antiDropOldNewIdx=nil; antiDropMT=nil
+    end
+    antiDropActive = false
+    destroyAntiDropBillboard()
+    if antiDropCharConn then antiDropCharConn:Disconnect(); antiDropCharConn=nil end
+    print("[Duels] Anti Drop OFF")
+end
+
+-- Keep stubs for compatibility
+
+
 local antiRagdollConn = nil
 local antiRagdollCached = {}
 
@@ -1138,46 +1237,81 @@ stopAntiRagdoll = function()
     print("[Duels] Anti-Ragdoll STOPPED")
 end
 
-local antiDieConn = nil
-local antiDieLoop = nil
+-- ============================================================
+-- ANTI DIE (404 Logic - Ported)
+-- ============================================================
+local antiDieHeartConn, antiDieDeathConns, antiDieCharAddedConn = nil, {}, nil
 
-startAntiDie = function()
-    if antiDieConn then return end
-    local char = LP.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then
-        task.spawn(function() task.wait(0.5) if State.antiDieEnabled then startAntiDie() end end)
-        return
-    end
-    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
-    antiDieConn = hum.StateChanged:Connect(function(_, new)
+local function antiDieProtectChar(character)
+    if not character then return end
+    local hum = character:WaitForChild("Humanoid", 5)
+    if not hum then return end
+
+    hum.MaxHealth = math.huge
+    hum.Health = math.huge
+
+    local sc = hum.StateChanged:Connect(function(_, new)
         if not State.antiDieEnabled then return end
         if new == Enum.HumanoidStateType.Dead then
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-            if hum.Health < 10 then hum.Health = hum.MaxHealth end
+            hum.Health = math.huge
+            hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
         end
     end)
-    antiDieLoop = task.spawn(function()
-        while State.antiDieEnabled do
-            local c = LP.Character
-            local h = c and c:FindFirstChildOfClass("Humanoid")
-            local hrp = c and c:FindFirstChild("HumanoidRootPart")
-            if h and h.Health < h.MaxHealth * 0.35 then
-                h.Health = h.MaxHealth
-            end
-            if hrp and not dropActive and hrp.Position.Y < -100 then
-                hrp.CFrame = CFrame.new(0,25,0)
-            end
-            task.wait(0.5)
+    table.insert(antiDieDeathConns, sc)
+
+    hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+
+    local hc = hum:GetPropertyChangedSignal("Health"):Connect(function()
+        if not State.antiDieEnabled then return end
+        if hum.Health < hum.MaxHealth then
+            hum.Health = math.huge
+        end
+    end)
+    table.insert(antiDieDeathConns, hc)
+
+    if antiDieHeartConn then antiDieHeartConn:Disconnect() end
+    antiDieHeartConn = RunService.Heartbeat:Connect(function()
+        if not State.antiDieEnabled then return end
+        if hum and hum.Parent and hum.Health < hum.MaxHealth then
+            hum.Health = math.huge
         end
     end)
 end
 
+startAntiDie = function()
+    for _, c in ipairs(antiDieDeathConns) do pcall(function() c:Disconnect() end) end
+    antiDieDeathConns = {}
+    if antiDieHeartConn then antiDieHeartConn:Disconnect(); antiDieHeartConn = nil end
+    if antiDieCharAddedConn then antiDieCharAddedConn:Disconnect(); antiDieCharAddedConn = nil end
+
+    antiDieProtectChar(LP.Character)
+
+    antiDieCharAddedConn = LP.CharacterAdded:Connect(function(c)
+        if not State.antiDieEnabled then return end
+        task.wait(0.1)
+        for _, c2 in ipairs(antiDieDeathConns) do pcall(function() c2:Disconnect() end) end
+        antiDieDeathConns = {}
+        antiDieProtectChar(c)
+    end)
+    print("[Duels] Anti Die ON (404 logic)")
+end
+
 stopAntiDie = function()
-    if antiDieConn then antiDieConn:Disconnect() antiDieConn=nil end
-    if antiDieLoop then task.cancel(antiDieLoop) antiDieLoop=nil end
-    local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-    if hum then pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end) end
+    for _, c in ipairs(antiDieDeathConns) do pcall(function() c:Disconnect() end) end
+    antiDieDeathConns = {}
+    if antiDieHeartConn then antiDieHeartConn:Disconnect(); antiDieHeartConn = nil end
+    if antiDieCharAddedConn then antiDieCharAddedConn:Disconnect(); antiDieCharAddedConn = nil end
+
+    local char = LP.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
+            hum.MaxHealth = 100
+            hum.Health = 100
+        end
+    end
+    print("[Duels] Anti Die OFF")
 end
 
 local antiFlingConn = nil
@@ -1944,6 +2078,9 @@ local function Main()
             makeGap(2); makeSectionHeader("Infinite Jump"); makeGap(2)
             setInfJump = makeToggleRow("Infinite Jump", true, function(on) State.infJumpEnabled=on end)
             toggleSetters["infJump"] = setInfJump
+            makeGap(8); makeSectionHeader("Anti Drop (404)"); makeGap(2)
+            setAntiDrop = makeToggleRow("Anti Drop", false, function(on) State.antiDropEnabled=on; if on then startAntiDrop() else stopAntiDrop() end end)
+            toggleSetters["antiDrop"] = setAntiDrop
             makeGap(8); makeSectionHeader("Defense"); makeGap(2)
             setAntiRag = makeToggleRow("Anti Ragdoll", false, function(on) State.antiRagdollEnabled=on; if on then startAntiRagdoll() else stopAntiRagdoll() end end)
 setAntiDie = makeToggleRow("Anti Die", false, function(on) State.antiDieEnabled=on; if on then startAntiDie() else stopAntiDie() end end)
@@ -2131,7 +2268,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
                 pcall(function() if _G._RemoveAccOn and _G._removeAccStop then _G._removeAccStop() end end)
                 applySky(nil)
                 State.normalSpeed=60; State.carrySpeed=30; State.laggerSpeed=10.1; State.laggerCarrySpeed=15
-                State.speedToggled=false; State.laggerMode=0; State.infJumpEnabled=true; State.antiRagdollEnabled=false
+                State.speedToggled=false; State.laggerMode=0; State.infJumpEnabled=true; State.antiDropEnabled=false; State.antiRagdollEnabled=false
                 State.antiLagEnabled=false; State.stretchedResEnabled=false
                 State.stretchFOV=120; State.activeSky=nil; State.medusaCounterEnabled=false; State.batCounterEnabled=false
                 State.batAimbotToggled=false; State.autoSwingEnabled=false; State.autoLeftEnabled=false; State.autoRightEnabled=false
@@ -2503,6 +2640,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
         local _rtLbl = getRagTimerLbl and getRagTimerLbl()
         if _rtLbl then _rtLbl.Text = "" end
         task.spawn(function() startRagTimerDetection(char) end)
+        if State.antiDropEnabled then startAntiDrop() end
         if State.antiRagdollEnabled then task.wait(0.5); startAntiRagdoll() end
         if State.medusaCounterEnabled then setupMedusaCounter(char) end
         if State.batAimbotToggled then stopBatAimbot(); task.wait(0.2); pcall(startBatAimbot) end
@@ -3761,7 +3899,7 @@ end
 
         local bools = {
             stackButtonsHidden="stackButtonsHidden", stackButtonsLocked="stackButtonsLocked",
-            infJump="infJumpEnabled", antiRagdoll="antiRagdollEnabled",
+            infJump="infJumpEnabled", antiDrop="antiDropEnabled", antiRagdoll="antiRagdollEnabled",
             antiDie="antiDieEnabled", antiFling="antiFlingEnabled",
             medusaCounter="medusaCounterEnabled", batCounter="batCounterEnabled",
             autoStealEnabled="autoStealEnabled", autoSwing="autoSwingEnabled",
@@ -3835,7 +3973,8 @@ end
         if State.batAimbotToggled then startBatAimbot() else stopBatAimbot() end
         if State.batCounterEnabled then startBatCounter() else stopBatCounter() end
         if State.medusaCounterEnabled then setupMedusaCounter(LP.Character) else stopMedusaCounter() end
-        if State.antiRagdollEnabled then startAntiRagdoll() else stopAntiRagdoll() end
+        if State.antiDropEnabled then startAntiDrop() else stopAntiDrop() end
+                if State.antiRagdollEnabled then startAntiRagdoll() else stopAntiRagdoll() end
                 if State.antiDieEnabled then startAntiDie() else stopAntiDie() end
                 if State.antiFlingEnabled then startAntiFling() else stopAntiFling() end
         if Steal.AutoStealEnabled then startAutoSteal() else stopAutoSteal() end
