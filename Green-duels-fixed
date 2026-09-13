@@ -2939,47 +2939,164 @@ end
         State.hittingCooldown=false
     end
 
-    local BAT_COUNTER_SLAP_LIST={"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap"}
+
+    local BAT_COUNTER_SLAP_LIST={"Bat","Slap","Iron Slap","Gold Slap","Diamond Slap","Emerald Slap","Ruby Slap","Dark Matter Slap","Flame Slap","Nuclear Slap","Galaxy Slap","Glitched Slap","Trowel"}
     local function findBatForCounter()
         local c=LP.Character; if not c then return nil end
-        local bp=LP:FindFirstChildOfClass("Backpack")
-        for _,name in ipairs(BAT_COUNTER_SLAP_LIST) do
-            local t=c:FindFirstChild(name) or (bp and bp:FindFirstChild(name))
-            if t then return t end
+        local function searchIn(container)
+            if not container then return nil end
+            for _,name in ipairs(BAT_COUNTER_SLAP_LIST) do
+                local t=container:FindFirstChild(name)
+                if t and t:IsA("Tool") then return t end
+            end
+            for _,ch in ipairs(container:GetChildren()) do
+                if ch:IsA("Tool") then
+                    local ln=ch.Name:lower()
+                    if ln:find("bat") or ln:find("slap") or ln:find("trowel") then
+                        return ch
+                    end
+                end
+            end
+            return nil
         end
-        for _,ch in ipairs(c:GetChildren()) do if ch:IsA("Tool") and ch.Name:lower():find("bat") then return ch end end
-        if bp then for _,ch in ipairs(bp:GetChildren()) do if ch:IsA("Tool") and ch.Name:lower():find("bat") then return ch end end end
+        local found = searchIn(c)
+        if found then return found end
+        local bp=LP:FindFirstChildOfClass("Backpack")
+        if not bp then bp = LP:FindFirstChild("Backpack") end
+        found = searchIn(bp)
+        if found then return found end
+        -- Fallback: search PlayerGui? Some exploits move tools there
+        local pg = LP:FindFirstChildOfClass("PlayerGui")
+        if pg then
+            for _,v in ipairs(pg:GetDescendants()) do
+                if v:IsA("Tool") then
+                    local ln=v.Name:lower()
+                    if ln:find("bat") or ln:find("slap") then return v end
+                end
+            end
+        end
         return nil
     end
+
     local function swingBatForCounter(bat,char)
+        if not bat or not char then return end
         local hum2=char:FindFirstChildOfClass("Humanoid")
-        if bat.Parent~=char then if hum2 then pcall(function() hum2:EquipTool(bat) end) end; task.wait(0.05) end
-        local remote=bat:FindFirstChildOfClass("RemoteEvent") or bat:FindFirstChildOfClass("RemoteFunction")
-        if remote and remote:IsA("RemoteEvent") then
-            pcall(function() remote:FireServer() end); task.wait(0.15); pcall(function() remote:FireServer() end)
-        else pcall(function() bat:Activate() end); task.wait(0.15); pcall(function() bat:Activate() end) end
+        if not hum2 then return end
+        -- Temporarily pause anti ragdoll if enabled so counter can execute
+        local wasAntiRag = State.antiRagdollEnabled and Conns and Conns.antiRag
+        -- Equip
+        if bat.Parent~=char then
+            pcall(function() hum2:EquipTool(bat) end)
+            task.wait(0.12)
+        end
+        -- Ensure tool still in char
+        if bat.Parent~=char then
+            bat.Parent = char
+            task.wait(0.05)
+        end
+        -- Try all remotes inside tool
+        local fired=false
+        for _,rem in ipairs(bat:GetDescendants()) do
+            if rem:IsA("RemoteEvent") then
+                pcall(function()
+                    rem:FireServer()
+                    rem:FireServer("Swing")
+                    rem:FireServer(char)
+                end)
+                fired=true
+            end
+        end
+        pcall(function() bat:Activate() end)
+        task.wait(0.08)
+        pcall(function() bat:Activate() end)
+        task.wait(0.08)
+        pcall(function() bat:Activate() end)
+        if not fired then
+            -- Some games need Tool.Activated remote named "Hit" etc
+            task.wait(0.05)
+        end
+        print("[Duels] Bat Counter swung:", bat.Name)
     end
+
     startBatCounter = function()
-        if Conns.batCounter then return end
-        Conns.batCounter = RunService.Heartbeat:Connect(function()
+        if Conns.batCounter then Conns.batCounter:Disconnect(); Conns.batCounter=nil end
+        if Conns.batCounterState then Conns.batCounterState:Disconnect(); Conns.batCounterState=nil end
+        
+        local function triggerCounter(reason)
             if not State.batCounterEnabled or State.batCounterDebounce then return end
-            local char=LP.Character; if not char then return end
-            local hum2=char:FindFirstChildOfClass("Humanoid"); if not hum2 then return end
-            local st=hum2:GetState()
-            local isRagdolled = st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown
-            if isRagdolled then
-                State.batCounterDebounce=true
-                task.spawn(function()
-                    local bat=findBatForCounter()
-                    if bat then swingBatForCounter(bat,char) end
-                    task.wait(0.5); State.batCounterDebounce=false
+            if State.hittingCooldown then return end
+            State.batCounterDebounce=true
+            State.batCounterEnabled = true -- ensure still enabled
+            task.spawn(function()
+                local char = LP.Character
+                if not char then State.batCounterDebounce=false; return end
+                local bat=findBatForCounter()
+                if bat then
+                    swingBatForCounter(bat,char)
+                else
+                    warn("[Duels] Bat Counter: No bat/slap tool found!")
+                end
+                task.wait(0.65)
+                State.batCounterDebounce=false
+            end)
+        end
+
+        -- Method 1: StateChanged (fastest)
+        local char = LP.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            Conns.batCounterState = hum.StateChanged:Connect(function(old, new)
+                if not State.batCounterEnabled then return end
+                if new==Enum.HumanoidStateType.Physics or new==Enum.HumanoidStateType.Ragdoll or new==Enum.HumanoidStateType.FallingDown or new==Enum.HumanoidStateType.PlatformStand then
+                    triggerCounter("StateChanged:"..tostring(new))
+                end
+            end)
+        end
+        LP.CharacterAdded:Connect(function(c)
+            task.wait(0.5)
+            if not State.batCounterEnabled then return end
+            local h = c:FindFirstChildOfClass("Humanoid")
+            if h then
+                if Conns.batCounterState then Conns.batCounterState:Disconnect() end
+                Conns.batCounterState = h.StateChanged:Connect(function(old, new)
+                    if not State.batCounterEnabled then return end
+                    if new==Enum.HumanoidStateType.Physics or new==Enum.HumanoidStateType.Ragdoll or new==Enum.HumanoidStateType.FallingDown or new==Enum.HumanoidStateType.PlatformStand then
+                        triggerCounter("StateChangedNewChar:"..tostring(new))
+                    end
                 end)
             end
         end)
+
+        -- Method 2: Heartbeat fallback + attribute check (for games that set ragdoll attribute instead of state)
+        Conns.batCounter = RunService.Heartbeat:Connect(function()
+            if not State.batCounterEnabled or State.batCounterDebounce then return end
+            local c=LP.Character; if not c then return end
+            local h2=c:FindFirstChildOfClass("Humanoid"); if not h2 then return end
+            local st=h2:GetState()
+            local isRagdolled = st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown or st==Enum.HumanoidStateType.PlatformStand
+            -- Also check PlatformStand bool and BallSocketConstraints (real ragdoll indicator)
+            if not isRagdolled then
+                if h2.PlatformStand then isRagdolled=true end
+                if not isRagdolled then
+                    -- If char has any BallSocketConstraint with ragdoll name, consider ragdolled
+                    for _,v in ipairs(c:GetDescendants()) do
+                        if v:IsA("BallSocketConstraint") and v.Name:lower():find("ragdoll") then
+                            isRagdolled=true; break
+                        end
+                    end
+                end
+            end
+            if isRagdolled then
+                triggerCounter("HeartbeatFallback:"..tostring(st))
+            end
+        end)
+        print("[Duels] Bat Counter FIXED started - dual detection")
     end
     stopBatCounter = function()
         if Conns.batCounter then Conns.batCounter:Disconnect(); Conns.batCounter=nil end
+        if Conns.batCounterState then Conns.batCounterState:Disconnect(); Conns.batCounterState=nil end
         State.batCounterDebounce=false
+        print("[Duels] Bat Counter stopped")
     end
 
     local MEDUSA_COOLDOWN=0.5
@@ -3735,6 +3852,7 @@ end
                 resetKey = Keys.reset and Keys.reset.Name or "R",
                 aimbotKey = Keys.aimbot and Keys.aimbot.Name or "Unknown",
                 infJump = State.infJumpEnabled,
+                antiDrop = State.antiDropEnabled,
                 antiRagdoll = State.antiRagdollEnabled,
                 antiDie = State.antiDieEnabled,
                 antiFling = State.antiFlingEnabled,
@@ -4069,6 +4187,7 @@ end
                     end
                     if d.autoTP ~= nil then State.autoTPEnabled=d.autoTP; if toggleSetters["autoTP"] then toggleSetters["autoTP"](d.autoTP) end end
                     if d.autoTPHeight then State.autoTPHeight=d.autoTPHeight; if autoTPHeightBox then autoTPHeightBox.Text=tostring(d.autoTPHeight) end end
+                    if d.antiDrop ~= nil then state.antiDropEnabled=d.antiDrop; if togglesetters["antiDrop"] then togglesetters["antiDrop"](d.antiDrop) end end
                     if d.antiRagdoll ~= nil then State.antiRagdollEnabled=d.antiRagdoll; if toggleSetters["antiRagdoll"] then toggleSetters["antiRagdoll"](d.antiRagdoll) end end
                     if d.antiDie ~= nil then State.antiDieEnabled=d.antiDie; if toggleSetters["antiDie"] then toggleSetters["antiDie"](d.antiDie) end end
                     if d.antiFling ~= nil then State.antiFlingEnabled=d.antiFling; if toggleSetters["antiFling"] then toggleSetters["antiFling"](d.antiFling) end end
