@@ -2696,7 +2696,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
             local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/Duels"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
         end
 
-    -- RAGDOLL TOP TIMER
+    -- RAGDOLL TOP TIMER (ScreenGui at top, not overhead)
     do
         local _rtActive=false
         local _rtGui,_rtLbl=nil,nil
@@ -3208,7 +3208,7 @@ end
         local char = LP.Character; if not char then return nil end
         local head = char:FindFirstChild("Head"); if not head then return nil end
         local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
-        return bb:FindFirstChild("RagdollTimerLbl")
+        return bb:FindFirstChild("SpeedBillLbl")
     end
     local function startRagTimerGui()
         if _rtTimerActive then return end
