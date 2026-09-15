@@ -84,6 +84,20 @@ end
 
 repeat task.wait() until game:IsLoaded()
 
+-- FORCE KILL TOP AIMBOT SELECTOR AT START
+pcall(function()
+    local cg = game:GetService("CoreGui")
+    local old = cg:FindFirstChild("SakuraModeSelectorGUI")
+    if old then old:Destroy() end
+    cg.ChildAdded:Connect(function(c)
+        if c.Name == "SakuraModeSelectorGUI" then
+            task.wait(0.1)
+            pcall(function() c:Destroy() end)
+        end
+    end)
+end)
+
+
 -- ============================================================
 -- BLOSSOM RESET FEATURE
 -- ============================================================
@@ -2695,8 +2709,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
             local speedBillLbl=Instance.new("TextLabel",bb); speedBillLbl.Name="SpeedBillLbl"; speedBillLbl.Size=UDim2.new(1,0,0,24); speedBillLbl.BackgroundTransparency=1; speedBillLbl.Text="0.0"; speedBillLbl.TextColor3=Color3.fromRGB(38,240,125); speedBillLbl.Font=Enum.Font.GothamBlack; speedBillLbl.TextScaled=true; speedBillLbl.TextStrokeTransparency=0.1; speedBillLbl.TextStrokeColor3=Color3.new(0,0,0); speedBillLbl.LayoutOrder=1
             local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/Duels"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
         end
-
-    -- RAGDOLL TOP TIMER (ScreenGui at top, not overhead)
+    -- RAGDOLL TOP TIMER
     do
         local _rtActive=false
         local _rtGui,_rtLbl=nil,nil
@@ -2771,7 +2784,6 @@ toggleSetters["antiRagdoll"] = setAntiRag
         LP.CharacterAdded:Connect(function(c) task.wait(0.2); startDetect(c) end)
         if LP.Character then startDetect(LP.Character) end
     end
-
 
         stopAntiRagdoll()
         Steal.Data={}
@@ -3208,7 +3220,7 @@ end
         local char = LP.Character; if not char then return nil end
         local head = char:FindFirstChild("Head"); if not head then return nil end
         local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
-        return bb:FindFirstChild("SpeedBillLbl")
+        return bb:FindFirstChild("RagdollTimerLbl")
     end
     local function startRagTimerGui()
         if _rtTimerActive then return end
@@ -4101,7 +4113,7 @@ end
 
         local bools = {
             stackButtonsHidden="stackButtonsHidden", stackButtonsLocked="stackButtonsLocked",
-            infJump="infJumpEnabled", antiDrop="antiDropEnabled", e01Enabled="e01Enabled", e01Enabled="e01Enabled", antiRagdoll="antiRagdollEnabled",
+            infJump="infJumpEnabled", antiDrop="antiDropEnabled", e01Enabled="e01Enabled", antiRagdoll="antiRagdollEnabled",
             antiDie="antiDieEnabled", antiFling="antiFlingEnabled",
             medusaCounter="medusaCounterEnabled", batCounter="batCounterEnabled",
             autoStealEnabled="autoStealEnabled", autoSwing="autoSwingEnabled",
@@ -4508,66 +4520,5 @@ Players.PlayerAdded:Connect(function(player)
 end)
 end)()
 
--- ============ STANDALONE AIMBOT MODE SELECTOR (ALWAYS VISIBLE) ============
-task.spawn(function()
-    task.wait(2)
-    if gui then gui:Destroy() end
-    local sg = Instance.new("ScreenGui")
-    sg.ResetOnSpawn = false
-    sg.Parent = game:GetService("CoreGui")
-    local frame = Instance.new("Frame", sg)
-    frame.Size = UDim2.new(0, 360, 0, 50)
-    frame.Position = UDim2.new(0.5, -180, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(14,22,16)
-    frame.BorderSizePixel = 0
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,10)
-    local st = Instance.new("UIStroke", frame)
-    st.Color = Color3.fromRGB(30,132,73)
-    st.Thickness = 1.5
-    local title = Instance.new("TextLabel", frame)
-    title.Size = UDim2.new(1,0,0,16)
-    title.Position = UDim2.new(0,0,0,2)
-    title.BackgroundTransparency=1
-    title.Text = "AIMBOT: "..(State.aimbotMode or "original"):upper()
-    title.TextColor3 = Color3.fromRGB(120,255,140)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 11
-    local holder = Instance.new("Frame", frame)
-    holder.Size = UDim2.new(1,-10,0,28)
-    holder.Position = UDim2.new(0,5,0,18)
-    holder.BackgroundTransparency=1
-    local l = Instance.new("UIListLayout", holder)
-    l.FillDirection = Enum.FillDirection.Horizontal
-    l.Padding = UDim.new(0,6)
-    local function mkBtn(txt, mode)
-        local b = Instance.new("TextButton", holder)
-        b.Size = UDim2.new(0.33,-4,1,0)
-        local active = State.aimbotMode==mode
-        b.BackgroundColor3 = active and Color3.fromRGB(30,132,73) or Color3.fromRGB(25,35,28)
-        b.Text = txt
-        b.TextColor3 = Color3.new(1,1,1)
-        b.Font = Enum.Font.GothamBold
-        b.TextSize = 11
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0,6)
-        b.MouseButton1Click:Connect(function()
-            State.aimbotMode = mode
-            title.Text = "AIMBOT: "..mode:upper()
-            for _, ch in ipairs(holder:GetChildren()) do
-                if ch:IsA("TextButton") then
-                    local sel = (ch.Text==txt)
-                    ch.BackgroundColor3 = sel and Color3.fromRGB(30,132,73) or Color3.fromRGB(25,35,28)
-                end
-            end
-            if requestSave then requestSave() end
-            if State.batAimbotToggled then
-                if stopBatAimbot then stopBatAimbot() end
-                task.wait(0.1)
-                if startBatAimbot then pcall(startBatAimbot) end
-            end
-        end)
-        return b
-    end
-    mkBtn("ORIGINAL","original")
-    mkBtn("ENVY V2","envy")
-    mkBtn("SAKURA","sakura")
-end)
+
+-- TOP SELECTOR PERMANENTLY REMOVED - END OF FILE CLEANED
