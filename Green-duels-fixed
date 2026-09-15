@@ -1001,7 +1001,7 @@ local antiDropUpdater = nil
 local antiDropCharConn = nil
 
 local function createAntiDropBillboard(char)
-    -- REMOVED BILLBOARD - NO GUI
+    -- REMOVED BILLBOARD
 end
 
 
@@ -1035,10 +1035,10 @@ startAntiDrop = function()
     end)
     setreadonly(mt, true)
     antiDropActive = true
-    -- REMOVED BILLBOARD
+    -- REMOVED
     if antiDropCharConn then antiDropCharConn:Disconnect() end
     antiDropCharConn = LP.CharacterAdded:Connect(function(c)
-        -- REMOVED BILLBOARD
+        -- REMOVED
     end)
     print("[Duels] Anti Drop ON (404 logic)")
 end
@@ -2696,90 +2696,88 @@ toggleSetters["antiRagdoll"] = setAntiRag
             local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/Duels"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
         end
 
-    -- ============================================================
-    -- RAGDOLL TIMER - TOP SCREEN (NEW)
-    -- ============================================================
+    -- RAGDOLL TOP TIMER (ScreenGui at top)
     do
-        local _rtTimerActive = false
-        local _rtGui, _rtLbl = nil, nil
-        local function ensureTopGui()
-            local pg = LP:FindFirstChild("PlayerGui")
-            if not pg then return nil, nil end
-            if _rtGui and _rtGui.Parent then return _rtGui, _rtLbl end
-            local old = pg:FindFirstChild("RagdollTopTimerGui")
+        local _rtActive=false
+        local _rtGui,_rtLbl=nil,nil
+        local function ensureGui()
+            local pg=LP:FindFirstChild("PlayerGui")
+            if not pg then return nil,nil end
+            if _rtGui and _rtGui.Parent then return _rtGui,_rtLbl end
+            local old=pg:FindFirstChild("RagdollTopTimerGui")
             if old then old:Destroy() end
-            local sg = Instance.new("ScreenGui")
-            sg.Name = "RagdollTopTimerGui"
-            sg.ResetOnSpawn = false
-            sg.IgnoreGuiInset = true
-            sg.DisplayOrder = 200
-            sg.Parent = pg
-            local frame = Instance.new("Frame", sg)
-            frame.Size = UDim2.new(0, 220, 0, 56)
-            frame.Position = UDim2.new(0.5, -110, 0, 16)
-            frame.BackgroundColor3 = Color3.fromRGB(10,20,12)
-            frame.BackgroundTransparency = 0.2
-            frame.BorderSizePixel = 0
-            Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
-            local stroke = Instance.new("UIStroke", frame)
-            stroke.Color = Color3.fromRGB(80,220,80)
-            stroke.Thickness = 2
-            local lbl = Instance.new("TextLabel", frame)
-            lbl.Size = UDim2.new(1,0,1,0)
-            lbl.BackgroundTransparency = 1
-            lbl.Text = ""
-            lbl.TextColor3 = Color3.fromRGB(80,220,80)
-            lbl.Font = Enum.Font.GothamBlack
-            lbl.TextScaled = true
-            _rtGui = sg; _rtLbl = lbl
-            return sg, lbl
+            local sg=Instance.new("ScreenGui")
+            sg.Name="RagdollTopTimerGui"
+            sg.ResetOnSpawn=false
+            sg.IgnoreGuiInset=true
+            sg.DisplayOrder=200
+            sg.Parent=pg
+            local frame=Instance.new("Frame", sg)
+            frame.Size=UDim2.new(0,220,0,56)
+            frame.Position=UDim2.new(0.5,-110,0,16)
+            frame.BackgroundColor3=Color3.fromRGB(10,20,12)
+            frame.BackgroundTransparency=0.2
+            frame.BorderSizePixel=0
+            Instance.new("UICorner", frame).CornerRadius=UDim.new(0,12)
+            local stroke=Instance.new("UIStroke", frame)
+            stroke.Color=Color3.fromRGB(80,220,80)
+            stroke.Thickness=2
+            local lbl=Instance.new("TextLabel", frame)
+            lbl.Size=UDim2.new(1,0,1,0)
+            lbl.BackgroundTransparency=1
+            lbl.Text=""
+            lbl.TextColor3=Color3.fromRGB(80,220,80)
+            lbl.Font=Enum.Font.GothamBlack
+            lbl.TextScaled=true
+            _rtGui=sg; _rtLbl=lbl
+            return sg,lbl
         end
-        local function startRagTimerTopGui()
-            if _rtTimerActive then return end
-            _rtTimerActive = true
+        local function startTopTimer()
+            if _rtActive then return end
+            _rtActive=true
             task.spawn(function()
-                local t = 3.0
-                while t >= 0.0 do
-                    local _, lbl = ensureTopGui()
-                    if lbl then lbl.Text = string.format("%.1f", t); lbl.Visible = true; lbl.Parent.Visible = true end
+                local t=3.0
+                while t>=0 do
+                    local _,lbl=ensureGui()
+                    if lbl then lbl.Text=string.format("%.1f",t); lbl.Visible=true; lbl.Parent.Visible=true end
                     task.wait(0.1)
-                    t = math.round((t-0.1)*10)/10
+                    t=math.round((t-0.1)*10)/10
                 end
-                local _, lbl = ensureTopGui()
-                if lbl then lbl.Text = "STEAL!"; lbl.TextColor3 = Color3.fromRGB(80,255,120) end
+                local _,lbl=ensureGui()
+                if lbl then lbl.Text="STEAL!"; lbl.TextColor3=Color3.fromRGB(80,255,120) end
                 repeat task.wait(0.1) until (function()
-                    local c = LP.Character
-                    local hum = c and c:FindFirstChildOfClass("Humanoid")
+                    local c=LP.Character
+                    local hum=c and c:FindFirstChildOfClass("Humanoid")
                     if not hum then return true end
-                    local st = hum:GetState()
-                    return st ~= Enum.HumanoidStateType.Physics and st ~= Enum.HumanoidStateType.Ragdoll and st ~= Enum.HumanoidStateType.FallingDown
+                    local st=hum:GetState()
+                    return st~=Enum.HumanoidStateType.Physics and st~=Enum.HumanoidStateType.Ragdoll and st~=Enum.HumanoidStateType.FallingDown
                 end)()
-                local _, lbl2 = ensureTopGui()
-                if lbl2 then lbl2.Text = ""; lbl2.Parent.Visible = false end
-                _rtTimerActive = false
+                local _,lbl2=ensureGui()
+                if lbl2 then lbl2.Text=""; lbl2.Parent.Visible=false end
+                _rtActive=false
             end)
         end
-        local function startRagTimerDetection(char)
+        local function startDetect(char)
             if not char then return end
             RunService.Heartbeat:Connect(function()
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local hum=char and char:FindFirstChildOfClass("Humanoid")
                 if not hum then return end
-                local st = hum:GetState()
-                if st == Enum.HumanoidStateType.Physics or st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
-                    startRagTimerTopGui()
+                local st=hum:GetState()
+                if st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown then
+                    startTopTimer()
                 end
             end)
         end
-        LP.CharacterAdded:Connect(function(c) task.wait(0.2); startRagTimerDetection(c) end)
-        if LP.Character then startRagTimerDetection(LP.Character) end
+        LP.CharacterAdded:Connect(function(c) task.wait(0.2); startDetect(c) end)
+        if LP.Character then startDetect(LP.Character) end
     end
 
 
         stopAntiRagdoll()
         Steal.Data={}
         _rtTimerActive = false
-        -- removed
-        -- removed old ragdoll
+        local _rtLbl = getRagTimerLbl and getRagTimerLbl()
+        if _rtLbl then _rtLbl.Text = "" end
         task.spawn(function() startRagTimerDetection(char) end)
         if State.antiDropEnabled then startAntiDrop() end
         if State.antiRagdollEnabled then task.wait(0.5); startAntiRagdoll() end
@@ -3206,6 +3204,49 @@ end
     stopMedusaCounter = function() for _,c2 in pairs(Conns.anchor) do pcall(function() c2:Disconnect() end) end; Conns.anchor={} end
 
     local _rtTimerActive = false
+    local function getRagTimerLbl()
+        local char = LP.Character; if not char then return nil end
+        local head = char:FindFirstChild("Head"); if not head then return nil end
+        local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
+        return bb:FindFirstChild("SpeedBillLbl")
+    end
+    local function startRagTimerGui()
+        if _rtTimerActive then return end
+        _rtTimerActive = true
+        task.spawn(function()
+            local t = 3.0
+            while t >= 0.0 do
+                local lbl = getRagTimerLbl()
+                if lbl then
+                    lbl.Text = string.format("%.1f", t)
+                    lbl.TextColor3 = Color3.fromRGB(80, 220, 80)
+                end
+                task.wait(0.1)
+                t = math.round((t - 0.1) * 10) / 10
+            end
+            local lbl = getRagTimerLbl()
+            if lbl then lbl.Text = "STEAL!"; lbl.TextColor3 = Color3.fromRGB(80, 255, 120) end
+            repeat task.wait(0.1) until (function()
+                local c = LP.Character
+                local hum = c and c:FindFirstChildOfClass("Humanoid")
+                if not hum then return true end
+                local st = hum:GetState()
+                return st ~= Enum.HumanoidStateType.Physics and st ~= Enum.HumanoidStateType.Ragdoll and st ~= Enum.HumanoidStateType.FallingDown
+            end)()
+            local lbl2 = getRagTimerLbl()
+            if lbl2 then lbl2.Text = "" end
+            _rtTimerActive = false
+        end)
+    end
+    local function startRagTimerDetection(char)
+        RunService.Heartbeat:Connect(function()
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+            local st = hum:GetState()
+            if st == Enum.HumanoidStateType.Physics or st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
+                startRagTimerGui()
+            end
+        end)
     end
 
     
@@ -4278,106 +4319,100 @@ end
 end
 
 
-    -- ============================================================
-    -- E01 FIXER - MERGED WITH TOGGLE
-    -- ============================================================
+    -- E01 FIXER WITH TOGGLE
     do
-        local E01_wasCarrying = false
-        local E01_countdownActive = false
-        if _G.E01FixerState == nil then _G.E01FixerState = {} end
-        if _G.E01FixerState.e01Enabled == nil then _G.E01FixerState.e01Enabled = true end
-        if State.e01Enabled == nil then State.e01Enabled = true end
+        local E01_wasCarrying=false
+        local E01_active=false
+        if _G.E01FixerState==nil then _G.E01FixerState={} end
+        if _G.E01FixerState.e01Enabled==nil then _G.E01FixerState.e01Enabled=true end
+        if State.e01Enabled==nil then State.e01Enabled=true end
         local function E01_isCarrying()
             if not State.e01Enabled then return false end
-            local char = LP.Character
+            local char=LP.Character
             if not char then return false end
-            for _, child in pairs(char:GetChildren()) do
-                local name = child.Name:lower()
-                if name:find("brainrot") or name:find("brain") or name:find("animal") or name:find("carry") or name:find("stolen") or name:find("held") or name:find("steal") then return true end
+            for _,child in pairs(char:GetChildren()) do
+                local n=child.Name:lower()
+                if n:find("brainrot") or n:find("brain") or n:find("animal") or n:find("carry") or n:find("stolen") or n:find("held") or n:find("steal") then return true end
             end
-            for attrName, attrValue in pairs(char:GetAttributes()) do
-                local name = attrName:lower()
-                if (name:find("carrying") or name:find("carry") or name:find("stealing") or name:find("isstealing") or name:find("hasbrainrot")) and attrValue == true then return true end
+            for attrName,attrValue in pairs(char:GetAttributes()) do
+                local n=attrName:lower()
+                if (n:find("carrying") or n:find("carry") or n:find("stealing") or n:find("isstealing") or n:find("hasbrainrot")) and attrValue==true then return true end
             end
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if humanoid and humanoid.WalkSpeed > 0 and humanoid.WalkSpeed <= 25 and humanoid.WalkSpeed ~= 16 then return true end
+            local hum=char:FindFirstChildOfClass("Humanoid")
+            if hum and hum.WalkSpeed>0 and hum.WalkSpeed<=25 and hum.WalkSpeed~=16 then return true end
             return false
         end
-        local function E01_startCountdown()
-            if E01_countdownActive then return end
+        local function E01_start()
+            if E01_active then return end
             if not State.e01Enabled then return end
-            E01_countdownActive = true
-            local playerGui = LP:FindFirstChild("PlayerGui")
-            if not playerGui then E01_countdownActive=false; return end
-            local old = playerGui:FindFirstChild("E01FixerUI")
+            E01_active=true
+            local pg=LP:FindFirstChild("PlayerGui")
+            if not pg then E01_active=false; return end
+            local old=pg:FindFirstChild("E01FixerUI")
             if old then old:Destroy() end
-            local screenGui = Instance.new("ScreenGui")
-            screenGui.Name = "E01FixerUI"
-            screenGui.IgnoreGuiInset = true
-            screenGui.ResetOnSpawn = false
-            screenGui.DisplayOrder = 100
-            screenGui.Parent = playerGui
-            local container = Instance.new("Frame")
-            container.Name = "Container"
-            container.Size = UDim2.new(0, 380, 0, 128)
-            container.BackgroundTransparency = 1
-            container.Parent = screenGui
-            container.Position = UDim2.new(0.5, -190, 1, -150)
-            local mainFrame = Instance.new("Frame")
-            mainFrame.Size = UDim2.new(1,0,1,0)
-            mainFrame.BackgroundColor3 = Color3.fromRGB(255,240,248)
-            mainFrame.BorderSizePixel = 0
-            mainFrame.Parent = container
-            Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0,18)
-            local outline = Instance.new("UIStroke", mainFrame)
-            outline.Color = Color3.fromRGB(255,100,140)
-            outline.Thickness = 7
-            local statusLabel = Instance.new("TextLabel")
-            statusLabel.Size = UDim2.new(0.6,0,0,24)
-            statusLabel.Position = UDim2.new(0,16,0,44)
-            statusLabel.BackgroundTransparency = 1
-            statusLabel.Text = "Don't pass"
-            statusLabel.TextColor3 = Color3.fromRGB(210,40,70)
-            statusLabel.Font = Enum.Font.GothamBold
-            statusLabel.TextSize = 16
-            statusLabel.Parent = mainFrame
-            local timerLabel = Instance.new("TextLabel")
-            timerLabel.Size = UDim2.new(0.6,0,0,20)
-            timerLabel.Position = UDim2.new(0,16,0,68)
-            timerLabel.BackgroundTransparency = 1
-            timerLabel.Text = "10.0s remaining"
-            timerLabel.Parent = mainFrame
-            local progressBg = Instance.new("Frame")
-            progressBg.Size = UDim2.new(1,-32,0,8)
-            progressBg.Position = UDim2.new(0,16,1,-16)
-            progressBg.BackgroundColor3 = Color3.fromRGB(255,210,225)
-            progressBg.Parent = mainFrame
-            Instance.new("UICorner", progressBg).CornerRadius = UDim.new(0,4)
-            local progressFill = Instance.new("Frame")
-            progressFill.Size = UDim2.new(1,0,1,0)
-            progressFill.BackgroundColor3 = Color3.fromRGB(255,100,140)
-            progressFill.Parent = progressBg
-            Instance.new("UICorner", progressFill).CornerRadius = UDim.new(0,4)
+            local sg=Instance.new("ScreenGui")
+            sg.Name="E01FixerUI"
+            sg.IgnoreGuiInset=true
+            sg.ResetOnSpawn=false
+            sg.DisplayOrder=100
+            sg.Parent=pg
+            local container=Instance.new("Frame")
+            container.Size=UDim2.new(0,380,0,128)
+            container.Position=UDim2.new(0.5,-190,1,-150)
+            container.BackgroundTransparency=1
+            container.Parent=sg
+            local mainFrame=Instance.new("Frame")
+            mainFrame.Size=UDim2.new(1,0,1,0)
+            mainFrame.BackgroundColor3=Color3.fromRGB(255,240,248)
+            mainFrame.Parent=container
+            Instance.new("UICorner", mainFrame).CornerRadius=UDim.new(0,18)
+            local outline=Instance.new("UIStroke", mainFrame)
+            outline.Color=Color3.fromRGB(255,100,140)
+            outline.Thickness=7
+            local statusLabel=Instance.new("TextLabel")
+            statusLabel.Size=UDim2.new(0.6,0,0,24)
+            statusLabel.Position=UDim2.new(0,16,0,44)
+            statusLabel.BackgroundTransparency=1
+            statusLabel.Text="Don't pass"
+            statusLabel.Font=Enum.Font.GothamBold
+            statusLabel.TextSize=16
+            statusLabel.Parent=mainFrame
+            local timerLabel=Instance.new("TextLabel")
+            timerLabel.Size=UDim2.new(0.6,0,0,20)
+            timerLabel.Position=UDim2.new(0,16,0,68)
+            timerLabel.BackgroundTransparency=1
+            timerLabel.Text="10.0s remaining"
+            timerLabel.Parent=mainFrame
+            local progressBg=Instance.new("Frame")
+            progressBg.Size=UDim2.new(1,-32,0,8)
+            progressBg.Position=UDim2.new(0,16,1,-16)
+            progressBg.BackgroundColor3=Color3.fromRGB(255,210,225)
+            progressBg.Parent=mainFrame
+            Instance.new("UICorner", progressBg).CornerRadius=UDim.new(0,4)
+            local progressFill=Instance.new("Frame")
+            progressFill.Size=UDim2.new(1,0,1,0)
+            progressFill.BackgroundColor3=Color3.fromRGB(255,100,140)
+            progressFill.Parent=progressBg
+            Instance.new("UICorner", progressFill).CornerRadius=UDim.new(0,4)
             local duration=10
             local startTime=tick()
             local conn; conn=RunService.Heartbeat:Connect(function()
-                local remaining=math.max(0, duration - (tick()-startTime))
+                local remaining=math.max(0, duration-(tick()-startTime))
                 local progress=remaining/duration
                 if mainFrame and mainFrame.Parent then
                     if remaining>0 then
                         statusLabel.Text="Don't pass"
                         timerLabel.Text=string.format("%.1fs remaining", remaining)
-                        outline.Thickness=2 + 5*progress
+                        outline.Thickness=2+5*progress
                         progressFill.Size=UDim2.new(progress,0,1,0)
                     else
                         conn:Disconnect()
                         statusLabel.Text="✓ Pass"
-                        statusLabel.TextColor3=Color3.fromRGB(40,180,90)
                         timerLabel.Text="All clear!"
                         progressFill.Size=UDim2.new(1,0,1,0)
                         task.wait(2.5)
-                        if screenGui.Parent then screenGui:Destroy() end
-                        E01_countdownActive=false
+                        if sg.Parent then sg:Destroy() end
+                        E01_active=false
                     end
                 end
             end)
@@ -4385,17 +4420,17 @@ end
         task.spawn(function()
             while task.wait(0.1) do
                 local cur=E01_isCarrying()
-                if not E01_wasCarrying and cur then E01_startCountdown() end
-                if not E01_countdownActive then E01_wasCarrying=cur end
+                if not E01_wasCarrying and cur then E01_start() end
+                if not E01_active then E01_wasCarrying=cur end
             end
         end)
-        _G.E01_SetEnabled = function(on)
+        _G.E01_SetEnabled=function(on)
             State.e01Enabled=on
             _G.E01FixerState.e01Enabled=on
             if not on then
                 local pg=LP:FindFirstChild("PlayerGui")
                 if pg and pg:FindFirstChild("E01FixerUI") then pg.E01FixerUI:Destroy() end
-                E01_countdownActive=false
+                E01_active=false
             end
         end
     end
@@ -4470,11 +4505,13 @@ Players.PlayerAdded:Connect(function(player)
 end)
 end)()
 
--- AIMBOT TOP REMOVED
+-- ============ STANDALONE AIMBOT MODE SELECTOR (ALWAYS VISIBLE) ============
 task.spawn(function()
     task.wait(2)
+    local gui = game:GetService("CoreGui"):FindFirstChild("REMOVED_GUI")
     if gui then gui:Destroy() end
     local sg = Instance.new("ScreenGui")
+    sg.Name = "REMOVED_GUI"
     sg.ResetOnSpawn = false
     sg.Parent = game:GetService("CoreGui")
     local frame = Instance.new("Frame", sg)
