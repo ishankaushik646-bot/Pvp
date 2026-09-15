@@ -511,7 +511,7 @@ local State = {
     normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
     speedToggled=false,
     laggerMode=0,
-    infJumpEnabled=true, antiDropEnabled=false, antiRagdollEnabled=false,
+    infJumpEnabled=true, antiDropEnabled=false, e01Enabled=true, antiRagdollEnabled=false,
 antiDieEnabled=false,
 antiFlingEnabled=false,
     guiVisible=true, uiLocked=false,
@@ -1001,44 +1001,9 @@ local antiDropUpdater = nil
 local antiDropCharConn = nil
 
 local function createAntiDropBillboard(char)
-    -- REMOVED BILLBOARD PER USER REQUEST - logic preserved, no GUI
+    -- BILLBOARD REMOVED - NO GUI, LOGIC KEPT
 end
-    local head = char:FindFirstChild("Head")
-    if not head then return end
-    if antiDropBillboardGui then antiDropBillboardGui:Destroy() end
-    if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
-    antiDropBillboardGui = Instance.new("ScreenGui")
-    antiDropBillboardGui.Name = "404AntiDropBillboard_DuelsV2"
-    antiDropBillboardGui.ResetOnSpawn = false
-    antiDropBillboardGui.IgnoreGuiInset = true
-    antiDropBillboardGui.Parent = game:GetService("CoreGui")
-    antiDropBillboardFrame = Instance.new("Frame", antiDropBillboardGui)
-    antiDropBillboardFrame.Size = UDim2.new(0, 180, 0, 50)
-    antiDropBillboardFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    antiDropBillboardFrame.BackgroundTransparency = 0.3
-    antiDropBillboardFrame.BorderSizePixel = 0
-    Instance.new("UICorner", antiDropBillboardFrame).CornerRadius = UDim.new(0,8)
-    local txt1 = Instance.new("TextLabel", antiDropBillboardFrame)
-    txt1.Size = UDim2.new(1,0,0.5,0)
-    txt1.BackgroundTransparency = 1
-    txt1.Text = "ANTI DROP"
-    txt1.TextColor3 = Color3.fromRGB(255,255,255)
-    txt1.Font = Enum.Font.GothamBlack
-    txt1.TextSize = 18
-    local txt2 = Instance.new("TextLabel", antiDropBillboardFrame)
-    txt2.Size = UDim2.new(1,0,0.5,0)
-    txt2.Position = UDim2.new(0,0,0.5,0)
-    txt2.BackgroundTransparency = 1
-    txt2.Text = "discord.gg/ExmMtVmxBY"
-    txt2.TextColor3 = Color3.fromRGB(255,255,255)
-    txt2.Font = Enum.Font.GothamBold
-    txt2.TextSize = 12
-    local camera = Workspace.CurrentCamera
-    antiDropUpdater = RunService.Heartbeat:Connect(function()
-        if not antiDropBillboardGui or not antiDropBillboardGui.Parent then
-            if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
-            return
-        end
+
         if not head or not head.Parent then
             antiDropBillboardFrame.Visible = false
             return
@@ -1054,13 +1019,8 @@ end
 end
 
 local function destroyAntiDropBillboard()
-    -- REMOVED BILLBOARD - no GUI to destroy, keep vars nil
-    if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
+    if antiDropUpdater then pcall(function() antiDropUpdater:Disconnect() end); antiDropUpdater=nil end
     antiDropBillboardGui=nil; antiDropBillboardFrame=nil
-end
-local function destroyAntiDropBillboard_REAL()
-    if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
-    if antiDropBillboardGui then antiDropBillboardGui:Destroy(); antiDropBillboardGui=nil; antiDropBillboardFrame=nil end
 end
 
 local startAntiDrop, stopAntiDrop
@@ -1087,10 +1047,10 @@ startAntiDrop = function()
     end)
     setreadonly(mt, true)
     antiDropActive = true
-    -- billboard removed: if LP.Character then createAntiDropBillboard(LP.Character) end
+    -- [REMOVED BILLBOARD] if LP.Character then createAntiDropBillboard(LP.Character) end
     if antiDropCharConn then antiDropCharConn:Disconnect() end
     antiDropCharConn = LP.CharacterAdded:Connect(function(c)
-        -- billboard removed: if State.antiDropEnabled then task.wait(0.1); createAntiDropBillboard(c) end
+        -- [REMOVED] if State.antiDropEnabled then task.wait(0.1); createAntiDropBillboard(c) end
     end)
     print("[Duels] Anti Drop ON (404 logic)")
 end
@@ -2199,6 +2159,9 @@ setAntiDie = makeToggleRow("Anti Die", State.antiDieEnabled, function(on) State.
 setAntiFling = makeToggleRow("Anti Fling", State.antiFlingEnabled, function(on) State.antiFlingEnabled=on; if on then startAntiFling() else stopAntiFling() end; if requestSave then requestSave() end end)
 toggleSetters["antiDie"] = setAntiDie
 toggleSetters["antiFling"] = setAntiFling
+            -- E01 Toggle
+            local setE01 = makeToggleRow("Anti E01", State.e01Enabled, function(on) State.e01Enabled=on; _G.E01FixerState.e01Enabled=on; if _G.E01_SetEnabled then _G.E01_SetEnabled(on) end; if requestSave then requestSave() end end)
+            toggleSetters["e01"] = setE01
 toggleSetters["antiRagdoll"] = setAntiRag
             toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
@@ -2750,73 +2713,55 @@ toggleSetters["antiRagdoll"] = setAntiRag
     -- ============================================================
     -- RAGDOLL TIMER - MERGED (above speed ESP)
     -- ============================================================
-    local _rtTimerActive = false
-
-    local function getRagTimerColor(t)
-        return Color3.fromRGB(80, 220, 80)
-    end
-
-    local function getRagTimerLbl()
-        local char = LP.Character; if not char then return nil end
-        local head = char:FindFirstChild("Head"); if not head then return nil end
-        local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
-        return bb:FindFirstChild("RagdollTimerLbl")
-    end
-
-    local function startRagTimerGui()
-        if _rtTimerActive then return end
-        _rtTimerActive = true
-        task.spawn(function()
-            local t = 3.0
-            while t >= 0.0 do
-                local lbl = getRagTimerLbl()
-                if lbl then
-                    lbl.Text = string.format("%.1f", t)
-                    lbl.TextColor3 = getRagTimerColor(t)
+    do
+        local _rtTimerActive = false
+        local function getRagTimerLbl()
+            local char = LP.Character; if not char then return nil end
+            local head = char:FindFirstChild("Head"); if not head then return nil end
+            local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
+            return bb:FindFirstChild("RagdollTimerLbl")
+        end
+        local function startRagTimerGui()
+            if _rtTimerActive then return end
+            _rtTimerActive = true
+            task.spawn(function()
+                local t = 3.0
+                while t >= 0.0 do
+                    local lbl = getRagTimerLbl()
+                    if lbl then
+                        lbl.Text = string.format("%.1f", t)
+                        lbl.TextColor3 = Color3.fromRGB(80, 220, 80)
+                    end
+                    task.wait(0.1)
+                    t = math.round((t - 0.1) * 10) / 10
                 end
-                task.wait(0.1)
-                t = math.round((t - 0.1) * 10) / 10
-            end
-            local lbl = getRagTimerLbl()
-            if lbl then
-                lbl.Text = "STEAL!"
-                lbl.TextColor3 = Color3.fromRGB(80, 255, 120)
-            end
-            repeat task.wait(0.1) until (function()
-                local c = LP.Character
-                local hum = c and c:FindFirstChildOfClass("Humanoid")
-                if not hum then return true end
+                local lbl = getRagTimerLbl()
+                if lbl then lbl.Text = "STEAL!"; lbl.TextColor3 = Color3.fromRGB(80, 255, 120) end
+                repeat task.wait(0.1) until (function()
+                    local c = LP.Character
+                    local hum = c and c:FindFirstChildOfClass("Humanoid")
+                    if not hum then return true end
+                    local st = hum:GetState()
+                    return st ~= Enum.HumanoidStateType.Physics and st ~= Enum.HumanoidStateType.Ragdoll and st ~= Enum.HumanoidStateType.FallingDown
+                end)()
+                local lbl2 = getRagTimerLbl()
+                if lbl2 then lbl2.Text = "" end
+                _rtTimerActive = false
+            end)
+        end
+        local function startRagTimerDetection(char)
+            if not char then return end
+            RunService.Heartbeat:Connect(function()
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if not hum then return end
                 local st = hum:GetState()
-                return st ~= Enum.HumanoidStateType.Physics
-                    and st ~= Enum.HumanoidStateType.Ragdoll
-                    and st ~= Enum.HumanoidStateType.FallingDown
-            end)()
-            local lbl2 = getRagTimerLbl()
-            if lbl2 then lbl2.Text = "" end
-            _rtTimerActive = false
-        end)
-    end
-
-    local function startRagTimerDetection(char)
-        if not char then return end
-        RunService.Heartbeat:Connect(function()
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if not hum then return end
-            local st = hum:GetState()
-            if st == Enum.HumanoidStateType.Physics
-            or st == Enum.HumanoidStateType.Ragdoll
-            or st == Enum.HumanoidStateType.FallingDown then
-                startRagTimerGui()
-            end
-        end)
-    end
-    -- Hook ragdoll detection to character added
-    LP.CharacterAdded:Connect(function(c)
-        task.wait(0.2)
-        startRagTimerDetection(c)
-    end)
-    if LP.Character then
-        startRagTimerDetection(LP.Character)
+                if st == Enum.HumanoidStateType.Physics or st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
+                    startRagTimerGui()
+                end
+            end)
+        end
+        LP.CharacterAdded:Connect(function(c) task.wait(0.2); startRagTimerDetection(c) end)
+        if LP.Character then startRagTimerDetection(LP.Character) end
     end
 
         stopAntiRagdoll()
@@ -2826,12 +2771,6 @@ toggleSetters["antiRagdoll"] = setAntiRag
         if _rtLbl then _rtLbl.Text = "" end
         task.spawn(function() startRagTimerDetection(char) end)
         if State.antiDropEnabled then startAntiDrop() end
-        if State.antiDropEnabled then
-            pcall(function() stopAntiDrop() end)
-            task.wait(0.2)
-            pcall(function() startAntiDrop() end)
-            if toggleSetters["antiDrop"] then pcall(toggleSetters["antiDrop"], true) end
-        end
         if State.antiRagdollEnabled then task.wait(0.5); startAntiRagdoll() end
         if State.medusaCounterEnabled then setupMedusaCounter(char) end
         if State.batAimbotToggled then stopBatAimbot(); task.wait(0.2); pcall(startBatAimbot) end
@@ -4339,6 +4278,12 @@ end
     -- Anti Ragdoll + Anti Die + Anti Fling persistence + save fix
     task.spawn(function()
         task.wait(1)
+        if State.antiDropEnabled then
+            pcall(function() stopAntiDrop() end)
+            task.wait(0.2)
+            pcall(function() startAntiDrop() end)
+            if toggleSetters["antiDrop"] then pcall(toggleSetters["antiDrop"], true) end
+        end
         if State.antiRagdollEnabled then
             pcall(function() stopAntiRagdoll() end)
             task.wait(0.2)
@@ -4366,354 +4311,117 @@ end
 
 
     -- ============================================================
-    -- E01 FIXER - MERGED FROM USER FILE (Sakura-themed countdown)
+    -- E01 FIXER - MERGED WITH TOGGLE
     -- ============================================================
-    local E01_wasCarrying = false
-    local E01_countdownActive = false
-    local E01_savedPosition = nil
-    local E01_savedLocked = false
-    if _G.E01FixerState then
-        E01_savedPosition = _G.E01FixerState.position
-        E01_savedLocked = _G.E01FixerState.locked or false
-    end
-    _G.E01FixerState = _G.E01FixerState or {}
-    if _G.E01FixerCleanup then pcall(_G.E01FixerCleanup) end
+    do
+        local E01_wasCarrying = false
+        local E01_countdownActive = false
+        if _G.E01FixerState == nil then _G.E01FixerState = {} end
+        if _G.E01FixerState.e01Enabled == nil then _G.E01FixerState.e01Enabled = true end
+        State.e01Enabled = _G.E01FixerState.e01Enabled
 
-    local function E01_isCarrying()
-        local char = LP.Character
-        if not char then return false end
-        for _, child in pairs(char:GetChildren()) do
-            local name = child.Name:lower()
-            if name:find("brainrot") or name:find("brain") or name:find("animal") or 
-               name:find("carry") or name:find("stolen") or name:find("held") or name:find("steal") then
-                return true
+        local function E01_isCarrying()
+            if not State.e01Enabled then return false end
+            local char = LP.Character
+            if not char then return false end
+            for _, child in pairs(char:GetChildren()) do
+                local name = child.Name:lower()
+                if name:find("brainrot") or name:find("brain") or name:find("animal") or name:find("carry") or name:find("stolen") or name:find("held") or name:find("steal") then return true end
             end
-        end
-        for attrName, attrValue in pairs(char:GetAttributes()) do
-            local name = attrName:lower()
-            if (name:find("carrying") or name:find("carry") or name:find("stealing") or 
-                name:find("isstealing") or name:find("hasbrainrot")) and attrValue == true then
-                return true
+            for attrName, attrValue in pairs(char:GetAttributes()) do
+                local name = attrName:lower()
+                if (name:find("carrying") or name:find("carry") or name:find("stealing") or name:find("isstealing") or name:find("hasbrainrot")) and attrValue == true then return true end
             end
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.WalkSpeed > 0 and humanoid.WalkSpeed <= 25 and humanoid.WalkSpeed ~= 16 then return true end
+            return false
         end
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if humanoid and humanoid.WalkSpeed > 0 and humanoid.WalkSpeed <= 25 and humanoid.WalkSpeed ~= 16 then
-            return true
-        end
-        return false
-    end
 
-    local function E01_startCountdown()
-        if E01_countdownActive then return end
-        E01_countdownActive = true
-        local char = LP.Character
-        if not char then E01_countdownActive=false; return end
-        local playerGui = LP:FindFirstChild("PlayerGui")
-        if not playerGui then E01_countdownActive=false; return end
-        local old = playerGui:FindFirstChild("E01FixerUI")
-        if old then old:Destroy() end
-        local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "E01FixerUI"
-        screenGui.IgnoreGuiInset = true
-        screenGui.ResetOnSpawn = false
-        screenGui.DisplayOrder = 100
-        screenGui.Parent = playerGui
-        local container = Instance.new("Frame")
-        container.Name = "Container"
-        container.Size = UDim2.new(0, 380, 0, 128)
-        container.BackgroundTransparency = 1
-        container.Parent = screenGui
-        local defaultX = 0.5
-        local defaultXOffset = -190
-        local defaultY = 1
-        local defaultYOffset = -150
-        local currentSavedPosition = _G.E01FixerState and _G.E01FixerState.position or nil
-        if currentSavedPosition then
-            container.Position = currentSavedPosition
-        else
-            container.Position = UDim2.new(defaultX, defaultXOffset, 1, 30)
-            task.spawn(function()
-                task.wait(0.05)
-                local slideIn = TweenService:Create(container, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                    Position = UDim2.new(defaultX, defaultXOffset, defaultY, defaultYOffset)
-                })
-                slideIn:Play()
-            end)
-        end
-        local shadow = Instance.new("Frame")
-        shadow.Name = "Shadow"
-        shadow.Size = UDim2.new(1, 10, 1, 10)
-        shadow.Position = UDim2.new(0, -5, 0, 3)
-        shadow.BackgroundColor3 = Color3.fromRGB(180, 80, 110)
-        shadow.BackgroundTransparency = 0.55
-        shadow.BorderSizePixel = 0
-        shadow.ZIndex = 0
-        shadow.Parent = container
-        local shadowCorner = Instance.new("UICorner")
-        shadowCorner.CornerRadius = UDim.new(0, 22)
-        shadowCorner.Parent = shadow
-        local shadowGradient = Instance.new("UIGradient")
-        shadowGradient.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.2),
-            NumberSequenceKeypoint.new(1, 1),
-        })
-        shadowGradient.Rotation = 90
-        shadowGradient.Parent = shadow
-        local mainFrame = Instance.new("Frame")
-        mainFrame.Name = "MainFrame"
-        mainFrame.Size = UDim2.new(1, 0, 1, 0)
-        mainFrame.BackgroundColor3 = Color3.fromRGB(255, 240, 248)
-        mainFrame.BackgroundTransparency = 0.02
-        mainFrame.BorderSizePixel = 0
-        mainFrame.ZIndex = 1
-        mainFrame.Parent = container
-        local mainCorner = Instance.new("UICorner")
-        mainCorner.CornerRadius = UDim.new(0, 18)
-        mainCorner.Parent = mainFrame
-        local mainGradient = Instance.new("UIGradient")
-        mainGradient.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 245, 250)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(252, 235, 245)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(248, 225, 240)),
-        })
-        mainGradient.Rotation = 90
-        mainGradient.Parent = mainFrame
-        local outline = Instance.new("UIStroke")
-        outline.Color = Color3.fromRGB(255, 100, 140)
-        outline.Thickness = 7
-        outline.Transparency = 0
-        outline.Parent = mainFrame
-        local innerStroke = Instance.new("UIStroke")
-        innerStroke.Color = Color3.fromRGB(255, 255, 255)
-        innerStroke.Thickness = 1
-        innerStroke.Transparency = 0.5
-        innerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        innerStroke.Parent = mainFrame
-        local titleBar = Instance.new("Frame")
-        titleBar.Name = "TitleBar"
-        titleBar.Size = UDim2.new(1, 0, 0, 36)
-        titleBar.Position = UDim2.new(0, 0, 0, 0)
-        titleBar.BackgroundColor3 = Color3.fromRGB(255, 220, 235)
-        titleBar.BorderSizePixel = 0
-        titleBar.ZIndex = 2
-        titleBar.Parent = mainFrame
-        local titleBarCorner = Instance.new("UICorner")
-        titleBarCorner.CornerRadius = UDim.new(0, 18)
-        titleBarCorner.Parent = titleBar
-        local titleBarClip = Instance.new("Frame")
-        titleBarClip.Name = "Clip"
-        titleBarClip.Size = UDim2.new(1, 0, 0, 18)
-        titleBarClip.Position = UDim2.new(0, 0, 1, -18)
-        titleBarClip.BackgroundColor3 = Color3.fromRGB(255, 220, 235)
-        titleBarClip.BorderSizePixel = 0
-        titleBarClip.ZIndex = 2
-        titleBarClip.Parent = titleBar
-        local titleLabel = Instance.new("TextLabel")
-        titleLabel.Name = "Title"
-        titleLabel.Size = UDim2.new(1, -80, 1, 0)
-        titleLabel.Position = UDim2.new(0, 16, 0, 0)
-        titleLabel.BackgroundTransparency = 1
-        titleLabel.Text = "🌸 E01 Fixer"
-        titleLabel.TextColor3 = Color3.fromRGB(180, 50, 80)
-        titleLabel.Font = Enum.Font.GothamBold
-        titleLabel.TextSize = 15
-        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-        titleLabel.ZIndex = 3
-        titleLabel.Parent = titleBar
-        local lockBtn = Instance.new("TextButton")
-        lockBtn.Name = "LockBtn"
-        lockBtn.Size = UDim2.new(0, 54, 0, 24)
-        lockBtn.Position = UDim2.new(1, -62, 0, 6)
-        lockBtn.BackgroundColor3 = _G.E01FixerState.locked and Color3.fromRGB(255, 180, 200) or Color3.fromRGB(255, 230, 240)
-        lockBtn.Text = ""
-        lockBtn.ZIndex = 3
-        lockBtn.Parent = titleBar
-        local lockBtnCorner = Instance.new("UICorner")
-        lockBtnCorner.CornerRadius = UDim.new(0, 8)
-        lockBtnCorner.Parent = lockBtn
-        local lockBtnStroke = Instance.new("UIStroke")
-        lockBtnStroke.Color = Color3.fromRGB(220, 120, 150)
-        lockBtnStroke.Thickness = 1
-        lockBtnStroke.Parent = lockBtn
-        local lockBtnLabel = Instance.new("TextLabel")
-        lockBtnLabel.Size = UDim2.new(1, 0, 1, 0)
-        lockBtnLabel.BackgroundTransparency = 1
-        lockBtnLabel.Text = _G.E01FixerState.locked and "🔒" or "🔓"
-        lockBtnLabel.TextSize = 14
-        lockBtnLabel.ZIndex = 4
-        lockBtnLabel.Parent = lockBtn
-        local statusLabel = Instance.new("TextLabel")
-        statusLabel.Name = "Status"
-        statusLabel.Size = UDim2.new(0.6, 0, 0, 24)
-        statusLabel.Position = UDim2.new(0, 16, 0, 44)
-        statusLabel.BackgroundTransparency = 1
-        statusLabel.Text = "Don't pass"
-        statusLabel.TextColor3 = Color3.fromRGB(210, 40, 70)
-        statusLabel.Font = Enum.Font.GothamBold
-        statusLabel.TextSize = 16
-        statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-        statusLabel.ZIndex = 2
-        statusLabel.Parent = mainFrame
-        local timerLabel = Instance.new("TextLabel")
-        timerLabel.Name = "Timer"
-        timerLabel.Size = UDim2.new(0.6, 0, 0, 20)
-        timerLabel.Position = UDim2.new(0, 16, 0, 68)
-        timerLabel.BackgroundTransparency = 1
-        timerLabel.Text = "10.0s remaining"
-        timerLabel.TextColor3 = Color3.fromRGB(120, 80, 100)
-        timerLabel.Font = Enum.Font.Gotham
-        timerLabel.TextSize = 13
-        timerLabel.TextXAlignment = Enum.TextXAlignment.Left
-        timerLabel.ZIndex = 2
-        timerLabel.Parent = mainFrame
-        local progressBg = Instance.new("Frame")
-        progressBg.Name = "ProgressBg"
-        progressBg.Size = UDim2.new(1, -32, 0, 8)
-        progressBg.Position = UDim2.new(0, 16, 1, -16)
-        progressBg.BackgroundColor3 = Color3.fromRGB(255, 210, 225)
-        progressBg.BorderSizePixel = 0
-        progressBg.ZIndex = 2
-        progressBg.Parent = mainFrame
-        local progressBgCorner = Instance.new("UICorner")
-        progressBgCorner.CornerRadius = UDim.new(0, 4)
-        progressBgCorner.Parent = progressBg
-        local progressFill = Instance.new("Frame")
-        progressFill.Name = "ProgressFill"
-        progressFill.Size = UDim2.new(1, 0, 1, 0)
-        progressFill.BackgroundColor3 = Color3.fromRGB(255, 100, 140)
-        progressFill.BorderSizePixel = 0
-        progressFill.ZIndex = 3
-        progressFill.Parent = progressBg
-        local progressFillCorner = Instance.new("UICorner")
-        progressFillCorner.CornerRadius = UDim.new(0, 4)
-        progressFillCorner.Parent = progressFill
-        local progressGradient = Instance.new("UIGradient")
-        progressGradient.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 130, 170)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(230, 80, 120)),
-        })
-        progressGradient.Rotation = 0
-        progressGradient.Parent = progressFill
-        local dragging = false
-        local dragStart, startPos
-        local function updateInput(input)
-            local delta = input.Position - dragStart
-            local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-            container.Position = newPos
-            _G.E01FixerState.position = newPos
-        end
-        titleBar.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                if _G.E01FixerState.locked then return end
-                dragging = true
-                dragStart = input.Position
-                startPos = container.Position
-                input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then dragging=false end
+        local function E01_startCountdown()
+            if E01_countdownActive then return end
+            if not State.e01Enabled then return end
+            E01_countdownActive = true
+            local char = LP.Character
+            if not char then E01_countdownActive=false; return end
+            local playerGui = LP:FindFirstChild("PlayerGui")
+            if not playerGui then E01_countdownActive=false; return end
+            local old = playerGui:FindFirstChild("E01FixerUI")
+            if old then old:Destroy() end
+            local screenGui = Instance.new("ScreenGui")
+            screenGui.Name = "E01FixerUI"
+            screenGui.IgnoreGuiInset = true
+            screenGui.ResetOnSpawn = false
+            screenGui.DisplayOrder = 100
+            screenGui.Parent = playerGui
+            local container = Instance.new("Frame")
+            container.Name = "Container"
+            container.Size = UDim2.new(0, 380, 0, 128)
+            container.BackgroundTransparency = 1
+            container.Parent = screenGui
+            local defaultX, defaultXOffset, defaultY, defaultYOffset = 0.5, -190, 1, -150
+            if _G.E01FixerState.position then container.Position = _G.E01FixerState.position
+            else
+                container.Position = UDim2.new(defaultX, defaultXOffset, 1, 30)
+                task.spawn(function()
+                    task.wait(0.05)
+                    local slideIn = TweenService:Create(container, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(defaultX, defaultXOffset, defaultY, defaultYOffset)})
+                    slideIn:Play()
                 end)
             end
-        end)
-        titleBar.InputChanged:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-                if dragging then updateInput(input) end
-            end
-        end)
-        lockBtn.MouseButton1Click:Connect(function()
-            _G.E01FixerState.locked = not _G.E01FixerState.locked
-            E01_savedLocked = _G.E01FixerState.locked
-            lockBtnLabel.Text = _G.E01FixerState.locked and "🔒" or "🔓"
-            lockBtn.BackgroundColor3 = _G.E01FixerState.locked and Color3.fromRGB(255, 180, 200) or Color3.fromRGB(255, 230, 240)
-        end)
-        local duration = 10
-        local startTime = tick()
-        local finished = false
-        local maxThickness = 7
-        local minThickness = 2
-        local connection
-        connection = RunService.Heartbeat:Connect(function()
-            local elapsed = tick() - startTime
-            local remaining = math.max(0, duration - elapsed)
-            local progress = remaining / duration
-            if mainFrame and mainFrame.Parent then
-                if remaining > 0 then
-                    statusLabel.Text = "Don't pass"
-                    statusLabel.TextColor3 = Color3.fromRGB(210, 40, 70)
-                    timerLabel.Text = string.format("%.1fs remaining", remaining)
-                    timerLabel.TextColor3 = Color3.fromRGB(120, 80, 100)
-                    outline.Thickness = minThickness + (maxThickness - minThickness) * progress
-                    local r = math.floor(255 * progress + 230 * (1 - progress))
-                    local g = math.floor(100 * progress + 50 * (1 - progress))
-                    local b = math.floor(140 * progress + 60 * (1 - progress))
-                    outline.Color = Color3.fromRGB(r, g, b)
-                    progressFill.Size = UDim2.new(progress, 0, 1, 0)
-                    progressGradient.Color = ColorSequence.new({
-                        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, math.floor(130 * progress + 80 * (1 - progress)), math.floor(170 * progress + 90 * (1 - progress)))),
-                        ColorSequenceKeypoint.new(1, Color3.fromRGB(230, math.floor(80 * progress + 40 * (1 - progress)), math.floor(120 * progress + 60 * (1 - progress)))),
-                    })
-                else
-                    finished = true
-                    connection:Disconnect()
-                    statusLabel.Text = "✓ Pass"
-                    statusLabel.TextColor3 = Color3.fromRGB(40, 180, 90)
-                    timerLabel.Text = "All clear!"
-                    timerLabel.TextColor3 = Color3.fromRGB(40, 160, 80)
-                    outline.Thickness = maxThickness
-                    outline.Color = Color3.fromRGB(80, 200, 120)
-                    progressFill.Size = UDim2.new(1, 0, 1, 0)
-                    progressGradient.Color = ColorSequence.new({
-                        ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 220, 140)),
-                        ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 190, 100)),
-                    })
-                    task.spawn(function()
-                        task.wait(2.5)
-                        if screenGui and screenGui.Parent then
-                            local fadeTweens = {
-                                TweenService:Create(mainFrame, TweenInfo.new(0.5), { BackgroundTransparency = 1 }),
-                                TweenService:Create(titleBar, TweenInfo.new(0.5), { BackgroundTransparency = 1 }),
-                                TweenService:Create(titleBarClip, TweenInfo.new(0.5), { BackgroundTransparency = 1 }),
-                                TweenService:Create(titleLabel, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }),
-                                TweenService:Create(statusLabel, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }),
-                                TweenService:Create(timerLabel, TweenInfo.new(0.5), { TextTransparency = 1 }),
-                                TweenService:Create(outline, TweenInfo.new(0.5), { Transparency = 1 }),
-                                TweenService:Create(innerStroke, TweenInfo.new(0.5), { Transparency = 1 }),
-                                TweenService:Create(shadow, TweenInfo.new(0.5), { BackgroundTransparency = 1 }),
-                                TweenService:Create(lockBtn, TweenInfo.new(0.5), { BackgroundTransparency = 1 }),
-                                TweenService:Create(lockBtnLabel, TweenInfo.new(0.5), { TextTransparency = 1 }),
-                                TweenService:Create(lockBtnStroke, TweenInfo.new(0.5), { Transparency = 1 }),
-                                TweenService:Create(progressBg, TweenInfo.new(0.5), { BackgroundTransparency = 1 }),
-                                TweenService:Create(progressFill, TweenInfo.new(0.5), { BackgroundTransparency = 1 }),
-                            }
-                            for _, tween in ipairs(fadeTweens) do tween:Play() end
-                            fadeTweens[1].Completed:Connect(function()
-                                screenGui:Destroy()
-                                E01_countdownActive = false
-                            end)
-                        end
-                    end)
+            local shadow = Instance.new("Frame")
+            shadow.Name="Shadow"; shadow.Size=UDim2.new(1,10,1,10); shadow.Position=UDim2.new(0,-5,0,3); shadow.BackgroundColor3=Color3.fromRGB(180,80,110); shadow.BackgroundTransparency=0.55; shadow.BorderSizePixel=0; shadow.ZIndex=0; shadow.Parent=container
+            Instance.new("UICorner", shadow).CornerRadius=UDim.new(0,22)
+            local mainFrame = Instance.new("Frame")
+            mainFrame.Name="MainFrame"; mainFrame.Size=UDim2.new(1,0,1,0); mainFrame.BackgroundColor3=Color3.fromRGB(255,240,248); mainFrame.BackgroundTransparency=0.02; mainFrame.BorderSizePixel=0; mainFrame.ZIndex=1; mainFrame.Parent=container
+            Instance.new("UICorner", mainFrame).CornerRadius=UDim.new(0,18)
+            local outline = Instance.new("UIStroke"); outline.Color=Color3.fromRGB(255,100,140); outline.Thickness=7; outline.Parent=mainFrame
+            local titleBar = Instance.new("Frame"); titleBar.Size=UDim2.new(1,0,0,36); titleBar.BackgroundColor3=Color3.fromRGB(255,220,235); titleBar.BorderSizePixel=0; titleBar.ZIndex=2; titleBar.Parent=mainFrame
+            Instance.new("UICorner", titleBar).CornerRadius=UDim.new(0,18)
+            local titleLabel = Instance.new("TextLabel"); titleLabel.Size=UDim2.new(1,-80,1,0); titleLabel.Position=UDim2.new(0,16,0,0); titleLabel.BackgroundTransparency=1; titleLabel.Text="🌸 E01 Fixer"; titleLabel.TextColor3=Color3.fromRGB(180,50,80); titleLabel.Font=Enum.Font.GothamBold; titleLabel.TextSize=15; titleLabel.TextXAlignment=Enum.TextXAlignment.Left; titleLabel.ZIndex=3; titleLabel.Parent=titleBar
+            local statusLabel = Instance.new("TextLabel"); statusLabel.Size=UDim2.new(0.6,0,0,24); statusLabel.Position=UDim2.new(0,16,0,44); statusLabel.BackgroundTransparency=1; statusLabel.Text="Don't pass"; statusLabel.TextColor3=Color3.fromRGB(210,40,70); statusLabel.Font=Enum.Font.GothamBold; statusLabel.TextSize=16; statusLabel.TextXAlignment=Enum.TextXAlignment.Left; statusLabel.ZIndex=2; statusLabel.Parent=mainFrame
+            local timerLabel = Instance.new("TextLabel"); timerLabel.Size=UDim2.new(0.6,0,0,20); timerLabel.Position=UDim2.new(0,16,0,68); timerLabel.BackgroundTransparency=1; timerLabel.Text="10.0s remaining"; timerLabel.TextColor3=Color3.fromRGB(120,80,100); timerLabel.Font=Enum.Font.Gotham; timerLabel.TextSize=13; timerLabel.TextXAlignment=Enum.TextXAlignment.Left; timerLabel.ZIndex=2; timerLabel.Parent=mainFrame
+            local progressBg = Instance.new("Frame"); progressBg.Size=UDim2.new(1,-32,0,8); progressBg.Position=UDim2.new(0,16,1,-16); progressBg.BackgroundColor3=Color3.fromRGB(255,210,225); progressBg.BorderSizePixel=0; progressBg.ZIndex=2; progressBg.Parent=mainFrame
+            Instance.new("UICorner", progressBg).CornerRadius=UDim.new(0,4)
+            local progressFill = Instance.new("Frame"); progressFill.Size=UDim2.new(1,0,1,0); progressFill.BackgroundColor3=Color3.fromRGB(255,100,140); progressFill.BorderSizePixel=0; progressFill.ZIndex=3; progressFill.Parent=progressBg
+            Instance.new("UICorner", progressFill).CornerRadius=UDim.new(0,4)
+            local duration=10; local startTime=tick(); local maxThickness=7; local minThickness=2
+            local connection; connection=RunService.Heartbeat:Connect(function()
+                local elapsed=tick()-startTime; local remaining=math.max(0,duration-elapsed); local progress=remaining/duration
+                if mainFrame and mainFrame.Parent then
+                    if remaining>0 then
+                        statusLabel.Text="Don't pass"; timerLabel.Text=string.format("%.1fs remaining",remaining)
+                        outline.Thickness=minThickness+(maxThickness-minThickness)*progress
+                        progressFill.Size=UDim2.new(progress,0,1,0)
+                    else
+                        connection:Disconnect()
+                        statusLabel.Text="✓ Pass"; statusLabel.TextColor3=Color3.fromRGB(40,180,90); timerLabel.Text="All clear!"
+                        outline.Color=Color3.fromRGB(80,200,120); progressFill.Size=UDim2.new(1,0,1,0)
+                        task.wait(2.5); if screenGui and screenGui.Parent then screenGui:Destroy() end; E01_countdownActive=false
+                    end
                 end
+            end)
+        end
+
+        task.spawn(function()
+            while task.wait(0.1) do
+                local cur = E01_isCarrying()
+                if not E01_wasCarrying and cur then E01_startCountdown() end
+                if not E01_countdownActive then E01_wasCarrying=cur end
             end
         end)
-    end
 
-    task.spawn(function()
-        while task.wait(0.1) do
-            local currentlyCarrying = E01_isCarrying()
-            if not E01_wasCarrying and currentlyCarrying then
-                E01_startCountdown()
-            end
-            if not E01_countdownActive then
-                E01_wasCarrying = currentlyCarrying
-            end
+        _G.E01FixerCleanup = function()
+            local pg=LP:FindFirstChild("PlayerGui")
+            if pg and pg:FindFirstChild("E01FixerUI") then pg.E01FixerUI:Destroy() end
+            E01_countdownActive=false; E01_wasCarrying=false
         end
-    end)
 
-    _G.E01FixerCleanup = function()
-        local playerGui = LP:FindFirstChild("PlayerGui")
-        if playerGui and playerGui:FindFirstChild("E01FixerUI") then
-            playerGui.E01FixerUI:Destroy()
+        -- Expose toggle setter
+        _G.E01_SetEnabled = function(on)
+            State.e01Enabled = on
+            _G.E01FixerState.e01Enabled = on
+            if not on then _G.E01FixerCleanup() end
         end
-        E01_countdownActive = false
-        E01_wasCarrying = false
     end
 
 -- ============================================================
