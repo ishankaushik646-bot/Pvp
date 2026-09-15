@@ -1004,19 +1004,6 @@ local function createAntiDropBillboard(char)
     -- BILLBOARD REMOVED - NO GUI, LOGIC KEPT
 end
 
-        if not head or not head.Parent then
-            antiDropBillboardFrame.Visible = false
-            return
-        end
-        local pos, onScreen = camera:WorldToScreenPoint(head.Position)
-        if onScreen then
-            antiDropBillboardFrame.Position = UDim2.new(0, pos.X - 90, 0, pos.Y - 30)
-            antiDropBillboardFrame.Visible = true
-        else
-            antiDropBillboardFrame.Visible = false
-        end
-    end)
-end
 
 local function destroyAntiDropBillboard()
     if antiDropUpdater then pcall(function() antiDropUpdater:Disconnect() end); antiDropUpdater=nil end
