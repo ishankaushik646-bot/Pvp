@@ -1001,7 +1001,7 @@ local antiDropUpdater = nil
 local antiDropCharConn = nil
 
 local function createAntiDropBillboard(char)
-    -- REMOVED BILLBOARD
+    -- REMOVED
 end
 
 
@@ -2696,7 +2696,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
             local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/Duels"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
         end
 
-    -- RAGDOLL TOP TIMER (ScreenGui at top)
+    -- RAGDOLL TOP TIMER
     do
         local _rtActive=false
         local _rtGui,_rtLbl=nil,nil
@@ -3208,7 +3208,7 @@ end
         local char = LP.Character; if not char then return nil end
         local head = char:FindFirstChild("Head"); if not head then return nil end
         local bb = head:FindFirstChild("DuelsBB"); if not bb then return nil end
-        return bb:FindFirstChild("SpeedBillLbl")
+        return bb:FindFirstChild("RagdollTimerLbl")
     end
     local function startRagTimerGui()
         if _rtTimerActive then return end
@@ -3934,6 +3934,7 @@ end
                 aimbotKey = Keys.aimbot and Keys.aimbot.Name or "Unknown",
                 infJump = State.infJumpEnabled,
                 antiDrop = State.antiDropEnabled,
+                e01Enabled = State.e01Enabled,
                 antiRagdoll = State.antiRagdollEnabled,
                 antiDie = State.antiDieEnabled,
                 antiFling = State.antiFlingEnabled,
@@ -4100,7 +4101,7 @@ end
 
         local bools = {
             stackButtonsHidden="stackButtonsHidden", stackButtonsLocked="stackButtonsLocked",
-            infJump="infJumpEnabled", antiDrop="antiDropEnabled", antiRagdoll="antiRagdollEnabled",
+            infJump="infJumpEnabled", antiDrop="antiDropEnabled", e01Enabled="e01Enabled", e01Enabled="e01Enabled", antiRagdoll="antiRagdollEnabled",
             antiDie="antiDieEnabled", antiFling="antiFlingEnabled",
             medusaCounter="medusaCounterEnabled", batCounter="batCounterEnabled",
             autoStealEnabled="autoStealEnabled", autoSwing="autoSwingEnabled",
@@ -4195,6 +4196,7 @@ end
             elseif key=="stretchedRes" then stateValue=State.stretchedResEnabled
             elseif key=="nukeOpt" then stateValue=State.nukeOpt
             elseif key=="removeAcc" then stateValue=State.removeAcc
+            elseif key=="e01" then stateValue=State.e01Enabled
             elseif key=="tryardAnim" then stateValue=State.tryardAnimEnabled
             elseif key=="introEnabled" then stateValue=State.introEnabled
             elseif key=="hideButtons" then stateValue=State.stackButtonsHidden
@@ -4319,7 +4321,7 @@ end
 end
 
 
-    -- E01 FIXER WITH TOGGLE
+    -- E01 FIXER WITH TOGGLE + SAVING
     do
         local E01_wasCarrying=false
         local E01_active=false
@@ -4427,6 +4429,7 @@ end
         _G.E01_SetEnabled=function(on)
             State.e01Enabled=on
             _G.E01FixerState.e01Enabled=on
+            if requestSave then requestSave() end
             if not on then
                 local pg=LP:FindFirstChild("PlayerGui")
                 if pg and pg:FindFirstChild("E01FixerUI") then pg.E01FixerUI:Destroy() end
@@ -4508,10 +4511,8 @@ end)()
 -- ============ STANDALONE AIMBOT MODE SELECTOR (ALWAYS VISIBLE) ============
 task.spawn(function()
     task.wait(2)
-    local gui = game:GetService("CoreGui"):FindFirstChild("REMOVED_GUI")
     if gui then gui:Destroy() end
     local sg = Instance.new("ScreenGui")
-    sg.Name = "REMOVED_GUI"
     sg.ResetOnSpawn = false
     sg.Parent = game:GetService("CoreGui")
     local frame = Instance.new("Frame", sg)
