@@ -84,6 +84,20 @@ end
 
 repeat task.wait() until game:IsLoaded()
 
+-- FORCE KILL TOP AIMBOT SELECTOR AT START
+pcall(function()
+    local cg = game:GetService("CoreGui")
+    local old = cg:FindFirstChild("SakuraModeSelectorGUI")
+    if old then old:Destroy() end
+    cg.ChildAdded:Connect(function(c)
+        if c.Name == "SakuraModeSelectorGUI" then
+            task.wait(0.1)
+            pcall(function() c:Destroy() end)
+        end
+    end)
+end)
+
+
 -- ============================================================
 -- BLOSSOM RESET FEATURE
 -- ============================================================
@@ -511,7 +525,7 @@ local State = {
     normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
     speedToggled=false,
     laggerMode=0,
-    infJumpEnabled=true, antiDropEnabled=false, antiRagdollEnabled=false,
+    infJumpEnabled=true, antiDropEnabled=false, e01Enabled=true, antiRagdollEnabled=false,
 antiDieEnabled=false,
 antiFlingEnabled=false,
     guiVisible=true, uiLocked=false,
@@ -1001,61 +1015,15 @@ local antiDropUpdater = nil
 local antiDropCharConn = nil
 
 local function createAntiDropBillboard(char)
-    if not char then return end
-    local head = char:FindFirstChild("Head")
-    if not head then return end
-    if antiDropBillboardGui then antiDropBillboardGui:Destroy() end
-    if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
-    antiDropBillboardGui = Instance.new("ScreenGui")
-    antiDropBillboardGui.Name = "404AntiDropBillboard_DuelsV2"
-    antiDropBillboardGui.ResetOnSpawn = false
-    antiDropBillboardGui.IgnoreGuiInset = true
-    antiDropBillboardGui.Parent = game:GetService("CoreGui")
-    antiDropBillboardFrame = Instance.new("Frame", antiDropBillboardGui)
-    antiDropBillboardFrame.Size = UDim2.new(0, 180, 0, 50)
-    antiDropBillboardFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    antiDropBillboardFrame.BackgroundTransparency = 0.3
-    antiDropBillboardFrame.BorderSizePixel = 0
-    Instance.new("UICorner", antiDropBillboardFrame).CornerRadius = UDim.new(0,8)
-    local txt1 = Instance.new("TextLabel", antiDropBillboardFrame)
-    txt1.Size = UDim2.new(1,0,0.5,0)
-    txt1.BackgroundTransparency = 1
-    txt1.Text = "ANTI DROP"
-    txt1.TextColor3 = Color3.fromRGB(255,255,255)
-    txt1.Font = Enum.Font.GothamBlack
-    txt1.TextSize = 18
-    local txt2 = Instance.new("TextLabel", antiDropBillboardFrame)
-    txt2.Size = UDim2.new(1,0,0.5,0)
-    txt2.Position = UDim2.new(0,0,0.5,0)
-    txt2.BackgroundTransparency = 1
-    txt2.Text = "discord.gg/ExmMtVmxBY"
-    txt2.TextColor3 = Color3.fromRGB(255,255,255)
-    txt2.Font = Enum.Font.GothamBold
-    txt2.TextSize = 12
-    local camera = Workspace.CurrentCamera
-    antiDropUpdater = RunService.Heartbeat:Connect(function()
-        if not antiDropBillboardGui or not antiDropBillboardGui.Parent then
-            if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
-            return
-        end
-        if not head or not head.Parent then
-            antiDropBillboardFrame.Visible = false
-            return
-        end
-        local pos, onScreen = camera:WorldToScreenPoint(head.Position)
-        if onScreen then
-            antiDropBillboardFrame.Position = UDim2.new(0, pos.X - 90, 0, pos.Y - 30)
-            antiDropBillboardFrame.Visible = true
-        else
-            antiDropBillboardFrame.Visible = false
-        end
-    end)
+    -- REMOVED
 end
 
+
 local function destroyAntiDropBillboard()
-    if antiDropUpdater then antiDropUpdater:Disconnect(); antiDropUpdater=nil end
-    if antiDropBillboardGui then antiDropBillboardGui:Destroy(); antiDropBillboardGui=nil; antiDropBillboardFrame=nil end
+    if antiDropUpdater then pcall(function() antiDropUpdater:Disconnect() end); antiDropUpdater=nil end
+    antiDropBillboardGui=nil; antiDropBillboardFrame=nil
 end
+
 
 local startAntiDrop, stopAntiDrop
 startAntiDrop = function()
@@ -1081,10 +1049,10 @@ startAntiDrop = function()
     end)
     setreadonly(mt, true)
     antiDropActive = true
-    if LP.Character then createAntiDropBillboard(LP.Character) end
+    -- REMOVED
     if antiDropCharConn then antiDropCharConn:Disconnect() end
     antiDropCharConn = LP.CharacterAdded:Connect(function(c)
-        if State.antiDropEnabled then task.wait(0.1); createAntiDropBillboard(c) end
+        -- REMOVED
     end)
     print("[Duels] Anti Drop ON (404 logic)")
 end
@@ -2185,14 +2153,16 @@ local function Main()
             setInfJump = makeToggleRow("Infinite Jump", true, function(on) State.infJumpEnabled=on; if requestSave then requestSave() end end)
             toggleSetters["infJump"] = setInfJump
             makeGap(8); makeSectionHeader("Anti Drop (404)"); makeGap(2)
-            setAntiDrop = makeToggleRow("Anti Drop", false, function(on) State.antiDropEnabled=on; if on then startAntiDrop() else stopAntiDrop() end; if requestSave then requestSave() end end)
+            setAntiDrop = makeToggleRow("Anti Drop", State.antiDropEnabled, function(on) State.antiDropEnabled=on; if on then startAntiDrop() else stopAntiDrop() end; if requestSave then requestSave() end end)
             toggleSetters["antiDrop"] = setAntiDrop
             makeGap(8); makeSectionHeader("Defense"); makeGap(2)
-            setAntiRag = makeToggleRow("Anti Ragdoll", false, function(on) State.antiRagdollEnabled=on; if on then startAntiRagdoll() else stopAntiRagdoll() end; if requestSave then requestSave() end end)
-setAntiDie = makeToggleRow("Anti Die", false, function(on) State.antiDieEnabled=on; if on then startAntiDie() else stopAntiDie() end; if requestSave then requestSave() end end)
-setAntiFling = makeToggleRow("Anti Fling", false, function(on) State.antiFlingEnabled=on; if on then startAntiFling() else stopAntiFling() end; if requestSave then requestSave() end end)
+            setAntiRag = makeToggleRow("Anti Ragdoll", State.antiRagdollEnabled, function(on) State.antiRagdollEnabled=on; if on then startAntiRagdoll() else stopAntiRagdoll() end; if requestSave then requestSave() end end)
+setAntiDie = makeToggleRow("Anti Die", State.antiDieEnabled, function(on) State.antiDieEnabled=on; if on then startAntiDie() else stopAntiDie() end; if requestSave then requestSave() end end)
+setAntiFling = makeToggleRow("Anti Fling", State.antiFlingEnabled, function(on) State.antiFlingEnabled=on; if on then startAntiFling() else stopAntiFling() end; if requestSave then requestSave() end end)
 toggleSetters["antiDie"] = setAntiDie
 toggleSetters["antiFling"] = setAntiFling
+            local setE01 = makeToggleRow("Anti E01", State.e01Enabled, function(on) State.e01Enabled=on; _G.E01FixerState.e01Enabled=on; if _G.E01_SetEnabled then _G.E01_SetEnabled(on) end; if requestSave then requestSave() end end)
+            toggleSetters["e01"] = setE01
 toggleSetters["antiRagdoll"] = setAntiRag
             toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
@@ -2734,12 +2704,87 @@ toggleSetters["antiRagdoll"] = setAntiRag
         local head=char:FindFirstChild("Head")
         if head then
             local oldBB=head:FindFirstChild("DuelsBB"); if oldBB then oldBB:Destroy() end
-            local bb=Instance.new("BillboardGui", head); bb.Name="DuelsBB"; bb.Size=UDim2.new(0,180,0,100); bb.StudsOffset=Vector3.new(0,3,0); bb.AlwaysOnTop=true
+            local bb=Instance.new("BillboardGui", head); bb.Name="DuelsBB"; bb.Size=UDim2.new(0,180,0,60); bb.StudsOffset=Vector3.new(0,3,0); bb.AlwaysOnTop=true
             local list=Instance.new("UIListLayout",bb); list.FillDirection=Enum.FillDirection.Vertical; list.SortOrder=Enum.SortOrder.LayoutOrder; list.VerticalAlignment=Enum.VerticalAlignment.Center; list.Padding=UDim.new(0,2)
             local speedBillLbl=Instance.new("TextLabel",bb); speedBillLbl.Name="SpeedBillLbl"; speedBillLbl.Size=UDim2.new(1,0,0,24); speedBillLbl.BackgroundTransparency=1; speedBillLbl.Text="0.0"; speedBillLbl.TextColor3=Color3.fromRGB(38,240,125); speedBillLbl.Font=Enum.Font.GothamBlack; speedBillLbl.TextScaled=true; speedBillLbl.TextStrokeTransparency=0.1; speedBillLbl.TextStrokeColor3=Color3.new(0,0,0); speedBillLbl.LayoutOrder=1
             local discordLbl=Instance.new("TextLabel",bb); discordLbl.Size=UDim2.new(1,0,0,22); discordLbl.BackgroundTransparency=1; discordLbl.Text="discord.gg/Duels"; discordLbl.TextColor3=Color3.fromRGB(100,255,100); discordLbl.Font=Enum.Font.GothamBold; discordLbl.TextScaled=true; discordLbl.TextStrokeTransparency=0.1; discordLbl.TextStrokeColor3=Color3.new(0,0,0); discordLbl.LayoutOrder=2
-            local ragTimerLbl=Instance.new("TextLabel",bb); ragTimerLbl.Name="RagdollTimerLbl"; ragTimerLbl.Size=UDim2.new(1,0,0,30); ragTimerLbl.BackgroundTransparency=1; ragTimerLbl.Text=""; ragTimerLbl.TextColor3=Color3.fromRGB(255,60,60); ragTimerLbl.Font=Enum.Font.GothamBlack; ragTimerLbl.TextScaled=true; ragTimerLbl.TextStrokeTransparency=0.1; ragTimerLbl.TextStrokeColor3=Color3.new(0,0,0); ragTimerLbl.LayoutOrder=3
         end
+    -- RAGDOLL TOP TIMER
+    do
+        local _rtActive=false
+        local _rtGui,_rtLbl=nil,nil
+        local function ensureGui()
+            local pg=LP:FindFirstChild("PlayerGui")
+            if not pg then return nil,nil end
+            if _rtGui and _rtGui.Parent then return _rtGui,_rtLbl end
+            local old=pg:FindFirstChild("RagdollTopTimerGui")
+            if old then old:Destroy() end
+            local sg=Instance.new("ScreenGui")
+            sg.Name="RagdollTopTimerGui"
+            sg.ResetOnSpawn=false
+            sg.IgnoreGuiInset=true
+            sg.DisplayOrder=200
+            sg.Parent=pg
+            local frame=Instance.new("Frame", sg)
+            frame.Size=UDim2.new(0,220,0,56)
+            frame.Position=UDim2.new(0.5,-110,0,16)
+            frame.BackgroundColor3=Color3.fromRGB(10,20,12)
+            frame.BackgroundTransparency=0.2
+            frame.BorderSizePixel=0
+            Instance.new("UICorner", frame).CornerRadius=UDim.new(0,12)
+            local stroke=Instance.new("UIStroke", frame)
+            stroke.Color=Color3.fromRGB(80,220,80)
+            stroke.Thickness=2
+            local lbl=Instance.new("TextLabel", frame)
+            lbl.Size=UDim2.new(1,0,1,0)
+            lbl.BackgroundTransparency=1
+            lbl.Text=""
+            lbl.TextColor3=Color3.fromRGB(80,220,80)
+            lbl.Font=Enum.Font.GothamBlack
+            lbl.TextScaled=true
+            _rtGui=sg; _rtLbl=lbl
+            return sg,lbl
+        end
+        local function startTopTimer()
+            if _rtActive then return end
+            _rtActive=true
+            task.spawn(function()
+                local t=3.0
+                while t>=0 do
+                    local _,lbl=ensureGui()
+                    if lbl then lbl.Text=string.format("%.1f",t); lbl.Visible=true; lbl.Parent.Visible=true end
+                    task.wait(0.1)
+                    t=math.round((t-0.1)*10)/10
+                end
+                local _,lbl=ensureGui()
+                if lbl then lbl.Text="STEAL!"; lbl.TextColor3=Color3.fromRGB(80,255,120) end
+                repeat task.wait(0.1) until (function()
+                    local c=LP.Character
+                    local hum=c and c:FindFirstChildOfClass("Humanoid")
+                    if not hum then return true end
+                    local st=hum:GetState()
+                    return st~=Enum.HumanoidStateType.Physics and st~=Enum.HumanoidStateType.Ragdoll and st~=Enum.HumanoidStateType.FallingDown
+                end)()
+                local _,lbl2=ensureGui()
+                if lbl2 then lbl2.Text=""; lbl2.Parent.Visible=false end
+                _rtActive=false
+            end)
+        end
+        local function startDetect(char)
+            if not char then return end
+            RunService.Heartbeat:Connect(function()
+                local hum=char and char:FindFirstChildOfClass("Humanoid")
+                if not hum then return end
+                local st=hum:GetState()
+                if st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown then
+                    startTopTimer()
+                end
+            end)
+        end
+        LP.CharacterAdded:Connect(function(c) task.wait(0.2); startDetect(c) end)
+        if LP.Character then startDetect(LP.Character) end
+    end
+
         stopAntiRagdoll()
         Steal.Data={}
         _rtTimerActive = false
@@ -3901,6 +3946,7 @@ end
                 aimbotKey = Keys.aimbot and Keys.aimbot.Name or "Unknown",
                 infJump = State.infJumpEnabled,
                 antiDrop = State.antiDropEnabled,
+                e01Enabled = State.e01Enabled,
                 antiRagdoll = State.antiRagdollEnabled,
                 antiDie = State.antiDieEnabled,
                 antiFling = State.antiFlingEnabled,
@@ -4067,7 +4113,7 @@ end
 
         local bools = {
             stackButtonsHidden="stackButtonsHidden", stackButtonsLocked="stackButtonsLocked",
-            infJump="infJumpEnabled", antiDrop="antiDropEnabled", antiRagdoll="antiRagdollEnabled",
+            infJump="infJumpEnabled", antiDrop="antiDropEnabled", e01Enabled="e01Enabled", antiRagdoll="antiRagdollEnabled",
             antiDie="antiDieEnabled", antiFling="antiFlingEnabled",
             medusaCounter="medusaCounterEnabled", batCounter="batCounterEnabled",
             autoStealEnabled="autoStealEnabled", autoSwing="autoSwingEnabled",
@@ -4162,6 +4208,7 @@ end
             elseif key=="stretchedRes" then stateValue=State.stretchedResEnabled
             elseif key=="nukeOpt" then stateValue=State.nukeOpt
             elseif key=="removeAcc" then stateValue=State.removeAcc
+            elseif key=="e01" then stateValue=State.e01Enabled
             elseif key=="tryardAnim" then stateValue=State.tryardAnimEnabled
             elseif key=="introEnabled" then stateValue=State.introEnabled
             elseif key=="hideButtons" then stateValue=State.stackButtonsHidden
@@ -4240,6 +4287,7 @@ end
                     end
                     if d.autoTP ~= nil then State.autoTPEnabled=d.autoTP; if toggleSetters["autoTP"] then toggleSetters["autoTP"](d.autoTP) end end
                     if d.autoTPHeight then State.autoTPHeight=d.autoTPHeight; if autoTPHeightBox then autoTPHeightBox.Text=tostring(d.autoTPHeight) end end
+                    if d.antiDrop ~= nil then State.antiDropEnabled=d.antiDrop; if toggleSetters["antiDrop"] then toggleSetters["antiDrop"](d.antiDrop) end end
                     if d.antiRagdoll ~= nil then State.antiRagdollEnabled=d.antiRagdoll; if toggleSetters["antiRagdoll"] then toggleSetters["antiRagdoll"](d.antiRagdoll) end end
                     if d.antiDie ~= nil then State.antiDieEnabled=d.antiDie; if toggleSetters["antiDie"] then toggleSetters["antiDie"](d.antiDie) end end
                     if d.antiFling ~= nil then State.antiFlingEnabled=d.antiFling; if toggleSetters["antiFling"] then toggleSetters["antiFling"](d.antiFling) end end
@@ -4253,6 +4301,12 @@ end
     -- Anti Ragdoll + Anti Die + Anti Fling persistence + save fix
     task.spawn(function()
         task.wait(1)
+        if State.antiDropEnabled then
+            pcall(function() stopAntiDrop() end)
+            task.wait(0.2)
+            pcall(function() startAntiDrop() end)
+            if toggleSetters["antiDrop"] then pcall(toggleSetters["antiDrop"], true) end
+        end
         if State.antiRagdollEnabled then
             pcall(function() stopAntiRagdoll() end)
             task.wait(0.2)
@@ -4277,6 +4331,124 @@ end
     startAutoSteal()
     print("[Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
+
+
+    -- E01 FIXER WITH TOGGLE + SAVING
+    do
+        local E01_wasCarrying=false
+        local E01_active=false
+        if _G.E01FixerState==nil then _G.E01FixerState={} end
+        if _G.E01FixerState.e01Enabled==nil then _G.E01FixerState.e01Enabled=true end
+        if State.e01Enabled==nil then State.e01Enabled=true end
+        local function E01_isCarrying()
+            if not State.e01Enabled then return false end
+            local char=LP.Character
+            if not char then return false end
+            for _,child in pairs(char:GetChildren()) do
+                local n=child.Name:lower()
+                if n:find("brainrot") or n:find("brain") or n:find("animal") or n:find("carry") or n:find("stolen") or n:find("held") or n:find("steal") then return true end
+            end
+            for attrName,attrValue in pairs(char:GetAttributes()) do
+                local n=attrName:lower()
+                if (n:find("carrying") or n:find("carry") or n:find("stealing") or n:find("isstealing") or n:find("hasbrainrot")) and attrValue==true then return true end
+            end
+            local hum=char:FindFirstChildOfClass("Humanoid")
+            if hum and hum.WalkSpeed>0 and hum.WalkSpeed<=25 and hum.WalkSpeed~=16 then return true end
+            return false
+        end
+        local function E01_start()
+            if E01_active then return end
+            if not State.e01Enabled then return end
+            E01_active=true
+            local pg=LP:FindFirstChild("PlayerGui")
+            if not pg then E01_active=false; return end
+            local old=pg:FindFirstChild("E01FixerUI")
+            if old then old:Destroy() end
+            local sg=Instance.new("ScreenGui")
+            sg.Name="E01FixerUI"
+            sg.IgnoreGuiInset=true
+            sg.ResetOnSpawn=false
+            sg.DisplayOrder=100
+            sg.Parent=pg
+            local container=Instance.new("Frame")
+            container.Size=UDim2.new(0,380,0,128)
+            container.Position=UDim2.new(0.5,-190,1,-150)
+            container.BackgroundTransparency=1
+            container.Parent=sg
+            local mainFrame=Instance.new("Frame")
+            mainFrame.Size=UDim2.new(1,0,1,0)
+            mainFrame.BackgroundColor3=Color3.fromRGB(255,240,248)
+            mainFrame.Parent=container
+            Instance.new("UICorner", mainFrame).CornerRadius=UDim.new(0,18)
+            local outline=Instance.new("UIStroke", mainFrame)
+            outline.Color=Color3.fromRGB(255,100,140)
+            outline.Thickness=7
+            local statusLabel=Instance.new("TextLabel")
+            statusLabel.Size=UDim2.new(0.6,0,0,24)
+            statusLabel.Position=UDim2.new(0,16,0,44)
+            statusLabel.BackgroundTransparency=1
+            statusLabel.Text="Don't pass"
+            statusLabel.Font=Enum.Font.GothamBold
+            statusLabel.TextSize=16
+            statusLabel.Parent=mainFrame
+            local timerLabel=Instance.new("TextLabel")
+            timerLabel.Size=UDim2.new(0.6,0,0,20)
+            timerLabel.Position=UDim2.new(0,16,0,68)
+            timerLabel.BackgroundTransparency=1
+            timerLabel.Text="10.0s remaining"
+            timerLabel.Parent=mainFrame
+            local progressBg=Instance.new("Frame")
+            progressBg.Size=UDim2.new(1,-32,0,8)
+            progressBg.Position=UDim2.new(0,16,1,-16)
+            progressBg.BackgroundColor3=Color3.fromRGB(255,210,225)
+            progressBg.Parent=mainFrame
+            Instance.new("UICorner", progressBg).CornerRadius=UDim.new(0,4)
+            local progressFill=Instance.new("Frame")
+            progressFill.Size=UDim2.new(1,0,1,0)
+            progressFill.BackgroundColor3=Color3.fromRGB(255,100,140)
+            progressFill.Parent=progressBg
+            Instance.new("UICorner", progressFill).CornerRadius=UDim.new(0,4)
+            local duration=10
+            local startTime=tick()
+            local conn; conn=RunService.Heartbeat:Connect(function()
+                local remaining=math.max(0, duration-(tick()-startTime))
+                local progress=remaining/duration
+                if mainFrame and mainFrame.Parent then
+                    if remaining>0 then
+                        statusLabel.Text="Don't pass"
+                        timerLabel.Text=string.format("%.1fs remaining", remaining)
+                        outline.Thickness=2+5*progress
+                        progressFill.Size=UDim2.new(progress,0,1,0)
+                    else
+                        conn:Disconnect()
+                        statusLabel.Text="✓ Pass"
+                        timerLabel.Text="All clear!"
+                        progressFill.Size=UDim2.new(1,0,1,0)
+                        task.wait(2.5)
+                        if sg.Parent then sg:Destroy() end
+                        E01_active=false
+                    end
+                end
+            end)
+        end
+        task.spawn(function()
+            while task.wait(0.1) do
+                local cur=E01_isCarrying()
+                if not E01_wasCarrying and cur then E01_start() end
+                if not E01_active then E01_wasCarrying=cur end
+            end
+        end)
+        _G.E01_SetEnabled=function(on)
+            State.e01Enabled=on
+            _G.E01FixerState.e01Enabled=on
+            if requestSave then requestSave() end
+            if not on then
+                local pg=LP:FindFirstChild("PlayerGui")
+                if pg and pg:FindFirstChild("E01FixerUI") then pg.E01FixerUI:Destroy() end
+                E01_active=false
+            end
+        end
+    end
 
 -- ============================================================
 -- SAFE MAIN EXECUTION - FIXED
@@ -4348,68 +4520,5 @@ Players.PlayerAdded:Connect(function(player)
 end)
 end)()
 
--- ============ STANDALONE AIMBOT MODE SELECTOR (ALWAYS VISIBLE) ============
-task.spawn(function()
-    task.wait(2)
-    local gui = game:GetService("CoreGui"):FindFirstChild("SakuraModeSelectorGUI")
-    if gui then gui:Destroy() end
-    local sg = Instance.new("ScreenGui")
-    sg.Name = "SakuraModeSelectorGUI"
-    sg.ResetOnSpawn = false
-    sg.Parent = game:GetService("CoreGui")
-    local frame = Instance.new("Frame", sg)
-    frame.Size = UDim2.new(0, 360, 0, 50)
-    frame.Position = UDim2.new(0.5, -180, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(14,22,16)
-    frame.BorderSizePixel = 0
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,10)
-    local st = Instance.new("UIStroke", frame)
-    st.Color = Color3.fromRGB(30,132,73)
-    st.Thickness = 1.5
-    local title = Instance.new("TextLabel", frame)
-    title.Size = UDim2.new(1,0,0,16)
-    title.Position = UDim2.new(0,0,0,2)
-    title.BackgroundTransparency=1
-    title.Text = "AIMBOT: "..(State.aimbotMode or "original"):upper()
-    title.TextColor3 = Color3.fromRGB(120,255,140)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 11
-    local holder = Instance.new("Frame", frame)
-    holder.Size = UDim2.new(1,-10,0,28)
-    holder.Position = UDim2.new(0,5,0,18)
-    holder.BackgroundTransparency=1
-    local l = Instance.new("UIListLayout", holder)
-    l.FillDirection = Enum.FillDirection.Horizontal
-    l.Padding = UDim.new(0,6)
-    local function mkBtn(txt, mode)
-        local b = Instance.new("TextButton", holder)
-        b.Size = UDim2.new(0.33,-4,1,0)
-        local active = State.aimbotMode==mode
-        b.BackgroundColor3 = active and Color3.fromRGB(30,132,73) or Color3.fromRGB(25,35,28)
-        b.Text = txt
-        b.TextColor3 = Color3.new(1,1,1)
-        b.Font = Enum.Font.GothamBold
-        b.TextSize = 11
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0,6)
-        b.MouseButton1Click:Connect(function()
-            State.aimbotMode = mode
-            title.Text = "AIMBOT: "..mode:upper()
-            for _, ch in ipairs(holder:GetChildren()) do
-                if ch:IsA("TextButton") then
-                    local sel = (ch.Text==txt)
-                    ch.BackgroundColor3 = sel and Color3.fromRGB(30,132,73) or Color3.fromRGB(25,35,28)
-                end
-            end
-            if requestSave then requestSave() end
-            if State.batAimbotToggled then
-                if stopBatAimbot then stopBatAimbot() end
-                task.wait(0.1)
-                if startBatAimbot then pcall(startBatAimbot) end
-            end
-        end)
-        return b
-    end
-    mkBtn("ORIGINAL","original")
-    mkBtn("ENVY V2","envy")
-    mkBtn("SAKURA","sakura")
-end)
+
+-- TOP SELECTOR PERMANENTLY REMOVED - END OF FILE CLEANED
