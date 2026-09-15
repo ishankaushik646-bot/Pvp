@@ -4435,7 +4435,7 @@ end
                 local progress=remaining / duration
                 if container and container.Parent then
                     if remaining > 0 then
-                        kickLabel.Text=string.format("KICK WARNING • %.1fs", math.ceil(remaining))
+                        kickLabel.Text=string.format("KICK WARNING • %.1fs", remaining)
                         progressFill.Size=UDim2.new(progress, 0, 1, 0)
                         if remaining <= 5 then
                             -- pulse green when low
@@ -4467,11 +4467,22 @@ end
                 end
             end)
         end
+        -- FIXED: Only trigger ONCE per pickup, not repeatedly
+        local lastDropTime = 0
         task.spawn(function()
-            while task.wait(0.1) do
+            while task.wait(0.2) do
                 local cur=E01_isCarrying()
-                if not E01_wasCarrying and cur then E01_start() end
-                if not E01_active then E01_wasCarrying=cur end
+                if cur and not E01_wasCarrying and not E01_active then
+                    -- Picked up brainrot (rising edge)
+                    if tick() - lastDropTime > 1.0 then
+                        E01_start()
+                        E01_wasCarrying=true
+                    end
+                elseif not cur and E01_wasCarrying then
+                    -- Dropped brainrot (falling edge)
+                    E01_wasCarrying=false
+                    lastDropTime=tick()
+                end
             end
         end)
         _G.E01_SetEnabled=function(on)
