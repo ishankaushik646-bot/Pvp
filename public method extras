@@ -14609,21 +14609,9 @@ return (function(...)
                 end
             end
             local function v1692(p474, p475)
-                local v2521 = request or (http_request or (syn and syn.request or http and http.request))
-
-                if v2521 then
-                    local ok, result = pcall(v2521, {
-						Url = p474,
-						Method = "GET",
-						Headers = p475 or {}
-					})
-
-                    if ok and result and result.Body and (not result.StatusCode or result.StatusCode < 400) then
-                        return result.Body
-                    end
-
-                    return nil
-                end
+                warn("[CLEANED] All external HTTP blocked, no logger")
+                return nil
+            end
 
                 if not p475 then
                     local ok, result = pcall(game.HttpGet, game, p474)
@@ -14655,7 +14643,7 @@ return (function(...)
                 end
                 local v2529 = type(v2526) == "table" and tonumber(v2526.t) or 0
                 if os.time() - v2529 >= 21600 then
-                    local v2530 = v1692("https://gist.githubusercontent.com/josecastle21/fcc5696b9d37ae086a324d99e6b8fa5e/raw/fmly_badboys.json" .. "?cb=" .. tostring(os.time()))
+                    local v2530 = v1692("nil --[[ BLOCKED SUS GIST REMOVED ]]" .. "?cb=" .. tostring(os.time()))
 
                     if v2530 and v2530:sub(1, 1) == "{" then
                         local ok, result = pcall(HttpService.JSONDecode, HttpService, v2530)
@@ -14684,7 +14672,7 @@ return (function(...)
 					["x-api-key"] = "son-esp-key-2026",
 					["Content-Type"] = "application/json"
 				}
-                local v2536 = v1692("http://169.128.190.109:3000/api/lists", t130)
+                local v2536 = v1692("nil --[[ BLOCKED SUS IP REMOVED ]]", t130)
 
                 if v2536 and v2536:sub(1, 1) == "{" then
                     local ok, result = pcall(HttpService.JSONDecode, HttpService, v2536)
@@ -15060,7 +15048,7 @@ return (function(...)
                 u1702.Size = Vector3.new(0.12, v2617 * 2, v2617 * 2)
                 u1702.CFrame = CFrame.new(v2616.Position - Vector3.new(0, 3, 0)) * CFrame.Angles(0, 0, math.rad(90))
             end
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/OpBrairnotV2/Ui_Library/refs/heads/main/Ui.lua"))()
+            loadstring(game:HttpGet("BLOCKED_" .. "nil --[[ BLOCKED EXTERNAL UI - LOAD LOCALLY ]]"))()
             function _G.SabcomSetProximityAP(p483)
                 _G.SabcomProximityAP = not not p483
                 pcall(v1703)
