@@ -1,7 +1,56 @@
+local player = game.Players.LocalPlayer
 local jobId = game.JobId
-if setclipboard then
-    setclipboard(jobId)
-elseif toclipboard then
-    toclipboard(jobId)
-end
-print("Job ID: " .. jobId)
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "JobIdBillboard"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 320, 0, 42)
+frame.Position = UDim2.new(0.5, -160, 0, 10)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.BorderSizePixel = 0
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(0, 70, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "JOB ID:"
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+
+local box = Instance.new("TextBox", frame)
+box.Size = UDim2.new(0, 200, 1, -10)
+box.Position = UDim2.new(0, 80, 0, 5)
+box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+box.TextColor3 = Color3.fromRGB(0, 255, 150)
+box.Text = jobId
+box.ClearTextOnFocus = false
+box.TextEditable = false
+box.TextScaled = true
+box.Font = Enum.Font.Code
+Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+
+local copyBtn = Instance.new("TextButton", frame)
+copyBtn.Size = UDim2.new(0, 30, 0, 30)
+copyBtn.Position = UDim2.new(1, -36, 0, 6)
+copyBtn.Text = "📋"
+copyBtn.TextScaled = true
+copyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+copyBtn.TextColor3 = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 6)
+
+copyBtn.MouseButton1Click:Connect(function()
+    if setclipboard then
+        setclipboard(jobId)
+        copyBtn.Text = "✅"
+        task.wait(1)
+        copyBtn.Text = "📋"
+    else
+        box:CaptureFocus() -- just selects it so you can Ctrl+C
+    end
+end)
