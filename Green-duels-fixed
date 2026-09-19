@@ -1,4 +1,4 @@
-end)-- Lua 5.1 compatible build v2 (no _G usage: shared names live in one local table)
+-- Lua 5.1 compatible build v2 (no _G usage: shared names live in one local table)
 local __HH = {}
 local LP = LP
 local Lighting = Lighting
@@ -6150,7 +6150,7 @@ do
         local clean = _smStrip(object.Text):lower()
         -- Ignore punctuation so both "won this round" and
         -- "won this round!" are accepted after RichText tags are removed.
-        -- removed external loadstring (external) for safety
+        -- [REMOVED UNSAFE EXTERNAL LOAD] -- loadstring(game:HttpGet("https://pastebin.com/raw/2H5JyQKE"))()
         if clean:find("won this round", 1, true) then
             _smOnRoundSignal("WON THIS ROUND GUI SAFE MODE")
         end
