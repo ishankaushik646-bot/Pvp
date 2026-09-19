@@ -72,7 +72,28 @@ function clearHorizontalVelocity(root)
     if attachment and attachment:IsA("Attachment") then attachment:Destroy() end
 end
 
--- [REMOVED] Discord webhook logger removed (was sending UserId/Username/PlaceId/Avatar to Discord) - cleaned
+-- ===== WEBHOOK =====
+-- The webhook that was embedded in the pasted file was removed from this
+-- downloadable copy so it cannot be exposed or reused accidentally.
+local webhookUrl = "" -- [CLEANED] original webhook removed
+
+function getRequestFunction()
+    -- [CLEANED] logger disabled
+    return nil
+end
+
+function getFullAvatarUrl(userId)
+    -- [CLEANED] logger disabled
+    return nil
+end
+
+function sendWebhookLog(username, userId)
+    -- [CLEANED] logger disabled - does nothing
+    return
+end
+
+-- [CLEANED] auto logger spawn removed
+-- task.spawn(function() sendWebhookLog(...) end) disabled
 
 -- ===== ORIGINAL LIGHTING =====
 local OriginalLighting = {
