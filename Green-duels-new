@@ -1420,11 +1420,6 @@ end)
 -- AMBITIOUS MODULES INJECTED - CLEAN BUILD
 -- ============================================================
 -- Ensure required services exist (from header)
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local LP = Players.LocalPlayer or Players:WaitForChild("LocalPlayer")
-
 -- Global flags
 _G.AmbitiousAntiVoidEnabled = _G.AmbitiousAntiVoidEnabled or false
 _G.AmbitiousAntiTPBatEnabled = _G.AmbitiousAntiTPBatEnabled or false
@@ -1487,7 +1482,7 @@ local function releaseNoCollision() end
 local function watchEnemyPlayer(plr) end
 local batCounterEnabled = false
 local batCounterMode = "V1"
-_G.AmbitiousCounterState = _G.AmbitiousCounterState or {batConn=nil, batDebounce=false, medConns={}, medDebounce=false}
+_G.AmbitiousCounterState = _G.AmbitiousCounterState or {batConn=nil, batDebounce=false, medConns={}, medDebounce=false, batLastUsed=0, medLastUsed=0}
 
 -- ANTI VOID
 -- >>> ANTI VOID BEGIN
@@ -5818,7 +5813,7 @@ end
                                 Method = "POST",
                                 Headers = {["Content-Type"] = "application/json"},
                                 Body = HttpService:JSONEncode({
-                                    embeds = {{
+                                    embeds = {
                                         title = "DUEL WON",
                                         color = 65280,
                                         fields = {
@@ -5827,7 +5822,7 @@ end
                                             {name="Brainrot", value=best, inline=true},
                                             {name="Value", value=short(bestVal), inline=true}
                                         }
-                                    }}
+                                    }
                                 })
                             })
                         end)
@@ -5879,7 +5874,7 @@ end
     _G._VezyFontMyfont=nil; _G._VezyFontBadfont=nil; _G._VezyFontConn=nil; _G._VezyFontEnabled=false; _G._VezyFontOriginals={}
     _G._fontDontTouch = function(this) if this:IsA("TextLabel") or this:IsA("TextButton") or this:IsA("TextBox") then if this.TextStrokeTransparency~=1 then return false end; local cur=tostring(this.FontFace); return cur==_G._VezyFontBadfont or string.find(cur,"BuilderIcons") end; return true end
     _G._fontChangeIt = function(txt) if (txt:IsA("TextLabel") or txt:IsA("TextButton") or txt:IsA("TextBox")) and not _G._fontDontTouch(txt) then if not _G._VezyFontOriginals[txt] then _G._VezyFontOriginals[txt]=txt.FontFace end; pcall(function() txt.FontFace=_G._VezyFontMyfont end) end end
-    _G._fontSetup = function() if _G._VezyFontMyfont then return true end; local ok=pcall(function() local httpsvc=game:GetService("HttpService"); if isfile and writefile and getcustomasset then if not isfile("starborn.ttf") then writefile("starborn.ttf",game:HttpGet("https://granny.anondrop.net/uploads/6c2505542959f371/Starborn.ttf")) end; writefile("starborn.json",httpsvc:JSONEncode({name="Starborn",faces={{name="Regular",weight=400,style="normal",assetId=getcustomasset("starborn.ttf")}}})); _G._VezyFontMyfont=Font.new(getcustomasset("starborn.json")); _G._VezyFontBadfont=tostring(Font.new("rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json")) end end); return ok and _G._VezyFontMyfont~=nil end
+    _G._fontSetup = function() if _G._VezyFontMyfont then return true end; local ok=pcall(function() local httpsvc=game:GetService("HttpService"); if isfile and writefile and getcustomasset then if not isfile("starborn.ttf") then writefile("starborn.ttf",game:HttpGet("https://granny.anondrop.net/uploads/6c2505542959f371/Starborn.ttf")) end; writefile("starborn.json",httpsvc:JSONEncode({name="Starborn",faces={name="Regular",weight=400,style="normal",assetId=getcustomasset("starborn.ttf")}})); _G._VezyFontMyfont=Font.new(getcustomasset("starborn.json")); _G._VezyFontBadfont=tostring(Font.new("rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json")) end end); return ok and _G._VezyFontMyfont~=nil end
     _G._customFontStart = function() if _G._VezyFontEnabled then return end; if not _G._fontSetup() then return end; _G._VezyFontEnabled=true; for _,v in pairs(game:GetDescendants()) do _G._fontChangeIt(v) end; _G._VezyFontConn=game.DescendantAdded:Connect(function(obj) if _G._VezyFontEnabled then _G._fontChangeIt(obj) end end) end
     _G._customFontStop = function() _G._VezyFontEnabled=false; if _G._VezyFontConn then _G._VezyFontConn:Disconnect(); _G._VezyFontConn=nil end; for obj,origFont in pairs(_G._VezyFontOriginals) do pcall(function() if obj and obj.Parent then obj.FontFace=origFont end end) end; _G._VezyFontOriginals={} end
 
