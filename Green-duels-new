@@ -481,10 +481,7 @@ do
   end)
 end
 -- <<< ANTI VOID END
-
--- Duels wrapper for Anti Void API
 _G.DuelsAntiVoid = _G.AmbitiousAntiVoid
-_G.DuelsAntiVoidEnabled = _G.AmbitiousAntiVoidEnabled
 
 
 -- FORCE KILL TOP AIMBOT SELECTOR AT START
@@ -2440,6 +2437,14 @@ local function Main()
                 requestSave()
             end)
             toggleSetters["safeMode"] = safeModeToggle
+            makeGap(2); makeSectionHeader("Anti Void [NEW]"); makeGap(2)
+            local antiVoidToggle = makeToggleRow("ANTI VOID", _G.AmbitiousAntiVoidEnabled == true, function(on)
+                if _G.AmbitiousAntiVoid then _G.AmbitiousAntiVoid.setEnabled(on) end
+                if _G.DuelsAntiVoid then _G.DuelsAntiVoid.setEnabled(on) end
+                _G.DuelsAntiVoidEnabled = on
+                print("[Duels] Anti Void:", on and "ON" or "OFF")
+            end)
+            toggleSetters["antiVoid"] = antiVoidToggle
         end)
         page.LayoutOrder = 2
     end
