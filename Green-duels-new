@@ -1414,1945 +1414,6 @@ end)
 -- MAIN FUNCTION (UI and everything else)
 -- ============================================================
 
-
-
--- ============================================================
--- AMBITIOUS MODULES INJECTED - CLEAN BUILD
--- ============================================================
--- Ensure required services exist (from header)
--- Global flags
-_G.AmbitiousAntiVoidEnabled = _G.AmbitiousAntiVoidEnabled or false
-_G.AmbitiousAntiTPBatEnabled = _G.AmbitiousAntiTPBatEnabled or false
-_G.AmbitiousAntiTPBatSpam = _G.AmbitiousAntiTPBatSpam or false
-_G.AmbitiousAntiTPBatVersion = _G.AmbitiousAntiTPBatVersion or 1
-_G.AmbitiousTPBatVersion = _G.AmbitiousTPBatVersion or 1
-_G.AmbitiousTPBatOn = _G.AmbitiousTPBatOn or false
-_G.AmbitiousTPBatSilent = false
-_G.AmbitiousBatCounterV2On = false
-_G.AmbitiousFloatOn = false
-
--- Shared helpers
-local function getClosestEnemy()
-    local char = LP.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-    local myPos = hrp.Position
-    local best, bestDist = nil, math.huge
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LP then
-            local ec = plr.Character
-            local ehrp = ec and ec:FindFirstChild("HumanoidRootPart")
-            local ehum = ec and ec:FindFirstChildOfClass("Humanoid")
-            if ehrp and ehum and ehum.Health > 0 then
-                local pos = ehrp.Position
-                if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.posFor then
-                    pos = _G.AmbitiousAntiVoid.posFor(plr, pos)
-                end
-                local d = (pos - myPos).Magnitude
-                if d < bestDist then
-                    bestDist = d
-                    best = plr
-                end
-            end
-        end
-    end
-    return best
-end
-
-local function trySwingBat()
-    local char = LP.Character
-    if not char then return end
-    for _, tool in ipairs(char:GetChildren()) do
-        if tool:IsA("Tool") and string.lower(tool.Name):find("bat") then
-            pcall(function() tool:Activate() end)
-            return
-        end
-    end
-end
-
-local tpBatEnabled = false
-local tpBatLoopConn = nil
-local tpBatRagdollConn = nil
-local tpBatResetConn = nil
-local tpBatPlayerConns = {}
-local tpBatCameraLockEnabled = false
-local tpBatAutoSwingEnabled = false
-local function acquireNoCollision() end
-local function releaseNoCollision() end
-local function watchEnemyPlayer(plr) end
-local batCounterEnabled = false
-local batCounterMode = "V1"
-_G.AmbitiousCounterState = _G.AmbitiousCounterState or {batConn=nil, batDebounce=false, medConns={}, medDebounce=false, batLastUsed=0, medLastUsed=0}
-
--- ANTI VOID
--- >>> ANTI VOID BEGIN
--- ============================================================
--- ANTI VOID
--- Sempre attivo dall'esecuzione. Un thread per giocatore tiene 0.07s
--- di storico dei CFrame: se in quella finestra copre 150 stud totali
--- oppure 100 stud di sola Y, e' un teletrasporto. La posizione buona e'
--- quella del campione piu' vecchio dello storico, e il TP viene contato
--- solo se partiva dalla Safe Zone. Da li' in poi TP Bat, aimbot V1/V2,
--- Bat Counter, Look At Enemy, ESP e tracker puntano al punto d'origine.
--- ============================================================
-do
-  -- Limiti di coordinate della Safe Zone
-  local MAP_BOUNDS = {
-    MinX = -535.7,
-    MaxX = -422.0,
-    MinY = -7.9,
-    MaxY = 115.0,
-    MinZ = -72.0,
-    MaxZ = 193.3,
-  }
-
-  -- Finestra UNICA da 0.07s per tutti gli assi:
-  --   150 stud di distanza totale (X/Z/Y)  oppure  100 stud di sola Y
-  local TP_TOTAL   = 150
-  local TP_DELTA_Y = 100
-  local WINDOW     = 0.07
-  -- Il fantasma non sparisce rientrando nella zona: sparisce quando il
-  -- giocatore ha camminato WALK_CLEAR stud ORIZZONTALI dentro la zona.
-  -- La Y e' esclusa dal conteggio: cadere o salire non lo cancella.
-  local WALK_CLEAR = 15
-  local STEP_MAX   = 50   -- oltre questo non e' camminata, non si accumula
-
-  local function enabled() return _G.AmbitiousAntiVoidEnabled == true end
-
-  local ghost   = setmetatable({}, { __mode = "k" })  -- [player] = posizione d'origine
-  local ghostCF = setmetatable({}, { __mode = "k" })  -- [player] = CFrame d'origine
-  local isOutOf = setmetatable({}, { __mode = "k" })  -- [player] = bool
-  local tracked = setmetatable({}, { __mode = "k" })  -- [player] = true (thread gia' avviato)
-
-  local function isWithinBounds(pos)
-    if typeof(pos) ~= "Vector3" then return false end
-    return pos.X >= MAP_BOUNDS.MinX and pos.X <= MAP_BOUNDS.MaxX
-       and pos.Y >= MAP_BOUNDS.MinY and pos.Y <= MAP_BOUNDS.MaxY
-       and pos.Z >= MAP_BOUNDS.MinZ and pos.Z <= MAP_BOUNDS.MaxZ
-  end
-
-  -- Richiamata SOLO quando un teleport viene confermato
-  local function onTeleportDetected(player, originCFrame)
-    isOutOf[player] = true
-    ghostCF[player] = originCFrame
-    ghost[player]   = originCFrame.Position
-  end
-
-
-  -- ============================================================
-  -- RESCUE (rete di sicurezza per LP)
-  -- Se LP finisce fuori dalla Safe Zone (void part assente, fling,
-  -- micro-bug) viene riportato all'ultima posizione sicura a terra.
-  -- Attivo solo quando Anti Void e' acceso. Cooldown zero: interviene
-  -- ad ogni Heartbeat finche' LP non e' rientrato nella zona.
-  -- ============================================================
-  local _rescueLastSafePos = nil   -- ultima pos a terra dentro la zona
-  local _rescueSpawnOrigin = nil   -- prima pos sicura rilevata all'accensione
-  local _rescueLastRescue  = 0     -- os.clock() dell'ultimo rescue
-  local RESCUE_COOLDOWN    = 0     -- istantaneo (come in Ambitious_2_)
-  local RESCUE_UPDATE_INT  = 0.1   -- ogni quanto aggiornare il checkpoint
-  local _rescueLastUpdate  = 0
-
-  local function _rescueUpdateCheckpoint()
-    local c   = LP.Character
-    local hrp = c and c:FindFirstChild("HumanoidRootPart")
-    local hum = c and c:FindFirstChildOfClass("Humanoid")
-    if not (hrp and hum) then return end
-    local now = os.clock()
-    if now - _rescueLastUpdate < RESCUE_UPDATE_INT then return end
-    _rescueLastUpdate = now
-    local pos = hrp.Position
-    if not _rescueSpawnOrigin and isWithinBounds(pos) then
-      _rescueSpawnOrigin = pos
-    end
-    -- salva checkpoint solo se e' a terra (non in aria) e dentro la zona
-    if hum.FloorMaterial ~= Enum.Material.Air and isWithinBounds(pos) then
-      _rescueLastSafePos = pos
-    end
-  end
-
-  local function _rescueTryRescue()
-    local c   = LP.Character
-    local hrp = c and c:FindFirstChild("HumanoidRootPart")
-    if not (hrp and hrp.Parent) then return end
-    if isWithinBounds(hrp.Position) then return end
-    local now = os.clock()
-    if now - _rescueLastRescue < RESCUE_COOLDOWN then return end
-    _rescueLastRescue = now
-    local dest = _rescueLastSafePos or _rescueSpawnOrigin
-    if dest and isWithinBounds(dest) then
-      pcall(function()
-        hrp.AssemblyLinearVelocity  = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        hrp.CFrame = CFrame.new(dest + Vector3.new(0, 3, 0))
-      end)
-    end
-  end
-
-  -- Heartbeat dedicato al rescue LP. Si registra una sola volta
-  -- e controlla enabled() ogni frame: zero overhead quando spento.
-  RunService.Heartbeat:Connect(function()
-    if not enabled() then return end
-    _rescueUpdateCheckpoint()
-    _rescueTryRescue()
-  end)
-
-  -- Resetta il checkpoint al respawn di LP: la nuova vita riparte da zero
-  LP.CharacterAdded:Connect(function()
-    _rescueLastSafePos = nil
-    _rescueSpawnOrigin = nil
-    _rescueLastRescue  = 0
-    _rescueLastUpdate  = 0
-  end)
-  -- ============================================================
-  -- FINE RESCUE
-  -- ============================================================
-
-  local function trackPlayer(player)
-    if player == LP then return end
-    if tracked[player] then return end
-    tracked[player] = true
-
-    local history      = {}
-    local walkedXZ     = 0     -- spostamento orizzontale accumulato a piedi
-    local lastCheckPos = nil
-
-    task.spawn(function()
-      while player and player.Parent do
-        -- Poll passivo finche' l'Anti Void e' spento: nessun overhead.
-        -- Il giocatore e' gia' in tracked, quindi se viene acceso basta
-        -- uscire dal poll e il ciclo attivo riparte immediatamente.
-        if not enabled() then
-          -- Resetta lo stato in modo che la prima rilevazione sia pulita
-          isOutOf[player] = false
-          history      = {}
-          walkedXZ     = 0
-          lastCheckPos = nil
-          task.wait(0.5)
-        else
-          local char = player.Character
-          local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-          local hum  = char and char:FindFirstChildOfClass("Humanoid")
-
-          if hrp and hum and hum.Health > 0 then
-            local now = tick()
-            local currentCFrame = hrp.CFrame
-            local currentPos = currentCFrame.Position
-
-            if isOutOf[player] then
-              -- FASE 1: fantasma attivo, si misura solo la camminata X/Z
-              if lastCheckPos then
-                local moveVector = currentPos - lastCheckPos
-                local moveXZ = Vector3.new(moveVector.X, 0, moveVector.Z).Magnitude
-                if moveXZ < STEP_MAX and isWithinBounds(currentPos) then
-                  walkedXZ = walkedXZ + moveXZ
-                end
-              end
-              lastCheckPos = currentPos
-
-              if walkedXZ >= WALK_CLEAR then
-                isOutOf[player] = false
-                ghost[player]   = currentPos
-                ghostCF[player] = currentCFrame
-                history      = {}
-                walkedXZ     = 0
-                lastCheckPos = nil
-              end
-            else
-              -- FASE 2: nessun fantasma, si cerca il teletrasporto
-              walkedXZ     = 0
-              lastCheckPos = currentPos
-              ghost[player]   = currentPos
-              ghostCF[player] = currentCFrame
-
-              table.insert(history, {time = now, cframe = currentCFrame})
-              while #history > 0 and (now - history[1].time) > WINDOW do
-                table.remove(history, 1)
-              end
-
-              local oldest = history[1]
-              if oldest then
-                local totalDistance = (currentPos - oldest.cframe.Position).Magnitude
-                local deltaY = math.abs(currentPos.Y - oldest.cframe.Position.Y)
-
-                if totalDistance >= TP_TOTAL or deltaY >= TP_DELTA_Y then
-                  local refCFrame = oldest.cframe
-                  local refPos = refCFrame.Position
-                  local studsTraveledVector = currentPos - refPos
-                  local exactOriginPos = currentPos - studsTraveledVector
-                  local exactCFrame = CFrame.new(exactOriginPos) * (refCFrame - refCFrame.Position)
-
-                  if isWithinBounds(exactOriginPos) then
-                    onTeleportDetected(player, exactCFrame)
-                  end
-                  history = {}
-                end
-              end
-            end
-          else
-            -- morto o senza character: niente fantasma
-            isOutOf[player] = false
-            history      = {}
-            walkedXZ     = 0
-            lastCheckPos = nil
-          end
-          RunService.Heartbeat:Wait()
-        end
-      end
-      tracked[player] = nil
-    end)
-  end
-
-  Players.PlayerAdded:Connect(trackPlayer)
-
-  -- I thread partono all'accensione e muoiono allo spegnimento: da spento
-  -- il modulo non tiene niente in esecuzione.
-  local function startAll()
-    for _, plr in ipairs(Players:GetPlayers()) do trackPlayer(plr) end
-  end
-
-  local function stopAll()
-    for plr in pairs(isOutOf) do isOutOf[plr] = false end
-  end
-
-  local function posFor(player, rawPos)
-    if not player or not enabled() then return rawPos, false end
-    if isOutOf[player] then
-      local g = ghost[player]
-      if g then return g, true end
-    end
-    return rawPos, false
-  end
-
-  -- Come sopra ma partendo da una BasePart del nemico
-  local function posForPart(part, rawPos)
-    if not part then return rawPos, false end
-    local model = part:FindFirstAncestorOfClass("Model")
-    local player = model and Players:GetPlayerFromCharacter(model)
-    return posFor(player, rawPos or part.Position)
-  end
-
-  _G.AmbitiousAntiVoidEnabled = _G.AmbitiousAntiVoidEnabled == true
-
-  -- Avvia subito un thread per ogni giocatore gia' presente.
-  -- I thread fanno poll passivo se Anti Void e' spento, tracking attivo
-  -- se e' acceso: nessun giocatore viene perso indipendentemente dallo stato.
-  startAll()
-
-  _G.AmbitiousAntiVoid = {
-    setEnabled = function(on)
-      on = on and true or false
-      local was = _G.AmbitiousAntiVoidEnabled == true
-      _G.AmbitiousAntiVoidEnabled = on
-      if on and not was then
-        -- Per sicurezza: aggiunge thread per giocatori entrati nel frattempo
-        startAll()
-      elseif (not on) and was then
-        stopAll()
-      end
-    end,
-    isEnabled  = function() return _G.AmbitiousAntiVoidEnabled == true end,
-    bounds     = MAP_BOUNDS,
-    posFor     = posFor,
-    posForPart = posForPart,
-    isOut      = function(player) return player and isOutOf[player] == true end,
-    ghostOf    = function(player) return player and ghost[player] or nil end,
-  }
-
-  -- ---------- REPLICA ESP SULLA POSIZIONE FANTASMA ----------
-  -- Al TP si congela una copia del corpo sul CFrame d'origine calcolato
-  -- dal tracker, con lo stesso contorno e overhead dell'ESP. L'ESP vero
-  -- viene nascosto, cosi' non lo segue nel void.
-  -- NB: ghostCF e' quello dichiarato sopra dal tracker, non ridichiararlo
-  -- qui o la replica leggerebbe una tabella sempre vuota.
-  local replicas   = {}
-  local ghostFolder = nil
-
-  local function ensureFolder()
-    if ghostFolder and ghostFolder.Parent then return ghostFolder end
-    ghostFolder = Instance.new("Folder")
-    ghostFolder.Name = "AmbitiousAntiVoid"
-    ghostFolder.Parent = workspace
-    return ghostFolder
-  end
-
-  -- Mostra o nasconde l'ESP reale del nemico
-  local function setRealESP(char, visible)
-    if not char then return end
-    local hl = char:FindFirstChild("AmbitiousHubESP")
-    if hl then pcall(function() hl.Enabled = visible end) end
-    local head = char:FindFirstChild("Head")
-    local tag = head and head:FindFirstChild("AmbitiousHubESPTag")
-    if tag then pcall(function() tag.Enabled = visible end) end
-  end
-
-  local function clearReplica(plr)
-    local r = replicas[plr]
-    if r then pcall(function() r:Destroy() end) end
-    replicas[plr] = nil
-  end
-
-  local function buildReplica(plr, char, cf)
-    clearReplica(plr)
-    -- ESP spento: non si crea niente. Il resto (TP Bat, aimbot, tracker,
-    -- Look At Enemy) continua a funzionare sulla posizione fantasma.
-    if not char:FindFirstChild("AmbitiousHubESP") then return end
-    local ok, clone = pcall(function()
-      char.Archivable = true
-      return char:Clone()
-    end)
-    if not ok or not clone then return end
-
-    -- Congela la copia: niente script, niente fisica, niente collisioni
-    for _, d in ipairs(clone:GetDescendants()) do
-      if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("Humanoid") then
-        pcall(function() d:Destroy() end)
-      elseif d:IsA("BasePart") then
-        d.Anchored   = true
-        d.CanCollide = false
-        d.CanQuery   = false
-        d.CanTouch   = false
-      end
-    end
-    clone.Name = "GhostReplica_" .. tostring(plr.Name)
-    clone.Parent = ensureFolder()
-    pcall(function() clone:PivotTo(cf) end)
-
-    -- L'ESP e il suo overhead sono figli del personaggio, quindi la copia
-    -- se li porta dietro identici e congelati sull'ultimo valore.
-    local hl = clone:FindFirstChild("AmbitiousHubESP")
-    if hl then pcall(function() hl.Enabled = true end) end
-
-    local cloneHead = clone:FindFirstChild("Head")
-    local tag = cloneHead and cloneHead:FindFirstChild("AmbitiousHubESPTag")
-    if tag then
-      pcall(function() tag.Enabled = true end)
-      -- scritta VOID sotto la velocita', al posto dove stava il nome
-      local box = tag:FindFirstChildOfClass("Frame") or tag
-      local vl = Instance.new("TextLabel")
-      vl.Name = "VoidTag"
-      vl.Size = UDim2.new(1, -10, 0, 16)
-      vl.Position = UDim2.new(0, 5, 0, 19)
-      vl.BackgroundTransparency = 1
-      vl.TextColor3 = Color3.fromRGB(255, 255, 255)
-      vl.Font = Enum.Font.GothamBlack
-      vl.TextSize = 16
-      vl.TextStrokeTransparency = 0.4
-      vl.Text = "VOID"
-      vl.Parent = box
-    end
-
-    replicas[plr] = clone
-  end
-
-  -- Repliche ESP: lo stato lo tiene gia' il thread di tracciamento
-  local lastMarkerTick = 0
-  RunService.Heartbeat:Connect(function()
-    local now = os.clock()
-    if now - lastMarkerTick < 0.1 then return end
-    lastMarkerTick = now
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-      if plr ~= LP then
-        local c   = plr.Character
-        local hrp = c and c:FindFirstChild("HumanoidRootPart")
-        local hum = c and c:FindFirstChildOfClass("Humanoid")
-        local out = enabled() and (hrp ~= nil) and (hum ~= nil) and hum.Health > 0 and isOutOf[plr] == true
-        if out and ghostCF[plr] then
-          setRealESP(c, false)
-          if not replicas[plr] or not replicas[plr].Parent then
-            buildReplica(plr, c, ghostCF[plr])
-          end
-        else
-          if replicas[plr] then
-            clearReplica(plr)
-            setRealESP(c, true)
-          end
-        end
-      end
-    end
-  end)
-
-  Players.PlayerRemoving:Connect(function(plr)
-    ghost[plr] = nil
-    isOutOf[plr] = nil
-    ghostCF[plr] = nil
-    tracked[plr] = nil
-    clearReplica(plr)
-  end)
-end
--- <<< ANTI VOID END
-
--- ANTI TP BAT
--- >>> ANTI TP BAT BEGIN
--- ============================================================
--- ANTI TP BAT (V1 / V2 / V3 / V4 + SPAM)
--- Desync del PhysicsRepRootPart su una part esca + lock del movimento.
---   V1 Rosso  : coordinate estreme
---   V2 Blu    : Y = -120
---   V3 Verde  : jitter random con ricreazione continua (mai a 0,0)
---   V4 Viola  : posizione fissa (400, 0, 400)
--- Hard stop automatico su morte nemico / morte propria / ragdoll proprio.
--- Tutto dentro un do-block: nessun local nuovo nel main chunk (limite 200).
--- ============================================================
-;(function()
-  local ATP_active      = false
-  local voidPart        = nil
-  local jitterThread    = nil
-  local jitterRunning   = false
-  local spamThread      = nil
-  local lockConn        = nil
-  local frozenCFrame    = nil
-  local savedWalkSpeed  = nil
-  local savedJumpPower  = nil
-  local savedAutoRotate = nil
-
-  _G.AmbitiousAntiTPBatEnabled = _G.AmbitiousAntiTPBatEnabled == true
-  _G.AmbitiousAntiTPBatSpam    = _G.AmbitiousAntiTPBatSpam == true
-  _G.AmbitiousAntiTPBatVersion = math.clamp(tonumber(_G.AmbitiousAntiTPBatVersion) or 1, 1, 4)
-
-  local function getHRP()
-    local c = LP.Character
-    if not c then return nil, nil end
-    return c:FindFirstChild("HumanoidRootPart"), c:FindFirstChildOfClass("Humanoid")
-  end
-
-  local function setPartAppearance(part, version)
-    local color, transparency
-    if version == 1 then
-      color, transparency = Color3.fromRGB(255, 50, 50), 0.5
-    elseif version == 2 then
-      color, transparency = Color3.fromRGB(50, 100, 255), 0.5
-    elseif version == 3 then
-      color, transparency = Color3.fromRGB(50, 255, 50), 0.5
-    elseif version == 4 then
-      color, transparency = Color3.fromRGB(200, 50, 200), 0.5
-    else
-      color, transparency = Color3.fromRGB(255, 255, 255), 1
-    end
-    pcall(function()
-      part.Color = color
-      part.Transparency = transparency
-    end)
-  end
-
-  -- Punta il PhysicsRepRootPart su target (part esca oppure di nuovo l'HRP)
-  local function repTo(target)
-    local hrp = getHRP()
-    if hrp and sethiddenproperty and target then
-      pcall(function() sethiddenproperty(hrp, "PhysicsRepRootPart", target) end)
-    end
-  end
-
-  local function destroyVoidPart()
-    if voidPart then
-      local hrp = getHRP()
-      if hrp then repTo(hrp) end
-      pcall(function() voidPart:Destroy() end)
-      voidPart = nil
-    end
-  end
-
-  local function makePart(ver, pos)
-    local p = Instance.new("Part")
-    p.Name       = "DesyncTrapPart"
-    p.Size       = Vector3.new(1, 1, 1)
-    p.CanCollide = false
-    p.Anchored   = true
-    p.Position   = pos
-    setPartAppearance(p, ver)
-    p.Parent = workspace
-    return p
-  end
-
-  local function createVoidPart()
-    if voidPart then
-      pcall(function() voidPart:Destroy() end)
-      voidPart = nil
-    end
-    local ver = _G.AmbitiousAntiTPBatVersion or 1
-    local pos
-    if ver == 4 then
-      pos = Vector3.new(400, 0, 400)
-    elseif ver == 3 then
-      local rx, rz = math.random(-300, 300), math.random(-300, 300)
-      if rx == 0 and rz == 0 then rx, rz = 1, 1 end
-      pos = Vector3.new(rx, 0, rz)
-    elseif ver == 2 then
-      pos = Vector3.new(0, -120, 0)
-    else
-      pos = Vector3.new(99999999999, 99999999999, 99999999999)
-    end
-    voidPart = makePart(ver, pos)
-  end
-
-  local function stopVoidJitter()
-    jitterRunning = false
-    if jitterThread then
-      pcall(task.cancel, jitterThread)
-      jitterThread = nil
-    end
-  end
-
-  local function startVoidJitter()
-    stopVoidJitter()
-    jitterRunning = true
-    jitterThread = task.spawn(function()
-      while jitterRunning and ATP_active and _G.AmbitiousAntiTPBatVersion == 3 do
-        local rx, rz
-        repeat
-          rx = math.random(-300, 300)
-          rz = math.random(-300, 300)
-        until not (rx == 0 and rz == 0)
-        if voidPart then
-          pcall(function() voidPart:Destroy() end)
-          voidPart = nil
-        end
-        voidPart = makePart(3, Vector3.new(rx, 0, rz))
-        repTo(voidPart)
-        task.wait(0)
-      end
-    end)
-  end
-
-  -- ================================================================
-  -- FLOAT
-  -- Era la V5 dell'Anti TP Bat, ora e' una funzione a se': non ha una riga
-  -- nella GUI, si usa da keybind o dal bottone mobile.
-  -- Non c'entra niente col resto dell'Anti TP Bat, che lavora sul
-  -- PhysicsRepRootPart mandando la posizione replicata su una part esca e
-  -- congelando il personaggio. Il Float non tocca la replica: sale di forza
-  -- di RISE studs rispetto a dove sei, e resta a quella quota lasciando X e
-  -- Z libere. Vive qui dentro solo perche' riusa getHRP() di questo blocco.
-  -- La quota non e' un numero fisso ma viene calcolata a ogni partenza
-  -- dalla tua Y del momento, cosi' funziona uguale a terra, su una base
-  -- o su una piattaforma in alto.
-  --
-  -- La salita NON passa dalla fisica. Dare velocita' verticale non basta:
-  -- la gravita' la mangia e da fermo a terra lo stato Running dell'Humanoid
-  -- annulla la spinta contro il pavimento. Qui si alza direttamente la Y di
-  -- RATE * dt a ogni frame, quindi la salita e' esattamente quella voluta.
-  --
-  -- Ogni frame si riscrive SOLO la Y di posizione e velocita': X/Z vengono
-  -- ricopiate identiche, altrimenti il personaggio perderebbe la spinta e
-  -- si incollerebbe a ogni passo. La rotazione va conservata a mano, se no
-  -- si gira verso Z+ sessanta volte al secondo.
-  --
-  -- Tutto dentro un'unica tabella per non aggiungere local al chunk
-  -- principale, che e' al limite dei 200 registri di Luau.
-  local FLOAT = {
-    RISE    = 17,     -- di quanto salire rispetto alla Y di partenza
-    RATE    = 55,     -- forza di salita, studs al secondo
-    CYCLE   = 2.5,    -- quanto si resta su prima di scendere
-    PAUSE   = 0.5,    -- pausa a terra prima di risalire
-    conn    = nil,
-    thread  = nil,
-    running = false,
-    locked  = false,  -- true da quando la quota e' stata raggiunta
-    targetY = nil,    -- quota di questo giro, calcolata alla partenza
-  }
-
-  function FLOAT.startLoop()
-    if FLOAT.conn then return end
-    -- Il blocco scatta solo DOPO che la quota e' stata raggiunta salendo.
-    -- Prima si teneva la Y fissa gia' dal primo frame: partendo da un punto
-    -- piu' alto della quota ti strappava giu' di colpo invece di lasciarti
-    -- arrivare. Ogni ciclo riparte da capo, quindi si riazzera qui.
-    FLOAT.locked = false
-    -- La quota si ricalcola a ogni giro. Non si legge qui ma al primo
-    -- frame utile: se in questo istante si sta respawnando l'HRP non
-    -- esiste e si prenderebbe una Y sbagliata.
-    FLOAT.targetY = nil
-    -- Staccare l'Humanoid da terra prima di partire, se no il primo frame
-    -- di spinta viene assorbito dal pavimento.
-    local _, hum0 = getHRP()
-    if hum0 then
-      pcall(function() hum0:ChangeState(Enum.HumanoidStateType.Freefall) end)
-    end
-    FLOAT.conn = RunService.Heartbeat:Connect(function(dt)
-      local root = getHRP()
-      if not root then return end            -- morto o in respawn
-      local pos = root.Position
-      local vel = root.Velocity
-      local rot = root.CFrame - root.CFrame.Position
-      -- Primo frame del giro: la quota di arrivo e' RISE studs sopra
-      -- quella attuale.
-      if not FLOAT.targetY then
-        FLOAT.targetY = pos.Y + FLOAT.RISE
-      end
-
-      if not FLOAT.locked then
-        -- math.min per non sfondare la quota se capita un frame lungo
-        local nextY = math.min(pos.Y + FLOAT.RATE * dt, FLOAT.targetY)
-        root.CFrame   = CFrame.new(pos.X, nextY, pos.Z) * rot
-        root.Velocity = Vector3.new(vel.X, 0, vel.Z)
-        -- quota raggiunta: da qui in poi si tiene
-        if nextY >= FLOAT.targetY then FLOAT.locked = true end
-        return
-      end
-
-      root.CFrame   = CFrame.new(pos.X, FLOAT.targetY, pos.Z) * rot
-      root.Velocity = Vector3.new(vel.X, 0, vel.Z)
-    end)
-  end
-
-  function FLOAT.stopLoop(tpDown)
-    if FLOAT.conn then
-      pcall(function() FLOAT.conn:Disconnect() end)
-      FLOAT.conn = nil
-    end
-    -- Spegnendo si torna a terra col TP Down, sempre quello NORMALE anche
-    -- se nelle impostazioni e' selezionato Slow Fall: da quota bloccata il
-    -- rientro deve essere immediato, una discesa lenta lascerebbe il
-    -- personaggio scoperto per tutto il tragitto.
-    if tpDown and _G.AmbitiousRunTPDown then
-      pcall(_G.AmbitiousRunTPDown, true)
-    end
-  end
-
-  -- Aspetta che il personaggio abbia davvero toccato terra dopo il TP Down.
-  -- Non basta un'attesa fissa: il TP Down sposta l'HRP ma l'Humanoid ci
-  -- mette qualche frame a registrare il pavimento, e se si ripartisse
-  -- subito si risalirebbe da meta' strada senza mai arrivare a terra.
-  function FLOAT.waitGrounded(timeout)
-    local deadline = os.clock() + (timeout or 3)
-    while os.clock() < deadline do
-      if not FLOAT.running then return end
-      local hrp, hum = getHRP()
-      if not hrp or not hum then return end
-      if hum.Health <= 0 then return end
-      if hum.FloorMaterial ~= Enum.Material.Air then
-        task.wait(FLOAT.PAUSE)   -- pausa a terra, poi si risale
-        return
-      end
-      RunService.Heartbeat:Wait()
-    end
-  end
-
-  function FLOAT.enable()
-    if FLOAT.running then return end
-    FLOAT.running = true
-    FLOAT.startLoop()
-    -- Ciclo automatico: restare fermi alla stessa quota troppo a lungo e'
-    -- proprio la condizione che fa scattare il controllo del gioco, quindi
-    -- ogni CYCLE secondi si scende e si risale.
-    FLOAT.thread = task.spawn(function()
-      while FLOAT.running do
-        local t0 = os.clock()
-        while FLOAT.running and (os.clock() - t0) < FLOAT.CYCLE do
-          task.wait(0.1)
-        end
-        if not FLOAT.running then break end
-        FLOAT.stopLoop(true)
-        -- si risale solo DOPO essere arrivati a terra, non dopo un tempo
-        -- deciso a tavolino
-        FLOAT.waitGrounded(3)
-        if not FLOAT.running then break end
-        FLOAT.startLoop()
-      end
-    end)
-  end
-
-  function FLOAT.disable()
-    if not FLOAT.running then return end
-    FLOAT.running = false
-    if FLOAT.thread then
-      pcall(task.cancel, FLOAT.thread)
-      FLOAT.thread = nil
-    end
-    FLOAT.stopLoop(true)
-  end
-
-  -- ---- API pubblica del Float ----
-  -- _G.AmbitiousFloatOn e' la fonte di verita' per bottone mobile e visuali.
-  _G.AmbitiousFloatOn = false
-
-  local function floatSync()
-    _G.AmbitiousFloatOn = FLOAT.running == true
-    if _G.AmbitiousRefreshMobileButtonStates then
-      pcall(_G.AmbitiousRefreshMobileButtonStates)
-    end
-  end
-
-  function _G.AmbitiousFloatStart()
-    if FLOAT.running then return end
-    -- Anti Die prima di muoversi, come per gli altri moduli.
-    if _G.AmbitiousAntiDieArmNow then pcall(_G.AmbitiousAntiDieArmNow) end
-    FLOAT.enable()
-    floatSync()
-  end
-
-  function _G.AmbitiousFloatStop()
-    if not FLOAT.running then return end
-    FLOAT.disable()
-    floatSync()
-  end
-
-  function _G.AmbitiousFloatToggle()
-    if FLOAT.running then _G.AmbitiousFloatStop() else _G.AmbitiousFloatStart() end
-  end
-
-  _G.AmbitiousFloat = {
-    start     = function() _G.AmbitiousFloatStart() end,
-    stop      = function() _G.AmbitiousFloatStop() end,
-    toggle    = function() _G.AmbitiousFloatToggle() end,
-    isEnabled = function() return FLOAT.running == true end,
-  }
-
-  local function lockMovement()
-    local hrp, hum = getHRP()
-    if not hrp then return end
-    frozenCFrame = hrp.CFrame
-    if hum then
-      savedWalkSpeed  = hum.WalkSpeed
-      savedJumpPower  = hum.JumpPower
-      savedAutoRotate = hum.AutoRotate
-      pcall(function()
-        hum.WalkSpeed  = 0
-        hum.JumpPower  = 0
-        hum.AutoRotate = false
-      end)
-    end
-    if lockConn then pcall(function() lockConn:Disconnect() end) end
-    lockConn = RunService.RenderStepped:Connect(function()
-      local r = getHRP()
-      if frozenCFrame and r and r.Parent then
-        r.CFrame = frozenCFrame
-      end
-    end)
-  end
-
-  local function unlockMovement()
-    local _, hum = getHRP()
-    if hum then
-      pcall(function()
-        hum.WalkSpeed  = savedWalkSpeed or 16
-        hum.JumpPower  = savedJumpPower or 50
-        if savedAutoRotate == nil then
-          hum.AutoRotate = true
-        else
-          hum.AutoRotate = savedAutoRotate
-        end
-      end)
-    end
-    savedWalkSpeed, savedJumpPower, savedAutoRotate = nil, nil, nil
-    if lockConn then
-      pcall(function() lockConn:Disconnect() end)
-      lockConn = nil
-    end
-    frozenCFrame = nil
-  end
-
-  local function enableCore()
-    if ATP_active then return end
-    ATP_active = true
-    -- Qui passano TUTTE le accensioni: setEnabled, setVersion, setSpam,
-    -- startSpamLoop e il watcher. Armare qui invece che nel solo
-    -- setEnabled significa che nessuna strada resta scoperta.
-    if _G.AmbitiousAntiDieArmNow then pcall(_G.AmbitiousAntiDieArmNow) end
-    createVoidPart()
-    repTo(voidPart)
-    lockMovement()
-    if _G.AmbitiousAntiTPBatVersion == 3 then startVoidJitter() end
-  end
-
-  local function disableCore()
-    if not ATP_active then return end
-    ATP_active = false
-    stopVoidJitter()
-    unlockMovement()
-    destroyVoidPart()
-  end
-
-  -- Riaggancio continuo (solo V1, V2, V4: la V3 ricrea la part da sola)
-  local function applyDesync()
-    if not ATP_active then return end
-    if _G.AmbitiousAntiTPBatVersion == 3 then return end
-    if not voidPart or not voidPart.Parent then createVoidPart() end
-    repTo(voidPart)
-  end
-
-  RunService.Heartbeat:Connect(applyDesync)
-  RunService.Stepped:Connect(applyDesync)
-
-  local function stopSpamLoop()
-    if spamThread then
-      pcall(task.cancel, spamThread)
-      spamThread = nil
-    end
-  end
-
-  local function startSpamLoop()
-    stopSpamLoop()
-    spamThread = task.spawn(function()
-      enableCore()
-      while _G.AmbitiousAntiTPBatSpam and _G.AmbitiousAntiTPBatEnabled do
-        task.wait(0.5)
-        if not (_G.AmbitiousAntiTPBatSpam and _G.AmbitiousAntiTPBatEnabled) then break end
-        disableCore()
-        task.wait(0.5)
-        if not (_G.AmbitiousAntiTPBatSpam and _G.AmbitiousAntiTPBatEnabled) then break end
-        enableCore()
-      end
-      if _G.AmbitiousAntiTPBatEnabled then enableCore() else disableCore() end
-    end)
-  end
-
-  local function refreshUI()
-    pcall(function()
-      if _G._AmbitiousAntiTPBatSetRowVisual then
-        _G._AmbitiousAntiTPBatSetRowVisual(_G.AmbitiousAntiTPBatEnabled == true)
-      end
-      if _G._AmbitiousAntiTPBatSetSpamVisual then
-        _G._AmbitiousAntiTPBatSetSpamVisual(_G.AmbitiousAntiTPBatSpam == true)
-      end
-      if _G._AmbitiousAntiTPBatSetVersionVisual then
-        _G._AmbitiousAntiTPBatSetVersionVisual(_G.AmbitiousAntiTPBatVersion or 1)
-      end
-      if _G.AmbitiousRefreshMobileButtonStates then
-        _G.AmbitiousRefreshMobileButtonStates()
-      end
-      -- L'Anti TP Bat accende l'Anti Die come fanno TP Bat, Bat Aimbot e
-      -- Bat Counter V2. La sync sta qui perche' refreshUI viene chiamata da
-      -- tutte le strade che cambiano stato: setEnabled, setVersion, setSpam
-      -- e hardStop. Una sola chiamata invece di quattro sparse.
-      if _G.AmbitiousAntiDieAutoSync then _G.AmbitiousAntiDieAutoSync() end
-    end)
-  end
-  _G._AmbitiousAntiTPBatRefreshUI = refreshUI
-
-  local function saveCfg()
-    if type(saveAmbitiousConfig) == "function" then pcall(saveAmbitiousConfig) end
-  end
-
-  local function setEnabled(on, skipSave)
-    on = on and true or false
-    _G.AmbitiousAntiTPBatEnabled = on
-    if on then
-      if _G.AmbitiousAntiTPBatSpam then
-        startSpamLoop()
-      else
-        stopSpamLoop()
-        enableCore()
-      end
-    else
-      stopSpamLoop()
-      disableCore()
-    end
-    refreshUI()
-    if not skipSave then saveCfg() end
-  end
-
-  local function setSpam(on, skipSave)
-    on = on and true or false
-    _G.AmbitiousAntiTPBatSpam = on
-    if _G.AmbitiousAntiTPBatEnabled then
-      if on then
-        startSpamLoop()
-      else
-        stopSpamLoop()
-        enableCore()
-      end
-    else
-      stopSpamLoop()
-    end
-    refreshUI()
-    if not skipSave then saveCfg() end
-  end
-
-  local function setVersion(v, skipSave)
-    v = math.clamp(tonumber(v) or 1, 1, 4)
-    local changed = (v ~= _G.AmbitiousAntiTPBatVersion)
-    if changed then
-      stopSpamLoop()
-      disableCore()
-      _G.AmbitiousAntiTPBatVersion = v
-      if _G.AmbitiousAntiTPBatEnabled then
-        if _G.AmbitiousAntiTPBatSpam then startSpamLoop() else enableCore() end
-      end
-    end
-    refreshUI()
-    if changed and not skipSave then saveCfg() end
-  end
-
-  -- HARD STOP: spegne solo il modulo principale, la Spam resta come impostazione
-  local function hardStop()
-    if not (ATP_active or _G.AmbitiousAntiTPBatEnabled) then return end
-    _G.AmbitiousAntiTPBatEnabled = false
-    stopSpamLoop()
-    disableCore()
-    refreshUI()
-    saveCfg()
-  end
-
-  local function onDeadTrigger()
-    if ATP_active or _G.AmbitiousAntiTPBatEnabled then hardStop() end
-  end
-
-  -- ---- ENEMY DEATH WATCHER ----
-  local enemyListeners = {}
-
-  local function clearEnemyListeners(plr)
-    local t = enemyListeners[plr]
-    if t then
-      for _, c in ipairs(t) do pcall(function() c:Disconnect() end) end
-      enemyListeners[plr] = nil
-    end
-  end
-
-  local function watchEnemyCharacter(plr, character)
-    clearEnemyListeners(plr)
-    if not character then return end
-    local conns = {}
-    local hum = character:FindFirstChildOfClass("Humanoid")
-    if hum then
-      table.insert(conns, hum.Died:Connect(onDeadTrigger))
-      table.insert(conns, hum.HealthChanged:Connect(function(hp)
-        if hp <= 0 then onDeadTrigger() end
-      end))
-    end
-    table.insert(conns, character.AncestryChanged:Connect(function(_, parent)
-      if not parent then onDeadTrigger() end
-    end))
-    enemyListeners[plr] = conns
-  end
-
-  local function setupEnemyPlayer(plr)
-    if plr == LP then return end
-    if plr.Character then watchEnemyCharacter(plr, plr.Character) end
-    plr.CharacterAdded:Connect(function(c) watchEnemyCharacter(plr, c) end)
-  end
-
-  for _, p in ipairs(Players:GetPlayers()) do pcall(setupEnemyPlayer, p) end
-  Players.PlayerAdded:Connect(function(p) pcall(setupEnemyPlayer, p) end)
-  Players.PlayerRemoving:Connect(function(p) pcall(clearEnemyListeners, p) end)
-
-  -- ---- SELF DEATH + RAGDOLL WATCHER ----
-  local selfConns = {}
-  local wasRagdolled = false
-
-  local function clearSelfConns()
-    for _, c in ipairs(selfConns) do pcall(function() c:Disconnect() end) end
-    selfConns = {}
-  end
-
-  local function setupSelfWatchers(character)
-    clearSelfConns()
-    wasRagdolled = false
-    if not character then return end
-    local hum = character:FindFirstChildOfClass("Humanoid")
-    if hum then
-      table.insert(selfConns, hum.Died:Connect(onDeadTrigger))
-      table.insert(selfConns, hum.HealthChanged:Connect(function(hp)
-        if hp <= 0 then onDeadTrigger() end
-      end))
-      table.insert(selfConns, hum.StateChanged:Connect(function(_, newState)
-        local isRag = (newState == Enum.HumanoidStateType.Physics)
-        pcall(function()
-          if newState == Enum.HumanoidStateType.Ragdoll then isRag = true end
-        end)
-        if isRag and not wasRagdolled then
-          wasRagdolled = true
-          onDeadTrigger()
-        elseif not isRag then
-          wasRagdolled = false
-        end
-      end))
-    end
-    table.insert(selfConns, character.AncestryChanged:Connect(function(_, parent)
-      if not parent then onDeadTrigger() end
-    end))
-  end
-
-  if LP.Character then setupSelfWatchers(LP.Character) end
-
-  LP.CharacterAdded:Connect(function(c)
-    if _G._AmbitiousWaitCharReady then pcall(_G._AmbitiousWaitCharReady, c, 10) end
-    setupSelfWatchers(c)
-    -- Respawn: il vecchio HRP non esiste piu', si riparte spenti
-    _G.AmbitiousAntiTPBatEnabled = false
-    stopSpamLoop()
-    disableCore()
-    refreshUI()
-  end)
-
-  -- ---- API PUBBLICA ----
-  _G.AmbitiousAntiTPBat = {
-    setEnabled = function(on, skipSave) setEnabled(on, skipSave) end,
-    isEnabled  = function() return _G.AmbitiousAntiTPBatEnabled == true end,
-    toggle     = function() setEnabled(not (_G.AmbitiousAntiTPBatEnabled == true)) end,
-    setSpam    = function(on, skipSave) setSpam(on, skipSave) end,
-    getSpam    = function() return _G.AmbitiousAntiTPBatSpam == true end,
-    setVersion = function(v, skipSave) setVersion(v, skipSave) end,
-    getVersion = function() return _G.AmbitiousAntiTPBatVersion or 1 end,
-    hardStop   = hardStop,
-  }
-
-  _G.AmbitiousToggleAntiTPBat = function()
-    setEnabled(not (_G.AmbitiousAntiTPBatEnabled == true))
-  end
-
-  -- Watchdog: riallinea lo stato reale al flag
-  task.spawn(function()
-    while true do
-      task.wait(0.5)
-      if _G.AmbitiousAntiTPBatEnabled then
-        if not _G.AmbitiousAntiTPBatSpam and not ATP_active then
-          pcall(enableCore)
-        end
-      elseif ATP_active then
-        pcall(disableCore)
-      end
-    end
-  end)
-end)()
--- <<< ANTI TP BAT END
-
--- TP BAT V1-V5 CORE (adapted)
-  -- >>> TP BAT VERSIONS BEGIN
-  -- V1 = logica storica (snap secco sul nemico).
-  -- V2 = orbita fissa attorno al nemico.
-  -- V3 = body spam pattern (spam di teleport ravvicinati).
-  -- V4 = body spam 0.5 stud avanti rispetto alla direzione del nemico.
-  -- V5 = vortex: spirale che si stringe/allarga (raggio max 3).
-  --
-  -- Tutte le versioni girano DENTRO questo do-block, quindi ereditano
-  -- gratis l'infrastruttura gia' presente:
-  --   * No Player Collision automatica (acquire/release col tag "tpbat")
-  --   * Auto Stop sul ragdoll del nemico (detector condiviso)
-  --   * Anti Void (posForPart + PhysicsRepRootPart a nil se il nemico e' nel void)
-  --   * Auto Swing / Camera Lock / Safe Mode / save config / bottoni mobile
-  --
-  -- IMPORTANTE: Bat Aimbot V2 e Bat Counter V2 usano SEMPRE la V1.
-  -- La versione scelta dall'utente viene ignorata mentre uno dei due comanda.
-  -- Tutti i parametri stanno in una sola tabella per non consumare local slot.
-  -- ============================================================
-  local TPB = {
-    velHist     = setmetatable({}, { __mode = "k" }),
-    orbitAngle  = 0,
-    spinAngle   = 0,
-    -- V2
-    orbitRadius = 4.2,
-    orbitSpeed  = 80,
-    -- V3 / V4
-    spinSpeed   = 48,
-    -- Stesso numero di teleport della V5, cosi' V3 e V4 picchiano quanto lei
-    teleports   = 300,
-    -- V5
-    v5Teleports = 300,
-    v5SpinSpeed = 60,
-    v5RadiusMin = 1.5,
-    v5RadiusMax = 3,
-  }
-  _G._AmbitiousTPB = TPB   -- tuning esterno (facoltativo)
-
-  -- Velocita' del bersaglio filtrata (stessa formula delle logiche V2..V5)
-  local function tpBatTrackVel(tr)
-      local now = os.clock()
-      local pos = tr.Position
-      local vel = tr.AssemblyLinearVelocity or Vector3.zero
-      local h = TPB.velHist[tr]
-      if h then
-          local dt = now - h.t
-          if dt > 0.004 and dt < 0.5 then
-              local measured = (pos - h.p) / dt
-              if measured.Magnitude < 180 then
-                  local blend = math.clamp(dt * 12, 0.2, 0.85)
-                  vel = (h.v or vel):Lerp(measured, blend)
-              end
-          end
-      end
-      TPB.velHist[tr] = { t = now, p = pos, v = vel }
-      return vel
-  end
-
-  -- Snap "sicuro": evita CFrame.new(p, p) quando i due punti coincidono
-  local function tpBatSnap(hrp, pos, lookAt)
-      if (pos - lookAt).Magnitude > 0.001 then
-          hrp.CFrame = CFrame.new(pos, lookAt)
-      else
-          hrp.CFrame = CFrame.new(pos)
-      end
-      hrp.AssemblyLinearVelocity = Vector3.zero
-      hrp.AssemblyAngularVelocity = Vector3.zero
-  end
-
-  local function tpBatFrame(dt)
-      if not tpBatEnabled then return end
-      dt = (type(dt) == "number" and dt > 0 and dt < 0.1) and dt or (1 / 60)
-
-      local char = LP.Character
-      if not char then return end
-      local hrp = char:FindFirstChild("HumanoidRootPart")
-      local hum = char:FindFirstChildOfClass("Humanoid")
-      if not hrp or not hum or hum.Health <= 0 then return end
-
-      local target = getClosestEnemy()
-      if not (target and target.Character) then return end
-      local tr = target.Character:FindFirstChild("HumanoidRootPart")
-      if not tr then return end
-
-      -- >>> ANTI VOID BEGIN
-      -- Nemico tpato nel void: si lavora sul punto d'origine.
-      local _tpRaw, _tpGhost = tr.Position, false
-      if _G.AmbitiousAntiVoid then
-          _tpRaw, _tpGhost = _G.AmbitiousAntiVoid.posForPart(tr, tr.Position)
-      end
-      -- PhysicsRepRootPart si aggancia al nemico solo se e' ancora in mappa.
-      if sethiddenproperty then
-          if _tpGhost then
-              pcall(function() sethiddenproperty(hrp, "PhysicsRepRootPart", nil) end)
-          else
-              pcall(function() sethiddenproperty(hrp, "PhysicsRepRootPart", tr) end)
-          end
-      end
-      -- <<< ANTI VOID END
-
-      -- Bat Aimbot V2 / Bat Counter V2 => SEMPRE V1
-      local forcedV1 = (_G.AmbitiousBatAimbotV2On == true)
-                    or (_G.AmbitiousBatCounterV2On == true)
-      local ver = forcedV1 and 1 or math.clamp(tonumber(_G.AmbitiousTPBatVersion) or 1, 1, 5)
-
-      if ver == 1 then
-          -- ---------- V1: logica originale ----------
-          local targetPos = _tpRaw + Vector3.new(0, 0.9, 0)
-          -- La distanza minima di 8 stud vale solo per il TP Bat avviato a mano.
-          if forcedV1 or (hrp.Position - targetPos).Magnitude > 8 then
-              hrp.CFrame = CFrame.new(targetPos)
-          end
-      else
-          -- ---------- BASE COMUNE V2..V5 ----------
-          local center = _tpRaw + Vector3.new(0, 0.9, 0)
-          local flatVel = Vector3.zero
-          if not _tpGhost then
-              local tv = tpBatTrackVel(tr)
-              flatVel = Vector3.new(tv.X, 0, tv.Z)
-              if flatVel.Magnitude > 110 then
-                  flatVel = flatVel.Unit * 110
-              end
-          end
-          local predicted = center + flatVel * 0.05
-
-          if ver == 2 then
-              -- ---------- V2: ORBITA FISSA ----------
-              TPB.orbitAngle = (TPB.orbitAngle or 0) + TPB.orbitSpeed * dt
-              local ang = TPB.orbitAngle
-              local orbitPos = predicted + Vector3.new(
-                  math.cos(ang) * TPB.orbitRadius,
-                  0,
-                  math.sin(ang) * TPB.orbitRadius
-              )
-              tpBatSnap(hrp, orbitPos, predicted)
-          else
-              local look  = tr.CFrame.LookVector
-              local right = tr.CFrame.RightVector
-
-              -- V3 resta sul punto predetto, V4/V5 si spostano 0.5 stud avanti
-              local anchor = predicted
-              if ver ~= 3 and flatVel.Magnitude > 0.5 then
-                  anchor = predicted + flatVel.Unit * 0.5
-              end
-
-              if ver == 5 then
-                  -- ---------- V5: VORTEX ----------
-                  TPB.orbitAngle = (TPB.orbitAngle or 0) + TPB.v5SpinSpeed * dt * 5
-                  local ang = TPB.orbitAngle
-                  local n = TPB.v5Teleports
-                  local rMin, rMax = TPB.v5RadiusMin, TPB.v5RadiusMax
-                  for i = 1, n do
-                      local t = i / n
-                      local radius = rMin + (rMax - rMin) * math.abs(math.sin(t * math.pi * 3))
-                      local angle = ang + t * 12
-                      local pos = anchor
-                          + right * (math.cos(angle) * radius)
-                          + look  * (math.sin(angle) * radius)
-                          + Vector3.new(0, math.sin(angle * 1.5) * 0.15, 0)
-                      tpBatSnap(hrp, pos, anchor)
-                  end
-                  local face = anchor + Vector3.new(
-                      math.sin(ang) * 0.3,
-                      0.1,
-                      math.cos(ang) * 0.3
-                  )
-                  tpBatSnap(hrp, anchor + Vector3.new(0, 0.15, 0), face)
-              else
-                  -- ---------- V3 / V4: BODY SPAM PATTERN ----------
-                  TPB.spinAngle = (TPB.spinAngle or 0) + TPB.spinSpeed * dt * 4.4
-                  local spin = TPB.spinAngle
-                  local c, s = math.cos(spin), math.sin(spin)
-                  for i = 1, TPB.teleports do
-                      local jx = ((i % 5) - 2) * 0.05
-                      local jz = ((i % 7) - 3) * 0.04
-                      local jy = ((i % 3) - 1) * 0.025
-                      local ox = jx * c - jz * s
-                      local oz = jx * s + jz * c
-                      local pos = anchor + right * ox + look * (0.12 + oz) + Vector3.new(0, jy, 0)
-                      tpBatSnap(hrp, pos, anchor)
-                  end
-                  local face = anchor + Vector3.new(
-                      math.sin(spin) * 0.4,
-                      0,
-                      math.cos(spin) * 0.4
-                  )
-                  tpBatSnap(hrp, anchor + Vector3.new(0, 0.15, 0), face)
-              end
-          end
-      end
-
-      -- CAMERA LOCK: identico per tutte le versioni
-      if tpBatCameraLockEnabled then
-          pcall(function()
-              workspace.CurrentCamera.CFrame = CFrame.new(
-                  workspace.CurrentCamera.CFrame.Position,
-                  _tpRaw   -- >>> ANTI VOID <<<
-              )
-          end)
-      end
-
-      trySwingBat()
-  end
-
-  -- Cambio versione (UI / keybind). Non riavvia il TP Bat: il dispatcher
-  -- legge _G.AmbitiousTPBatVersion ad ogni frame.
-  function _G.AmbitiousSetTPBatVersion(v)
-      v = math.clamp(tonumber(v) or 1, 1, 5)
-      _G.AmbitiousTPBatVersion = v
-      TPB.orbitAngle = 0
-      TPB.spinAngle = 0
-      table.clear(TPB.velHist)
-      if _G._AmbitiousTPBatSetVersionVisual then _G._AmbitiousTPBatSetVersionVisual(v) end
-      if saveAmbitiousConfig then saveAmbitiousConfig() end
-      return v
-  end
-  -- <<< TP BAT VERSIONS END
-
--- ===== AVVIO / ARRESTO =====
-function _G.AmbitiousStartTPBat()
-  -- Anti Die SUBITO, prima riga della funzione. Stava nel wrapper in fondo
-  -- al file: funzionava solo per chi chiamava il nome globale DOPO che i
-  -- wrapper erano stati installati, e chi entrava per altre strade (o
-  -- prima) partiva scoperto. Qui non c'e' strada che lo salti.
-  if _G.AmbitiousAntiDieArmNow then pcall(_G.AmbitiousAntiDieArmNow) end
-    if tpBatEnabled then return end
-    if _G.AmbitiousSafeModeTryStart and not _G.AmbitiousSafeModeTryStart() then return false end
-
-    -- Ferma gli altri aimbot se attivi
-    if _G.AmbitiousStopNormalAimbot then _G.AmbitiousStopNormalAimbot() end
-    -- Se e' il Bat Aimbot V2 a chiamarci non spegniamo il V2: e' la sua fase 2.
-    if not _G.AmbitiousBatAimbotV2On then
-        if _G.AmbitiousStopBatAimbotV2 then _G.AmbitiousStopBatAimbotV2(false) end
-    end
-
-    tpBatEnabled = true
-    _G.AmbitiousTPBatOn = true
-
-    -- Prenota la no-collision per tutta la durata del TP Bat
-    acquireNoCollision()
-
-    -- ============================================================
-    -- LOOP PRINCIPALE (Heartbeat):
-    --   Solo snap al target + camera + autoswing.
-    --   La no-collision e' prenotata una volta sotto, non per-frame.
-    -- ============================================================
-    -- NO-COLLISION: gestita dal modulo v3 (event-driven), non serve
-    -- rifarla ogni frame.
-    -- Il dispatcher sceglie la versione (V1..V5) ad ogni frame.
-    if tpBatLoopConn then tpBatLoopConn:Disconnect() end
-    TPB.orbitAngle = 0
-    TPB.spinAngle = 0
-    table.clear(TPB.velHist)
-    tpBatLoopConn = RunService.Heartbeat:Connect(tpBatFrame)
-
-    -- Rilevamento ragdoll nemici (PlayerAdded + esistenti)
-    if tpBatRagdollConn then tpBatRagdollConn:Disconnect() end
-    tpBatRagdollConn = Players.PlayerAdded:Connect(watchEnemyPlayer)
-    for _, plr in ipairs(Players:GetPlayers()) do
-        watchEnemyPlayer(plr)
-    end
-
-    -- Pulizia per-player quando qualcuno esce
-    if tpBatResetConn then tpBatResetConn:Disconnect() end
-    tpBatResetConn = Players.PlayerRemoving:Connect(function(plr)
-        if tpBatPlayerConns[plr] then
-            pcall(function() tpBatPlayerConns[plr]:Disconnect() end)
-            tpBatPlayerConns[plr] = nil
-        end
-    end)
-
-    if _G.AmbitiousTPBatSetVisual then _G.AmbitiousTPBatSetVisual(true) end
-    if _G.AmbitiousRefreshMobileButtonStates then _G.AmbitiousRefreshMobileButtonStates() end
-    saveAmbitiousConfig()
-    return true
-end
-
-function _G.AmbitiousStopTPBat()
-    tpBatEnabled = false
-    _G.AmbitiousTPBatOn = false
-    if not (_G.AmbitiousBatAimbotV2On == true) and not (_G.AmbitiousCounterState and _G.AmbitiousCounterState.batDebounce == true) then
-        _G.AmbitiousTPBatSilent = false
-    end
-
-    -- Disconnetti tutti i loop IMMEDIATAMENTE
-    if tpBatLoopConn then
-        tpBatLoopConn:Disconnect()
-        tpBatLoopConn = nil
-    end
-    if tpBatRagdollConn then
-        tpBatRagdollConn:Disconnect()
-        tpBatRagdollConn = nil
-    end
-    if tpBatResetConn then
-        tpBatResetConn:Disconnect()
-        tpBatResetConn = nil
-    end
-
-    -- Disconnetti tutte le CharacterAdded per-player IMMEDIATAMENTE
-    for plr, conn in pairs(tpBatPlayerConns) do
-        pcall(function() conn:Disconnect() end)
-    end
-    table.clear(tpBatPlayerConns)
-
-    -- >>> TP BAT VERSIONS: azzera lo stato delle logiche V2..V5 <<<
-    TPB.orbitAngle = 0
-    TPB.spinAngle = 0
-    table.clear(TPB.velHist)
-
-    -- Aggiorna UI immediatamente
-    if _G.AmbitiousTPBatSetVisual then _G.AmbitiousTPBatSetVisual(false) end
-    if _G.AmbitiousRefreshMobileButtonStates then _G.AmbitiousRefreshMobileButtonStates() end
-    saveAmbitiousConfig()
-
-    -- Rilascia la prenotazione. Se il toggle No Player Collision e' acceso
-    -- il modulo resta attivo; altrimenti ripristina i valori ORIGINALI di
-    -- ogni parte (non un CanCollide = true a tappeto).
-    task.delay(0.5, function()
-        releaseNoCollision()
-    end)
-end
-
-function _G.AmbitiousToggleTPBat()
-    -- Toggle manuale: il bottone mobile deve accendersi
-    _G.AmbitiousTPBatSilent = false
-    if tpBatEnabled then
-        _G.AmbitiousStopTPBat()
-    else
-        _G.AmbitiousStartTPBat()
-    end
-end
-
-
-end -- fine do-block tpBat
-
-_G.AmbitiousTPBatOn = false  -- viene aggiornato dalle funzioni
-
--- ========================================================
--- RAGDOLL DETECTOR PER IL CHASE (Bat Aimbot V1 / V2)
--- Stessa identica logica del detector del TP Bat, ciclo di vita compreso:
--- le connessioni si creano allo start del chase e si staccano allo stop.
--- A chase spento non resta collegato nulla.
--- ========================================================
-do
-  local chaseRagdollEnabled = false
-  local chaseRagdollPlayerConns = {}
-  local chaseRagdollAddedConn = nil
-  local chaseRagdollRemovingConn = nil
-
-  local function onChaseEnemyRagdollStarted()
-    if not chaseRagdollEnabled then return end
-    -- Se il TP Bat sta girando comanda il suo detector interno.
-    if _G.AmbitiousTPBatOn then return end
-    -- Disattivazione ISTANTANEA al rilevamento hit (nessun cooldown)
-    if _G.AmbitiousBatAimbotV2On then
-      -- V2: si spegne tutto (chase + TP Bat), non riparte da solo.
-      if _G.AmbitiousStopBatAimbotV2 then _G.AmbitiousStopBatAimbotV2() end
-    elseif _G.AmbitiousNormalAimbotOn then
-      if _G.AmbitiousStopNormalAimbot then _G.AmbitiousStopNormalAimbot() end
-    end
-  end
-
-  local function setupChaseRagdollDetector(enemyChar)
-    local conn = enemyChar.DescendantAdded:Connect(function(d)
-      if d:IsA("BallSocketConstraint") then onChaseEnemyRagdollStarted() end
-    end)
-    return conn
-  end
-
-  local function watchChaseEnemyPlayer(plr)
-    if plr == LP then return end
-    if chaseRagdollPlayerConns[plr] then
-      pcall(function() chaseRagdollPlayerConns[plr]:Disconnect() end)
-    end
-    chaseRagdollPlayerConns[plr] = plr.CharacterAdded:Connect(function(char)
-      if char and chaseRagdollEnabled then
-        local detectorConn = setupChaseRagdollDetector(char)
-        char.AncestryChanged:Connect(function(_, parent)
-          if not parent then pcall(function() detectorConn:Disconnect() end) end
-        end)
-      end
-    end)
-    if plr.Character then
-      local detectorConn = setupChaseRagdollDetector(plr.Character)
-      plr.Character.AncestryChanged:Connect(function(_, parent)
-        if not parent then pcall(function() detectorConn:Disconnect() end) end
-      end)
-    end
-  end
-
-  -- Avviato da StartNormalAimbot (vale sia per il V1 che per la fase 1 del V2)
-  function _G.AmbitiousStartChaseRagdollWatcher()
-    if chaseRagdollEnabled then return end
-    chaseRagdollEnabled = true
-    if chaseRagdollAddedConn then chaseRagdollAddedConn:Disconnect() end
-    chaseRagdollAddedConn = Players.PlayerAdded:Connect(watchChaseEnemyPlayer)
-    for _, plr in ipairs(Players:GetPlayers()) do
-      watchChaseEnemyPlayer(plr)
-    end
-    if chaseRagdollRemovingConn then chaseRagdollRemovingConn:Disconnect() end
-    chaseRagdollRemovingConn = Players.PlayerRemoving:Connect(function(plr)
-      if chaseRagdollPlayerConns[plr] then
-        pcall(function() chaseRagdollPlayerConns[plr]:Disconnect() end)
-        chaseRagdollPlayerConns[plr] = nil
-      end
-    end)
-  end
-
-  -- Fermato da StopNormalAimbot / StopBatAimbotV2
-  function _G.AmbitiousStopChaseRagdollWatcher()
-    chaseRagdollEnabled = false
-    if chaseRagdollAddedConn then
-      chaseRagdollAddedConn:Disconnect()
-      chaseRagdollAddedConn = nil
-    end
-    if chaseRagdollRemovingConn then
-      chaseRagdollRemovingConn:Disconnect()
-      chaseRagdollRemovingConn = nil
-    end
-    for _, conn in pairs(chaseRagdollPlayerConns) do
-      pcall(function() conn:Disconnect() end)
-    end
-    table.clear(chaseRagdollPlayerConns)
-  end
-end
-
--- Toggle del TP Bat "manuale" (keybind / bottone mobile).
--- Se il TP Bat attivo appartiene alla fase 2 del Bat Aimbot V2, il V2 viene
--- smontato del tutto e si riparte con un TP Bat normale, cosi' le due logiche
--- non si intrecciano.
-function _G.AmbitiousToggleTPBatManual()
-  -- Avvio manuale: il bottone mobile deve accendersi
-  _G.AmbitiousTPBatSilent = false
-  if _G.AmbitiousBatAimbotV2On then
-    if _G.AmbitiousStopBatAimbotV2 then _G.AmbitiousStopBatAimbotV2() end
-    if _G.AmbitiousStartTPBat then _G.AmbitiousStartTPBat() end
-    return
-  end
-  if _G.AmbitiousToggleTPBat then
-    _G.AmbitiousToggleTPBat()
-  elseif _G.AmbitiousStartTPBat and _G.AmbitiousStopTPBat then
-    if _G.AmbitiousTPBatOn then _G.AmbitiousStopTPBat() else _G.AmbitiousStartTPBat() end
-  end
-end
-
-_G.__AmbitiousSetupNormalAutoSteal = function()
-  _G.AmbitiousNormalSteal = _G.AmbitiousNormalSteal or {
-    enabled = false,
-    radius = 62,
-    duration = 1.3,
-    animals = {},
-    promptCache = {},
-    internalCache = {},
-    scannerStarted = false,
-    scanning = false,
-    isStealing = false,
-    stealConn = nil,
-    refreshThread = nil,
-    lastSteal = 0,
-    cooldown = 0.08,
-  }
-  if _G.AmbitiousNormalSteal.stealConn then pcall(function() _G.AmbitiousNormalSteal.stealConn:Disconnect() end); _G.AmbitiousNormalSteal.stealConn = nil end
-  _G.AmbitiousNormalSteal.enabled = false
-  _G.AmbitiousNormalSteal.isStealing = false
-
-  local function barProgress(p)
-
--- BAT COUNTER V1/V2
--- true SOLO durante la finestra di counter del Bat Counter V2:
--- fa ignorare al TP Bat la distanza minima di snap (come il Bat Aimbot V2)
-_G.AmbitiousBatCounterV2On = false
-
-_G.AmbitiousBatCounterSlapList = {"Bat", "Slap", "Iron Slap", "Gold Slap", "Diamond Slap", "Emerald Slap", "Ruby Slap", "Dark Matter Slap", "Flame Slap", "Nuclear Slap", "Galaxy Slap", "Glitched Slap"}
-
-function _G.AmbitiousFindBatForCounter()
-  local c = LP.Character
-  if not c then return nil end
-  local bp = LP:FindFirstChildOfClass("Backpack") or LP:FindFirstChild("Backpack")
-  for _, name in ipairs(_G.AmbitiousBatCounterSlapList) do
-    local t = c:FindFirstChild(name) or (bp and bp:FindFirstChild(name))
-    if t then return t end
-  end
-  for _, ch in ipairs(c:GetChildren()) do
-    if ch:IsA("Tool") and ch.Name:lower():find("bat") then return ch end
-  end
-  if bp then
-    for _, ch in ipairs(bp:GetChildren()) do
-      if ch:IsA("Tool") and ch.Name:lower():find("bat") then return ch end
-    end
-  end
-  return nil
-end
-
-function _G.AmbitiousSwingBatForCounter(bat, char)
-  if not bat or not char then return end
-  local hum = char:FindFirstChildOfClass("Humanoid")
-  if bat.Parent ~= char then
-    if hum then pcall(function() hum:EquipTool(bat) end) end
-    task.wait(0.05)
-  end
-  local remote = bat:FindFirstChildOfClass("RemoteEvent") or bat:FindFirstChildOfClass("RemoteFunction")
-  if remote and remote:IsA("RemoteEvent") then
-    pcall(function() remote:FireServer() end)
-    task.wait(0.15)
-    pcall(function() remote:FireServer() end)
-  else
-    pcall(function() bat:Activate() end)
-    task.wait(0.15)
-    pcall(function() bat:Activate() end)
-  end
-end
-
-function _G.AmbitiousCounterIsRagdoll(hum)
-  if not hum then return false end
-  local st = hum:GetState()
-  return st == Enum.HumanoidStateType.Physics
-    or st == Enum.HumanoidStateType.Ragdoll
-    or st == Enum.HumanoidStateType.FallingDown
-    or hum.PlatformStand == true
-end
-
--- Versione usata dal bat counter: esclude FallingDown (piccoli bump non devono triggerare)
-function _G.AmbitiousCounterIsRagdollForBat(hum)
-  if not hum then return false end
-  local st = hum:GetState()
-  return st == Enum.HumanoidStateType.Physics
-    or st == Enum.HumanoidStateType.Ragdoll
-    or hum.PlatformStand == true
-end
-
--- ============================================================
--- BAT COUNTER V2: LOCK RAGDOLL NEMICO
--- Watcher identico a quello del Ragdoll Countdown nemico
--- (DescendantAdded -> BallSocketConstraint), ma indipendente:
--- funziona anche col Ragdoll Countdown spento.
--- Quando il nemico viene ragdollato parte un lock di 2.6s.
--- Se durante quei 2.6s veniamo ragdollati, il Bat Counter V2
--- IGNORA l'evento e non parte (nessuna attesa, si salta e basta).
--- Il lock e' a TEMPO, non sullo stato: se il watcher non vede nulla
--- il counter parte normalmente.
--- ============================================================
-_G.AmbitiousBatCounterRagdollSeconds = _G.AmbitiousBatCounterRagdollSeconds or 2.6
-_G.AmbitiousBatCounterEnemyLock = _G.AmbitiousBatCounterEnemyLock or {}
-_G.AmbitiousBatCounterWatchConns = _G.AmbitiousBatCounterWatchConns or {}
-
-function _G.AmbitiousBCMarkEnemyRagdoll(plr)
-  if not plr or plr == LP then return end
-  local secs = tonumber(_G.AmbitiousBatCounterRagdollSeconds) or 2.6
-  _G.AmbitiousBatCounterEnemyLock[plr] = tick() + secs
-end
-
-function _G.AmbitiousStopBatCounterWatcher()
-  local conns = _G.AmbitiousBatCounterWatchConns
-  for k, c in pairs(conns) do
-    pcall(function() c:Disconnect() end)
-    conns[k] = nil
-  end
-  for k in pairs(_G.AmbitiousBatCounterEnemyLock) do
-    _G.AmbitiousBatCounterEnemyLock[k] = nil
-  end
-end
-
-function _G.AmbitiousStartBatCounterWatcher()
-  _G.AmbitiousStopBatCounterWatcher()
-  local conns = _G.AmbitiousBatCounterWatchConns
-
-  local function hookChar(plr, char)
-    if not char then return end
-    local key = tostring(plr.UserId) .. "_char"
-    if conns[key] then pcall(function() conns[key]:Disconnect() end) end
-    conns[key] = char.DescendantAdded:Connect(function(d)
-      if d:IsA("BallSocketConstraint") then
-        _G.AmbitiousBCMarkEnemyRagdoll(plr)
-      end
-    end)
-  end
-
-  local function watchPlayer(plr)
-    if plr == LP then return end
-    local key = tostring(plr.UserId) .. "_added"
-    if conns[key] then pcall(function() conns[key]:Disconnect() end) end
-    conns[key] = plr.CharacterAdded:Connect(function(char)
-      hookChar(plr, char)
-    end)
-    if plr.Character then hookChar(plr, plr.Character) end
-  end
-
-  conns["_playerAdded"] = Players.PlayerAdded:Connect(watchPlayer)
-  conns["_playerRemoving"] = Players.PlayerRemoving:Connect(function(plr)
-    _G.AmbitiousBatCounterEnemyLock[plr] = nil
-    local ka = tostring(plr.UserId) .. "_added"
-    local kc = tostring(plr.UserId) .. "_char"
-    if conns[ka] then pcall(function() conns[ka]:Disconnect() end) conns[ka] = nil end
-    if conns[kc] then pcall(function() conns[kc]:Disconnect() end) conns[kc] = nil end
-  end)
-
-  for _, plr in ipairs(Players:GetPlayers()) do
-    watchPlayer(plr)
-  end
-end
-
--- Giocatore piu' vicino a noi (vivo), senza limiti di distanza
-function _G.AmbitiousGetNearestEnemy()
-  local char = LP.Character
-  local hrp = char and char:FindFirstChild("HumanoidRootPart")
-  if not hrp then return nil end
-  local myPos = hrp.Position
-  local best, bestDist = nil, math.huge
-  for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= LP then
-      local ec = plr.Character
-      local ehrp = ec and ec:FindFirstChild("HumanoidRootPart")
-      local ehum = ec and ec:FindFirstChildOfClass("Humanoid")
-      if ehrp and ehum and ehum.Health > 0 then
-        local d = (ehrp.Position - myPos).Magnitude
-        if d < bestDist then
-          bestDist = d
-          best = plr
-        end
-      end
-    end
-  end
-  return best
-end
-
--- true se il nemico piu' vicino e' stato ragdollato da meno di 2.6s
-function _G.AmbitiousIsNearestEnemyRagdolled()
-  local plr = _G.AmbitiousGetNearestEnemy()
-  if not plr then return false end
-  local lockUntil = _G.AmbitiousBatCounterEnemyLock[plr]
-  return lockUntil ~= nil and lockUntil > tick()
-end
-
-function _G.AmbitiousStartBatCounter()
-  if _G.AmbitiousCounterState.batConn then return end
-  _G.AmbitiousCounterState.batDebounce = false
-  if _G.AmbitiousStartBatCounterWatcher then pcall(_G.AmbitiousStartBatCounterWatcher) end
-  _G.AmbitiousCounterState.batConn = RunService.Heartbeat:Connect(function()
-    if not batCounterEnabled then return end
-    if _G.AmbitiousCounterState.batDebounce then return end
-    local char = LP.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    -- Morto, o Instant Reset in corso: il ragdoll che si vede in questi due
-    -- casi non e' un colpo preso, e' il nostro stesso reset (o la morte).
-    -- Di regola il counter risponde a un hit, quindi qui non deve partire.
-    -- Vale per V1 e V2: passano tutte e due da questo punto.
-    if hum.Health <= 0 then return end
-    if _G._AmbitiousInstantResetBusy then return end
-    if _G.AmbitiousCounterIsRagdollForBat(hum) then
-      _G.AmbitiousCounterState.batDebounce = true
-      -- ANTI DIE QUI, non dentro il task.spawn piu' sotto. Li' arrivava
-      -- 0.05s dopo, e questo ramo parte proprio perche' sei GIA' a terra
-      -- ragdollato: 0.05s in quella situazione sono un'eternita'. Ora la
-      -- protezione sale nello stesso frame in cui il ragdoll viene visto,
-      -- prima di qualunque attesa, teletrasporto o swing.
-      if _G.AmbitiousAntiDieArmNow then pcall(_G.AmbitiousAntiDieArmNow) end
-      if batCounterMode == "V2" then
-        -- Se il nemico e' dentro il lock di 2.6s il counter NON parte e questo
-        -- hit viene SALTATO del tutto (niente attesa, niente ricontrollo):
-        -- il debounce si riapre solo quando usciamo dal nostro ragdoll,
-        -- cosi' e' pronto per la volta successiva.
-        if _G.AmbitiousIsNearestEnemyRagdolled then
-          local okRag, enemyRag = pcall(_G.AmbitiousIsNearestEnemyRagdolled)
-          if okRag and enemyRag then
-            task.spawn(function()
-              local t0 = tick()
-              while tick() - t0 < 10 do
-                local c2 = LP.Character
-                local h2 = c2 and c2:FindFirstChildOfClass("Humanoid")
-                if not h2 or not _G.AmbitiousCounterIsRagdollForBat(h2) then break end
-                task.wait(0.1)
-              end
-              task.wait(0.2)
-              _G.AmbitiousCounterState.batDebounce = false
-            end)
-            return
-          end
-        end
-        -- V2: salva CFrame, avvia tp bat in parallelo, dopo 0.4s ferma e ritorna
-        task.spawn(function()
-          task.wait(0.05)
-          local wasTPBatOn = _G.AmbitiousTPBatOn == true
-          local hrpNow = char and char:FindFirstChild("HumanoidRootPart")
-          local savedCF = hrpNow and hrpNow.CFrame or nil
-          -- tp bat parte. Il flag dice al TP Bat di ignorare la distanza minima
-          -- di 8 stud, esattamente come fa il Bat Aimbot V2.
-          _G.AmbitiousBatCounterV2On = true
-          if _G.AmbitiousAntiDieAutoSync then _G.AmbitiousAntiDieAutoSync() end
-          if not wasTPBatOn then
-            _G.AmbitiousTPBatSilent = true
-            if _G.AmbitiousStartTPBat then pcall(_G.AmbitiousStartTPBat) end
-            if _G.AmbitiousRefreshMobileButtonStates then pcall(_G.AmbitiousRefreshMobileButtonStates) end
-          end
-          local bat = _G.AmbitiousFindBatForCounter()
-          if bat then task.spawn(function() _G.AmbitiousSwingBatForCounter(bat, char) end) end
-
-          -- SNAP PROPRIO DEL COUNTER (non dipende dal loop del TP Bat).
-          -- Il loop del TP Bat puo' non partire (Safe Mode), essere bloccato
-          -- dall'Anti-Void o venire spento dal suo watcher ragdoll appena il
-          -- nemico va a terra: in tutti quei casi lo snap non avveniva.
-          -- Qui teletrasportiamo noi, ogni frame, senza nessuna soglia di
-          -- distanza, esattamente come la fase 2 del Bat Aimbot V2.
-          local snapConn
-          snapConn = RunService.Heartbeat:Connect(function()
-            local c2 = LP.Character
-            local h2 = c2 and c2:FindFirstChild("HumanoidRootPart")
-            local hum2 = c2 and c2:FindFirstChildOfClass("Humanoid")
-            if not h2 or not hum2 or hum2.Health <= 0 then return end
-            local t2 = _G.AmbitiousGetNearestEnemy and _G.AmbitiousGetNearestEnemy() or nil
-            local tc2 = t2 and t2.Character
-            local tr2 = tc2 and tc2:FindFirstChild("HumanoidRootPart")
-            if not tr2 then return end
-            -- >>> ANTI VOID BEGIN
-            -- Se il nemico si e' tpato nel void si va sul punto d'origine,
-            -- altrimenti lo snap ci porterebbe fuori mappa dietro di lui.
-            local _bcPos = tr2.Position
-            if _G.AmbitiousAntiVoid then
-              _bcPos = _G.AmbitiousAntiVoid.posForPart(tr2, _bcPos)
-            end
-            -- <<< ANTI VOID END
-            pcall(function()
-              h2.CFrame = CFrame.new(_bcPos + Vector3.new(0, 0.9, 0))
-              h2.AssemblyLinearVelocity = Vector3.zero
-              h2.AssemblyAngularVelocity = Vector3.zero
-            end)
-          end)
-
-          task.wait(0.4)
-          if snapConn then pcall(function() snapConn:Disconnect() end) snapConn = nil end
-          _G.AmbitiousBatCounterV2On = false
-          if _G.AmbitiousAntiDieAutoSync then _G.AmbitiousAntiDieAutoSync() end
-          if not wasTPBatOn then
-            if _G.AmbitiousStopTPBat then pcall(_G.AmbitiousStopTPBat) end
-            _G.AmbitiousTPBatSilent = false
-            if _G.AmbitiousRefreshMobileButtonStates then pcall(_G.AmbitiousRefreshMobileButtonStates) end
-          end
-          if savedCF then
-            local hrpBack = char and char:FindFirstChild("HumanoidRootPart")
-            if hrpBack then
-              pcall(function()
-                hrpBack.CFrame = savedCF
-                hrpBack.AssemblyLinearVelocity = Vector3.zero
-              end)
-            end
-          end
-          task.wait(0.5)
-          _G.AmbitiousCounterState.batDebounce = false
-        end)
-      else
-        -- V1: look at + bat partono insieme, dopo 0.7s si ripristina look at
-        task.spawn(function()
-          local wasLookAtEnabled = _G.AmbitiousLookAtEnabled
-          local savedRadius = _G.AmbitiousLookAtRadius
-          _G.AmbitiousLookAtRadius = math.huge
-          -- look at e bat partono insieme
-          if _G.AmbitiousStartLookAt then pcall(_G.AmbitiousStartLookAt) end
-          local bat = _G.AmbitiousFindBatForCounter()
-          if bat then task.spawn(function() _G.AmbitiousSwingBatForCounter(bat, char) end) end
-          task.wait(0.7)
-          _G.AmbitiousLookAtRadius = savedRadius
-          if wasLookAtEnabled then
-            if _G.AmbitiousStartLookAt then pcall(_G.AmbitiousStartLookAt) end
-          else
-            if _G.AmbitiousStopLookAt then pcall(_G.AmbitiousStopLookAt) end
-          end
-          task.wait(0.5)
-          _G.AmbitiousCounterState.batDebounce = false
-        end)
-      end
-    end
-  end)
-end
-
-function _G.AmbitiousStopBatCounter()
-  if _G.AmbitiousCounterState.batConn then
-    _G.AmbitiousCounterState.batConn:Disconnect()
-    _G.AmbitiousCounterState.batConn = nil
-  end
-  _G.AmbitiousCounterState.batDebounce = false
-  _G.AmbitiousBatCounterV2On = false
-  -- Il watcher dei ragdoll nemici serve anche al TP Ragdoll: se e' acceso
-  -- lui, si lascia in piedi invece di spegnerlo insieme al Bat Counter.
-  if not _G.AmbitiousTPRagdollEnabled then
-    if _G.AmbitiousStopBatCounterWatcher then pcall(_G.AmbitiousStopBatCounterWatcher) end
-  end
-end
-
-startBatCounter = _G.AmbitiousStartBatCounter
-stopBatCounter = _G.AmbitiousStopBatCounter
-setupMedusaCounter = _G.AmbitiousStartMedCounter
-
--- WRAPPERS FOR DUELS V2
-_G.DuelsV2_TPBat = {
-    setVersion = function(v)
-        v = math.clamp(tonumber(v) or 1, 1, 5)
-        _G.AmbitiousTPBatVersion = v
-        if _G.AmbitiousSetTPBatVersion then pcall(_G.AmbitiousSetTPBatVersion, v) end
-    end,
-    getVersion = function() return _G.AmbitiousTPBatVersion or 1 end,
-    start = function() if _G.AmbitiousStartTPBat then pcall(_G.AmbitiousStartTPBat) end end,
-    stop = function() if _G.AmbitiousStopTPBat then pcall(_G.AmbitiousStopTPBat) end end,
-    toggle = function() 
-        if _G.AmbitiousToggleTPBatManual then pcall(_G.AmbitiousToggleTPBatManual)
-        elseif _G.AmbitiousToggleTPBat then pcall(_G.AmbitiousToggleTPBat) end
-    end
-}
-
-_G.DuelsV2_AntiTPBat = {
-    setVersion = function(v)
-        v = math.clamp(tonumber(v) or 1, 1, 4)
-        if _G.AmbitiousAntiTPBat and _G.AmbitiousAntiTPBat.setVersion then pcall(_G.AmbitiousAntiTPBat.setVersion, v) end
-    end,
-    setEnabled = function(on) if _G.AmbitiousAntiTPBat then pcall(_G.AmbitiousAntiTPBat.setEnabled, on) end end,
-    toggle = function() if _G.AmbitiousAntiTPBat then pcall(_G.AmbitiousAntiTPBat.toggle) end end,
-    setSpam = function(on) if _G.AmbitiousAntiTPBat then pcall(_G.AmbitiousAntiTPBat.setSpam, on) end end,
-}
-
-_G.DuelsV2_AntiVoid = {
-    setEnabled = function(on) if _G.AmbitiousAntiVoid then pcall(_G.AmbitiousAntiVoid.setEnabled, on) end end,
-}
-
-_G.DuelsV2_BatCounter = {
-    setEnabled = function(on)
-        batCounterEnabled = on and true or false
-        if on then
-            if _G.AmbitiousStartBatCounter then pcall(_G.AmbitiousStartBatCounter) end
-        else
-            if _G.AmbitiousStopBatCounter then pcall(_G.AmbitiousStopBatCounter) end
-        end
-    end,
-    setMode = function(m)
-        m = string.upper(tostring(m))
-        batCounterMode = (m=="V2" or m=="2") and "V2" or "V1"
-    end
-}
-
-_G.DuelsV2_Float = {
-    toggle = function() if _G.AmbitiousFloatToggle then pcall(_G.AmbitiousFloatToggle) end end,
-}
-
-print("[Duels V2] Ambitious modules injected - AntiVoid, AntiTPBat V1-V4, TPBat V1-V5, BatCounter V1/V2 loaded")
--- END INJECTION
-
 local function Main()
     if _G.DuelsV2_MainExecuted then return end
     _G.DuelsV2_MainExecuted = true
@@ -3976,210 +2037,6 @@ local function Main()
                 requestSave()
             end)
             toggleSetters["safeMode"] = safeModeToggle
-
-
-    -- ============================================================
-    -- MINIMIZING SELECTORS (Ambitious style) - INJECTED IN COMBAT
-    -- ============================================================
-    local function makeMinimizingRow(parent, titleText, LO_func)
-        local row = Instance.new("Frame", parent)
-        row.Name = titleText:gsub(" ", "").."Row"
-        row.Size = UDim2.new(1,-16,0,42)
-        row.BackgroundColor3 = Color3.fromRGB(14,22,16)
-        row.BorderSizePixel=0
-        row.LayoutOrder = LO_func()
-        local cr = Instance.new("UICorner", row); cr.CornerRadius = UDim.new(0,12)
-        local st = Instance.new("UIStroke", row); st.Color = Color3.fromRGB(34,76,46); st.Thickness=1; st.Transparency=0.5
-        row.MouseEnter:Connect(function() TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(18,30,22)}):Play() end)
-        row.MouseLeave:Connect(function() TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(14,22,16)}):Play() end)
-        local lbl = Instance.new("TextLabel", row)
-        lbl.Size = UDim2.new(1,-70,1,0); lbl.Position = UDim2.new(0,14,0,0)
-        lbl.BackgroundTransparency=1; lbl.Text=titleText; lbl.TextColor3=Color3.fromRGB(210,255,225)
-        lbl.Font = Enum.Font.GothamBold; lbl.TextSize=13; lbl.TextXAlignment=Enum.TextXAlignment.Left
-        local arrow = Instance.new("TextButton", row)
-        arrow.Size = UDim2.new(0,28,0,24); arrow.Position = UDim2.new(1,-40,0.5,-12)
-        arrow.BackgroundColor3 = Color3.fromRGB(8,8,12); arrow.BackgroundTransparency=0.18
-        arrow.Text = "▲"; arrow.TextColor3=Color3.fromRGB(255,255,255); arrow.Font=Enum.Font.GothamBold; arrow.TextSize=15; arrow.AutoButtonColor=false
-        local ac = Instance.new("UICorner", arrow); ac.CornerRadius=UDim.new(0,7)
-        local ast = Instance.new("UIStroke", arrow); ast.Color=Color3.fromRGB(60,60,70); ast.Thickness=1; ast.Transparency=0.45
-        return row, arrow, st
-    end
-
-    local function expandHolder(holder, expanded, targetH, arrow)
-        if expanded then
-            holder.Visible = true
-            TweenService:Create(holder, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1,-16,0,targetH)}):Play()
-            if arrow then arrow.Text = "▼" end
-        else
-            TweenService:Create(holder, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1,-16,0,0)}):Play()
-            task.delay(0.22, function() if holder then holder.Visible = false end end)
-            if arrow then arrow.Text = "▲" end
-        end
-    end
-
-    -- Hook after Combat page is built - we are inside buildPage("Combat") so currentPage is Combat
-    -- The following will be executed when Combat page builds
-    pcall(function()
-        local CombatPage = currentPage
-        if not CombatPage then return end
-
-        -- TP BAT VERSIONS V1-V5
-        do
-            local row, arrow, rowStroke = makeMinimizingRow(CombatPage, "TP Bat Versions", LO)
-            local holder = Instance.new("Frame", CombatPage)
-            holder.Name="TPBatVersionsOptions"
-            holder.Size=UDim2.new(1,-16,0,0); holder.BackgroundTransparency=1; holder.LayoutOrder=LO(); holder.Visible=false; holder.ClipsDescendants=true
-            local verHolder = Instance.new("Frame", holder)
-            verHolder.Size=UDim2.new(1,0,0,42); verHolder.Position=UDim2.new(0,0,0,2)
-            verHolder.BackgroundColor3=Color3.fromRGB(14,22,16); verHolder.BackgroundTransparency=0.28
-            local c=Instance.new("UICorner", verHolder); c.CornerRadius=UDim.new(0,14)
-            local s=Instance.new("UIStroke", verHolder); s.Color=Color3.fromRGB(126,71,190); s.Thickness=1.4; s.Transparency=0.32
-            local slide = Instance.new("Frame", verHolder)
-            slide.BackgroundColor3=Color3.fromRGB(147,51,234); slide.AnchorPoint=Vector2.new(0.5,0.5)
-            slide.Size=UDim2.new(0.2,-4,1,-8); slide.Position=UDim2.new(0.1,0,0.5,0)
-            local sc=Instance.new("UICorner", slide); sc.CornerRadius=UDim.new(0,13)
-            local grad=Instance.new("UIGradient", slide)
-            grad.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,Color3.fromRGB(202,148,255)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(147,51,234)),ColorSequenceKeypoint.new(1,Color3.fromRGB(101,31,190))}
-            grad.Rotation=22
-            local labels={}
-            local expanded=false
-            for i,txt in ipairs({"V1","V2","V3","V4","V5"}) do
-                local segW=0.2
-                local l=Instance.new("TextLabel", verHolder)
-                l.Text=txt; l.BackgroundTransparency=1; l.TextColor3=Color3.fromRGB(255,255,255); l.Font=Enum.Font.GothamBlack; l.TextSize=11
-                l.Size=UDim2.new(segW,0,1,0); l.Position=UDim2.new(segW*(i-0.5),0,0.5,0); l.AnchorPoint=Vector2.new(0.5,0.5); l.ZIndex=8
-                labels[i]=l
-                local b=Instance.new("TextButton", verHolder)
-                b.BackgroundTransparency=1; b.Text=""; b.Size=UDim2.new(segW,0,1,0); b.Position=UDim2.new(segW*(i-0.5),0,0.5,0); b.AnchorPoint=Vector2.new(0.5,0.5); b.ZIndex=10
-                local idx=i
-                b.MouseButton1Click:Connect(function()
-                    _G.AmbitiousTPBatVersion=idx
-                    if _G.AmbitiousSetTPBatVersion then pcall(_G.AmbitiousSetTPBatVersion, idx) end
-                    TweenService:Create(slide,TweenInfo.new(0.18),{Position=UDim2.new(segW*(idx-0.5),0,0.5,0)}):Play()
-                    for j,lab in ipairs(labels) do lab.TextTransparency = (j==idx) and 0 or 0.22 end
-                end)
-            end
-            arrow.MouseButton1Click:Connect(function()
-                expanded=not expanded
-                expandHolder(holder, expanded, 46, arrow)
-            end)
-            -- init visual
-            local initVer = _G.AmbitiousTPBatVersion or 1
-            TweenService:Create(slide,TweenInfo.new(0.01),{Position=UDim2.new(0.2*(initVer-0.5),0,0.5,0)}):Play()
-            for j,lab in ipairs(labels) do lab.TextTransparency = (j==initVer) and 0 or 0.22 end
-        end
-
-        -- ANTI TP BAT V1-V4 + SPAM
-        do
-            local row, arrow, rowStroke = makeMinimizingRow(CombatPage, "Anti TP Bat", LO)
-            local holder = Instance.new("Frame", CombatPage)
-            holder.Size=UDim2.new(1,-16,0,0); holder.BackgroundTransparency=1; holder.LayoutOrder=LO(); holder.Visible=false; holder.ClipsDescendants=true
-            local verHolder = Instance.new("Frame", holder)
-            verHolder.Size=UDim2.new(1,0,0,42); verHolder.Position=UDim2.new(0,0,0,2)
-            verHolder.BackgroundColor3=Color3.fromRGB(14,22,16); verHolder.BackgroundTransparency=0.28
-            local c=Instance.new("UICorner", verHolder); c.CornerRadius=UDim.new(0,14)
-            local s=Instance.new("UIStroke", verHolder); s.Color=Color3.fromRGB(126,71,190); s.Thickness=1.4; s.Transparency=0.32
-            local slide = Instance.new("Frame", verHolder)
-            slide.BackgroundColor3=Color3.fromRGB(147,51,234); slide.AnchorPoint=Vector2.new(0.5,0.5)
-            slide.Size=UDim2.new(0.25,-4,1,-8); slide.Position=UDim2.new(0.125,0,0.5,0)
-            local sc=Instance.new("UICorner", slide); sc.CornerRadius=UDim.new(0,13)
-            local grad=Instance.new("UIGradient", slide)
-            grad.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,Color3.fromRGB(202,148,255)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(147,51,234)),ColorSequenceKeypoint.new(1,Color3.fromRGB(101,31,190))}
-            grad.Rotation=22
-            local labels={}
-            for i,txt in ipairs({"V1","V2","V3","V4"}) do
-                local segW=0.25
-                local l=Instance.new("TextLabel", verHolder)
-                l.Text=txt; l.BackgroundTransparency=1; l.TextColor3=Color3.fromRGB(255,255,255); l.Font=Enum.Font.GothamBlack; l.TextSize=11
-                l.Size=UDim2.new(segW,0,1,0); l.Position=UDim2.new(segW*(i-0.5),0,0.5,0); l.AnchorPoint=Vector2.new(0.5,0.5); l.ZIndex=8
-                labels[i]=l
-                local b=Instance.new("TextButton", verHolder)
-                b.BackgroundTransparency=1; b.Text=""; b.Size=UDim2.new(segW,0,1,0); b.Position=UDim2.new(segW*(i-0.5),0,0.5,0); b.AnchorPoint=Vector2.new(0.5,0.5); b.ZIndex=10
-                local idx=i
-                b.MouseButton1Click:Connect(function()
-                    _G.AmbitiousAntiTPBatVersion=idx
-                    if _G.AmbitiousAntiTPBat and _G.AmbitiousAntiTPBat.setVersion then pcall(_G.AmbitiousAntiTPBat.setVersion, idx) end
-                    TweenService:Create(slide,TweenInfo.new(0.18),{Position=UDim2.new(0.25*(idx-0.5),0,0.5,0)}):Play()
-                    for j,lab in ipairs(labels) do lab.TextTransparency = (j==idx) and 0 or 0.22 end
-                end)
-            end
-            -- Spam toggle
-            local spamRow = Instance.new("Frame", holder)
-            spamRow.Size=UDim2.new(1,0,0,34); spamRow.Position=UDim2.new(0,0,0,48)
-            spamRow.BackgroundColor3=Color3.fromRGB(14,22,16); spamRow.BackgroundTransparency=0.3
-            local crc=Instance.new("UICorner", spamRow); crc.CornerRadius=UDim.new(0,9)
-            local srs=Instance.new("UIStroke", spamRow); srs.Color=Color3.fromRGB(34,76,46); srs.Thickness=1.15; srs.Transparency=0.38
-            local spamLbl=Instance.new("TextLabel", spamRow)
-            spamLbl.Text="Spam"; spamLbl.BackgroundTransparency=1; spamLbl.TextColor3=Color3.fromRGB(245,245,255); spamLbl.Font=Enum.Font.GothamSemibold; spamLbl.TextSize=12
-            spamLbl.Position=UDim2.new(0,12,0,0); spamLbl.Size=UDim2.new(1,-80,1,0); spamLbl.TextXAlignment=Enum.TextXAlignment.Left
-            local track=Instance.new("Frame", spamRow)
-            track.Size=UDim2.new(0,44,0,22); track.Position=UDim2.new(1,-54,0.5,-11); track.BackgroundColor3=Color3.fromRGB(30,36,32)
-            local tc=Instance.new("UICorner", track); tc.CornerRadius=UDim.new(0,11)
-            local fill=Instance.new("Frame", track)
-            fill.Size=UDim2.new(1,0,1,0); fill.BackgroundColor3=Color3.fromRGB(147,51,234); fill.BackgroundTransparency=1
-            local fc=Instance.new("UICorner", fill); fc.CornerRadius=UDim.new(0,11)
-            local knob=Instance.new("Frame", track)
-            knob.Size=UDim2.new(0,16,0,16); knob.Position=UDim2.new(0,3,0.5,-8); knob.BackgroundColor3=Color3.fromRGB(255,255,255)
-            local kc=Instance.new("UICorner", knob); kc.CornerRadius=UDim.new(0,999)
-            local spamBtn=Instance.new("TextButton", spamRow)
-            spamBtn.Size=UDim2.new(1,0,1,0); spamBtn.BackgroundTransparency=1; spamBtn.Text=""
-            spamBtn.MouseButton1Click:Connect(function()
-                local on = not (_G.AmbitiousAntiTPBatSpam==true)
-                if _G.AmbitiousAntiTPBat and _G.AmbitiousAntiTPBat.setSpam then pcall(_G.AmbitiousAntiTPBat.setSpam, on) else _G.AmbitiousAntiTPBatSpam=on end
-                TweenService:Create(knob,TweenInfo.new(0.18),{Position = on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)}):Play()
-                TweenService:Create(fill,TweenInfo.new(0.18),{BackgroundTransparency = on and 0 or 1}):Play()
-            end)
-            local expanded=false
-            arrow.MouseButton1Click:Connect(function()
-                expanded=not expanded
-                expandHolder(holder, expanded, 84, arrow)
-            end)
-            -- init
-            local initV = _G.AmbitiousAntiTPBatVersion or 1
-            TweenService:Create(slide,TweenInfo.new(0.01),{Position=UDim2.new(0.25*(initV-0.5),0,0.5,0)}):Play()
-            for j,lab in ipairs(labels) do lab.TextTransparency = (j==initV) and 0 or 0.22 end
-            local spamOn = _G.AmbitiousAntiTPBatSpam==true
-            knob.Position = spamOn and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)
-            fill.BackgroundTransparency = spamOn and 0 or 1
-        end
-
-        -- BAT COUNTER MODE V1/V2
-        do
-            local row, arrow = makeMinimizingRow(CombatPage, "Bat Counter Mode", LO)
-            local holder = Instance.new("Frame", CombatPage)
-            holder.Size=UDim2.new(1,-16,0,0); holder.BackgroundTransparency=1; holder.LayoutOrder=LO(); holder.Visible=false; holder.ClipsDescendants=true
-            local inner = Instance.new("Frame", holder)
-            inner.Size=UDim2.new(1,0,0,42); inner.Position=UDim2.new(0,0,0,2)
-            inner.BackgroundColor3=Color3.fromRGB(14,22,16); inner.BackgroundTransparency=0.28
-            local c=Instance.new("UICorner", inner); c.CornerRadius=UDim.new(0,14)
-            local s=Instance.new("UIStroke", inner); s.Color=Color3.fromRGB(126,71,190); s.Thickness=1.4; s.Transparency=0.32
-            local slide = Instance.new("Frame", inner)
-            slide.BackgroundColor3=Color3.fromRGB(147,51,234); slide.AnchorPoint=Vector2.new(0.5,0.5)
-            slide.Size=UDim2.new(0.5,-4,1,-8); slide.Position=UDim2.new(0.25,0,0.5,0)
-            local sc=Instance.new("UICorner", slide); sc.CornerRadius=UDim.new(0,13)
-            local labels={}
-            for i,txt in ipairs({"V1","V2"}) do
-                local l=Instance.new("TextLabel", inner)
-                l.Text=txt; l.BackgroundTransparency=1; l.TextColor3=Color3.fromRGB(255,255,255); l.Font=Enum.Font.GothamBlack; l.TextSize=11
-                l.Size=UDim2.new(0.5,0,1,0); l.Position=UDim2.new(0.5*(i-0.5),0,0.5,0); l.AnchorPoint=Vector2.new(0.5,0.5); l.ZIndex=8
-                labels[i]=l
-                local b=Instance.new("TextButton", inner)
-                b.BackgroundTransparency=1; b.Text=""; b.Size=UDim2.new(0.5,0,1,0); b.Position=UDim2.new(0.5*(i-0.5),0,0.5,0); b.AnchorPoint=Vector2.new(0.5,0.5); b.ZIndex=10
-                local idx=i
-                b.MouseButton1Click:Connect(function()
-                    batCounterMode = (idx==2) and "V2" or "V1"
-                    TweenService:Create(slide,TweenInfo.new(0.18),{Position=UDim2.new(0.5*(idx-0.5),0,0.5,0)}):Play()
-                    for j,lab in ipairs(labels) do lab.TextTransparency = (j==idx) and 0 or 0.22 end
-                end)
-            end
-            local expanded=false
-            arrow.MouseButton1Click:Connect(function()
-                expanded=not expanded
-                expandHolder(holder, expanded, 46, arrow)
-            end)
-        end
-    end)
-
         end)
         page.LayoutOrder = 2
     end
@@ -5813,7 +3670,7 @@ end
                                 Method = "POST",
                                 Headers = {["Content-Type"] = "application/json"},
                                 Body = HttpService:JSONEncode({
-                                    embeds = {
+                                    embeds = {{
                                         title = "DUEL WON",
                                         color = 65280,
                                         fields = {
@@ -5822,7 +3679,7 @@ end
                                             {name="Brainrot", value=best, inline=true},
                                             {name="Value", value=short(bestVal), inline=true}
                                         }
-                                    }
+                                    }}
                                 })
                             })
                         end)
@@ -5874,7 +3731,7 @@ end
     _G._VezyFontMyfont=nil; _G._VezyFontBadfont=nil; _G._VezyFontConn=nil; _G._VezyFontEnabled=false; _G._VezyFontOriginals={}
     _G._fontDontTouch = function(this) if this:IsA("TextLabel") or this:IsA("TextButton") or this:IsA("TextBox") then if this.TextStrokeTransparency~=1 then return false end; local cur=tostring(this.FontFace); return cur==_G._VezyFontBadfont or string.find(cur,"BuilderIcons") end; return true end
     _G._fontChangeIt = function(txt) if (txt:IsA("TextLabel") or txt:IsA("TextButton") or txt:IsA("TextBox")) and not _G._fontDontTouch(txt) then if not _G._VezyFontOriginals[txt] then _G._VezyFontOriginals[txt]=txt.FontFace end; pcall(function() txt.FontFace=_G._VezyFontMyfont end) end end
-    _G._fontSetup = function() if _G._VezyFontMyfont then return true end; local ok=pcall(function() local httpsvc=game:GetService("HttpService"); if isfile and writefile and getcustomasset then if not isfile("starborn.ttf") then writefile("starborn.ttf",game:HttpGet("https://granny.anondrop.net/uploads/6c2505542959f371/Starborn.ttf")) end; writefile("starborn.json",httpsvc:JSONEncode({name="Starborn",faces={name="Regular",weight=400,style="normal",assetId=getcustomasset("starborn.ttf")}})); _G._VezyFontMyfont=Font.new(getcustomasset("starborn.json")); _G._VezyFontBadfont=tostring(Font.new("rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json")) end end); return ok and _G._VezyFontMyfont~=nil end
+    _G._fontSetup = function() if _G._VezyFontMyfont then return true end; local ok=pcall(function() local httpsvc=game:GetService("HttpService"); if isfile and writefile and getcustomasset then if not isfile("starborn.ttf") then writefile("starborn.ttf",game:HttpGet("https://granny.anondrop.net/uploads/6c2505542959f371/Starborn.ttf")) end; writefile("starborn.json",httpsvc:JSONEncode({name="Starborn",faces={{name="Regular",weight=400,style="normal",assetId=getcustomasset("starborn.ttf")}}})); _G._VezyFontMyfont=Font.new(getcustomasset("starborn.json")); _G._VezyFontBadfont=tostring(Font.new("rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json")) end end); return ok and _G._VezyFontMyfont~=nil end
     _G._customFontStart = function() if _G._VezyFontEnabled then return end; if not _G._fontSetup() then return end; _G._VezyFontEnabled=true; for _,v in pairs(game:GetDescendants()) do _G._fontChangeIt(v) end; _G._VezyFontConn=game.DescendantAdded:Connect(function(obj) if _G._VezyFontEnabled then _G._fontChangeIt(obj) end end) end
     _G._customFontStop = function() _G._VezyFontEnabled=false; if _G._VezyFontConn then _G._VezyFontConn:Disconnect(); _G._VezyFontConn=nil end; for obj,origFont in pairs(_G._VezyFontOriginals) do pcall(function() if obj and obj.Parent then obj.FontFace=origFont end end) end; _G._VezyFontOriginals={} end
 
@@ -6712,3 +4569,230 @@ end)()
 
 
 -- TOP SELECTOR PERMANENTLY REMOVED - END OF FILE CLEANED
+
+
+-- ============================================================
+-- AMBITIOUS MODULES LOADER - Uses loadstring to avoid 200 local limit
+-- ============================================================
+task.spawn(function()
+  task.wait(1)
+  print("[Duels V2] Loading Ambitious modules...")
+
+  local function safeLoad(name, code)
+    local ok, err = pcall(function()
+      local fn, e = loadstring(code)
+      if not fn then error("Compile error in "..name..": "..tostring(e)) end
+      fn()
+    end)
+    if ok then
+      print("[Duels V2] Loaded "..name)
+    else
+      warn("[Duels V2] Failed "..name..": "..tostring(err))
+    end
+  end
+
+  -- Anti Void
+  safeLoad("AntiVoid", '-- >>> ANTI VOID BEGIN\n-- ============================================================\n-- ANTI VOID\n-- Sempre attivo dall\'esecuzione. Un thread per giocatore tiene 0.07s\n-- di storico dei CFrame: se in quella finestra copre 150 stud totali\n-- oppure 100 stud di sola Y, e\' un teletrasporto. La posizione buona e\'\n-- quella del campione piu\' vecchio dello storico, e il TP viene contato\n-- solo se partiva dalla Safe Zone. Da li\' in poi TP Bat, aimbot V1/V2,\n-- Bat Counter, Look At Enemy, ESP e tracker puntano al punto d\'origine.\n-- ============================================================\ndo\n  -- Limiti di coordinate della Safe Zone\n  local MAP_BOUNDS = {\n    MinX = -535.7,\n    MaxX = -422.0,\n    MinY = -7.9,\n    MaxY = 115.0,\n    MinZ = -72.0,\n    MaxZ = 193.3,\n  }\n\n  -- Finestra UNICA da 0.07s per tutti gli assi:\n  --   150 stud di distanza totale (X/Z/Y)  oppure  100 stud di sola Y\n  local TP_TOTAL   = 150\n  local TP_DELTA_Y = 100\n  local WINDOW     = 0.07\n  -- Il fantasma non sparisce rientrando nella zona: sparisce quando il\n  -- giocatore ha camminato WALK_CLEAR stud ORIZZONTALI dentro la zona.\n  -- La Y e\' esclusa dal conteggio: cadere o salire non lo cancella.\n  local WALK_CLEAR = 15\n  local STEP_MAX   = 50   -- oltre questo non e\' camminata, non si accumula\n\n  local function enabled() return _G.AmbitiousAntiVoidEnabled == true end\n\n  local ghost   = setmetatable({}, { __mode = "k" })  -- [player] = posizione d\'origine\n  local ghostCF = setmetatable({}, { __mode = "k" })  -- [player] = CFrame d\'origine\n  local isOutOf = setmetatable({}, { __mode = "k" })  -- [player] = bool\n  local tracked = setmetatable({}, { __mode = "k" })  -- [player] = true (thread gia\' avviato)\n\n  local function isWithinBounds(pos)\n    if typeof(pos) ~= "Vector3" then return false end\n    return pos.X >= MAP_BOUNDS.MinX and pos.X <= MAP_BOUNDS.MaxX\n       and pos.Y >= MAP_BOUNDS.MinY and pos.Y <= MAP_BOUNDS.MaxY\n       and pos.Z >= MAP_BOUNDS.MinZ and pos.Z <= MAP_BOUNDS.MaxZ\n  end\n\n  -- Richiamata SOLO quando un teleport viene confermato\n  local function onTeleportDetected(player, originCFrame)\n    isOutOf[player] = true\n    ghostCF[player] = originCFrame\n    ghost[player]   = originCFrame.Position\n  end\n\n\n  -- ============================================================\n  -- RESCUE (rete di sicurezza per LP)\n  -- Se LP finisce fuori dalla Safe Zone (void part assente, fling,\n  -- micro-bug) viene riportato all\'ultima posizione sicura a terra.\n  -- Attivo solo quando Anti Void e\' acceso. Cooldown zero: interviene\n  -- ad ogni Heartbeat finche\' LP non e\' rientrato nella zona.\n  -- ============================================================\n  local _rescueLastSafePos = nil   -- ultima pos a terra dentro la zona\n  local _rescueSpawnOrigin = nil   -- prima pos sicura rilevata all\'accensione\n  local _rescueLastRescue  = 0     -- os.clock() dell\'ultimo rescue\n  local RESCUE_COOLDOWN    = 0     -- istantaneo (come in Ambitious_2_)\n  local RESCUE_UPDATE_INT  = 0.1   -- ogni quanto aggiornare il checkpoint\n  local _rescueLastUpdate  = 0\n\n  local function _rescueUpdateCheckpoint()\n    local c   = LP.Character\n    local hrp = c and c:FindFirstChild("HumanoidRootPart")\n    local hum = c and c:FindFirstChildOfClass("Humanoid")\n    if not (hrp and hum) then return end\n    local now = os.clock()\n    if now - _rescueLastUpdate < RESCUE_UPDATE_INT then return end\n    _rescueLastUpdate = now\n    local pos = hrp.Position\n    if not _rescueSpawnOrigin and isWithinBounds(pos) then\n      _rescueSpawnOrigin = pos\n    end\n    -- salva checkpoint solo se e\' a terra (non in aria) e dentro la zona\n    if hum.FloorMaterial ~= Enum.Material.Air and isWithinBounds(pos) then\n      _rescueLastSafePos = pos\n    end\n  end\n\n  local function _rescueTryRescue()\n    local c   = LP.Character\n    local hrp = c and c:FindFirstChild("HumanoidRootPart")\n    if not (hrp and hrp.Parent) then return end\n    if isWithinBounds(hrp.Position) then return end\n    local now = os.clock()\n    if now - _rescueLastRescue < RESCUE_COOLDOWN then return end\n    _rescueLastRescue = now\n    local dest = _rescueLastSafePos or _rescueSpawnOrigin\n    if dest and isWithinBounds(dest) then\n      pcall(function()\n        hrp.AssemblyLinearVelocity  = Vector3.zero\n        hrp.AssemblyAngularVelocity = Vector3.zero\n        hrp.CFrame = CFrame.new(dest + Vector3.new(0, 3, 0))\n      end)\n    end\n  end\n\n  -- Heartbeat dedicato al rescue LP. Si registra una sola volta\n  -- e controlla enabled() ogni frame: zero overhead quando spento.\n  RunService.Heartbeat:Connect(function()\n    if not enabled() then return end\n    _rescueUpdateCheckpoint()\n    _rescueTryRescue()\n  end)\n\n  -- Resetta il checkpoint al respawn di LP: la nuova vita riparte da zero\n  LP.CharacterAdded:Connect(function()\n    _rescueLastSafePos = nil\n    _rescueSpawnOrigin = nil\n    _rescueLastRescue  = 0\n    _rescueLastUpdate  = 0\n  end)\n  -- ============================================================\n  -- FINE RESCUE\n  -- ============================================================\n\n  local function trackPlayer(player)\n    if player == LP then return end\n    if tracked[player] then return end\n    tracked[player] = true\n\n    local history      = {}\n    local walkedXZ     = 0     -- spostamento orizzontale accumulato a piedi\n    local lastCheckPos = nil\n\n    task.spawn(function()\n      while player and player.Parent do\n        -- Poll passivo finche\' l\'Anti Void e\' spento: nessun overhead.\n        -- Il giocatore e\' gia\' in tracked, quindi se viene acceso basta\n        -- uscire dal poll e il ciclo attivo riparte immediatamente.\n        if not enabled() then\n          -- Resetta lo stato in modo che la prima rilevazione sia pulita\n          isOutOf[player] = false\n          history      = {}\n          walkedXZ     = 0\n          lastCheckPos = nil\n          task.wait(0.5)\n        else\n          local char = player.Character\n          local hrp  = char and char:FindFirstChild("HumanoidRootPart")\n          local hum  = char and char:FindFirstChildOfClass("Humanoid")\n\n          if hrp and hum and hum.Health > 0 then\n            local now = tick()\n            local currentCFrame = hrp.CFrame\n            local currentPos = currentCFrame.Position\n\n            if isOutOf[player] then\n              -- FASE 1: fantasma attivo, si misura solo la camminata X/Z\n              if lastCheckPos then\n                local moveVector = currentPos - lastCheckPos\n                local moveXZ = Vector3.new(moveVector.X, 0, moveVector.Z).Magnitude\n                if moveXZ < STEP_MAX and isWithinBounds(currentPos) then\n                  walkedXZ = walkedXZ + moveXZ\n                end\n              end\n              lastCheckPos = currentPos\n\n              if walkedXZ >= WALK_CLEAR then\n                isOutOf[player] = false\n                ghost[player]   = currentPos\n                ghostCF[player] = currentCFrame\n                history      = {}\n                walkedXZ     = 0\n                lastCheckPos = nil\n              end\n            else\n              -- FASE 2: nessun fantasma, si cerca il teletrasporto\n              walkedXZ     = 0\n              lastCheckPos = currentPos\n              ghost[player]   = currentPos\n              ghostCF[player] = currentCFrame\n\n              table.insert(history, {time = now, cframe = currentCFrame})\n              while #history > 0 and (now - history[1].time) > WINDOW do\n                table.remove(history, 1)\n              end\n\n              local oldest = history[1]\n              if oldest then\n                local totalDistance = (currentPos - oldest.cframe.Position).Magnitude\n                local deltaY = math.abs(currentPos.Y - oldest.cframe.Position.Y)\n\n                if totalDistance >= TP_TOTAL or deltaY >= TP_DELTA_Y then\n                  local refCFrame = oldest.cframe\n                  local refPos = refCFrame.Position\n                  local studsTraveledVector = currentPos - refPos\n                  local exactOriginPos = currentPos - studsTraveledVector\n                  local exactCFrame = CFrame.new(exactOriginPos) * (refCFrame - refCFrame.Position)\n\n                  if isWithinBounds(exactOriginPos) then\n                    onTeleportDetected(player, exactCFrame)\n                  end\n                  history = {}\n                end\n              end\n            end\n          else\n            -- morto o senza character: niente fantasma\n            isOutOf[player] = false\n            history      = {}\n            walkedXZ     = 0\n            lastCheckPos = nil\n          end\n          RunService.Heartbeat:Wait()\n        end\n      end\n      tracked[player] = nil\n    end)\n  end\n\n  Players.PlayerAdded:Connect(trackPlayer)\n\n  -- I thread partono all\'accensione e muoiono allo spegnimento: da spento\n  -- il modulo non tiene niente in esecuzione.\n  local function startAll()\n    for _, plr in ipairs(Players:GetPlayers()) do trackPlayer(plr) end\n  end\n\n  local function stopAll()\n    for plr in pairs(isOutOf) do isOutOf[plr] = false end\n  end\n\n  local function posFor(player, rawPos)\n    if not player or not enabled() then return rawPos, false end\n    if isOutOf[player] then\n      local g = ghost[player]\n      if g then return g, true end\n    end\n    return rawPos, false\n  end\n\n  -- Come sopra ma partendo da una BasePart del nemico\n  local function posForPart(part, rawPos)\n    if not part then return rawPos, false end\n    local model = part:FindFirstAncestorOfClass("Model")\n    local player = model and Players:GetPlayerFromCharacter(model)\n    return posFor(player, rawPos or part.Position)\n  end\n\n  _G.AmbitiousAntiVoidEnabled = _G.AmbitiousAntiVoidEnabled == true\n\n  -- Avvia subito un thread per ogni giocatore gia\' presente.\n  -- I thread fanno poll passivo se Anti Void e\' spento, tracking attivo\n  -- se e\' acceso: nessun giocatore viene perso indipendentemente dallo stato.\n  startAll()\n\n  _G.AmbitiousAntiVoid = {\n    setEnabled = function(on)\n      on = on and true or false\n      local was = _G.AmbitiousAntiVoidEnabled == true\n      _G.AmbitiousAntiVoidEnabled = on\n      if on and not was then\n        -- Per sicurezza: aggiunge thread per giocatori entrati nel frattempo\n        startAll()\n      elseif (not on) and was then\n        stopAll()\n      end\n    end,\n    isEnabled  = function() return _G.AmbitiousAntiVoidEnabled == true end,\n    bounds     = MAP_BOUNDS,\n    posFor     = posFor,\n    posForPart = posForPart,\n    isOut      = function(player) return player and isOutOf[player] == true end,\n    ghostOf    = function(player) return player and ghost[player] or nil end,\n  }\n\n  -- ---------- REPLICA ESP SULLA POSIZIONE FANTASMA ----------\n  -- Al TP si congela una copia del corpo sul CFrame d\'origine calcolato\n  -- dal tracker, con lo stesso contorno e overhead dell\'ESP. L\'ESP vero\n  -- viene nascosto, cosi\' non lo segue nel void.\n  -- NB: ghostCF e\' quello dichiarato sopra dal tracker, non ridichiararlo\n  -- qui o la replica leggerebbe una tabella sempre vuota.\n  local replicas   = {}\n  local ghostFolder = nil\n\n  local function ensureFolder()\n    if ghostFolder and ghostFolder.Parent then return ghostFolder end\n    ghostFolder = Instance.new("Folder")\n    ghostFolder.Name = "AmbitiousAntiVoid"\n    ghostFolder.Parent = workspace\n    return ghostFolder\n  end\n\n  -- Mostra o nasconde l\'ESP reale del nemico\n  local function setRealESP(char, visible)\n    if not char then return end\n    local hl = char:FindFirstChild("AmbitiousHubESP")\n    if hl then pcall(function() hl.Enabled = visible end) end\n    local head = char:FindFirstChild("Head")\n    local tag = head and head:FindFirstChild("AmbitiousHubESPTag")\n    if tag then pcall(function() tag.Enabled = visible end) end\n  end\n\n  local function clearReplica(plr)\n    local r = replicas[plr]\n    if r then pcall(function() r:Destroy() end) end\n    replicas[plr] = nil\n  end\n\n  local function buildReplica(plr, char, cf)\n    clearReplica(plr)\n    -- ESP spento: non si crea niente. Il resto (TP Bat, aimbot, tracker,\n    -- Look At Enemy) continua a funzionare sulla posizione fantasma.\n    if not char:FindFirstChild("AmbitiousHubESP") then return end\n    local ok, clone = pcall(function()\n      char.Archivable = true\n      return char:Clone()\n    end)\n    if not ok or not clone then return end\n\n    -- Congela la copia: niente script, niente fisica, niente collisioni\n    for _, d in ipairs(clone:GetDescendants()) do\n      if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("Humanoid") then\n        pcall(function() d:Destroy() end)\n      elseif d:IsA("BasePart") then\n        d.Anchored   = true\n        d.CanCollide = false\n        d.CanQuery   = false\n        d.CanTouch   = false\n      end\n    end\n    clone.Name = "GhostReplica_" .. tostring(plr.Name)\n    clone.Parent = ensureFolder()\n    pcall(function() clone:PivotTo(cf) end)\n\n    -- L\'ESP e il suo overhead sono figli del personaggio, quindi la copia\n    -- se li porta dietro identici e congelati sull\'ultimo valore.\n    local hl = clone:FindFirstChild("AmbitiousHubESP")\n    if hl then pcall(function() hl.Enabled = true end) end\n\n    local cloneHead = clone:FindFirstChild("Head")\n    local tag = cloneHead and cloneHead:FindFirstChild("AmbitiousHubESPTag")\n    if tag then\n      pcall(function() tag.Enabled = true end)\n      -- scritta VOID sotto la velocita\', al posto dove stava il nome\n      local box = tag:FindFirstChildOfClass("Frame") or tag\n      local vl = Instance.new("TextLabel")\n      vl.Name = "VoidTag"\n      vl.Size = UDim2.new(1, -10, 0, 16)\n      vl.Position = UDim2.new(0, 5, 0, 19)\n      vl.BackgroundTransparency = 1\n      vl.TextColor3 = Color3.fromRGB(255, 255, 255)\n      vl.Font = Enum.Font.GothamBlack\n      vl.TextSize = 16\n      vl.TextStrokeTransparency = 0.4\n      vl.Text = "VOID"\n      vl.Parent = box\n    end\n\n    replicas[plr] = clone\n  end\n\n  -- Repliche ESP: lo stato lo tiene gia\' il thread di tracciamento\n  local lastMarkerTick = 0\n  RunService.Heartbeat:Connect(function()\n    local now = os.clock()\n    if now - lastMarkerTick < 0.1 then return end\n    lastMarkerTick = now\n\n    for _, plr in ipairs(Players:GetPlayers()) do\n      if plr ~= LP then\n        local c   = plr.Character\n        local hrp = c and c:FindFirstChild("HumanoidRootPart")\n        local hum = c and c:FindFirstChildOfClass("Humanoid")\n        local out = enabled() and (hrp ~= nil) and (hum ~= nil) and hum.Health > 0 and isOutOf[plr] == true\n        if out and ghostCF[plr] then\n          setRealESP(c, false)\n          if not replicas[plr] or not replicas[plr].Parent then\n            buildReplica(plr, c, ghostCF[plr])\n          end\n        else\n          if replicas[plr] then\n            clearReplica(plr)\n            setRealESP(c, true)\n          end\n        end\n      end\n    end\n  end)\n\n  Players.PlayerRemoving:Connect(function(plr)\n    ghost[plr] = nil\n    isOutOf[plr] = nil\n    ghostCF[plr] = nil\n    tracked[plr] = nil\n    clearReplica(plr)\n  end)\nend\n-- <<< ANTI VOID END')
+
+  -- Anti TP Bat
+  safeLoad("AntiTPBat", '-- >>> ANTI TP BAT BEGIN\n-- ============================================================\n-- ANTI TP BAT (V1 / V2 / V3 / V4 + SPAM)\n-- Desync del PhysicsRepRootPart su una part esca + lock del movimento.\n--   V1 Rosso  : coordinate estreme\n--   V2 Blu    : Y = -120\n--   V3 Verde  : jitter random con ricreazione continua (mai a 0,0)\n--   V4 Viola  : posizione fissa (400, 0, 400)\n-- Hard stop automatico su morte nemico / morte propria / ragdoll proprio.\n-- Tutto dentro un do-block: nessun local nuovo nel main chunk (limite 200).\n-- ============================================================\n;(function()\n  local ATP_active      = false\n  local voidPart        = nil\n  local jitterThread    = nil\n  local jitterRunning   = false\n  local spamThread      = nil\n  local lockConn        = nil\n  local frozenCFrame    = nil\n  local savedWalkSpeed  = nil\n  local savedJumpPower  = nil\n  local savedAutoRotate = nil\n\n  _G.AmbitiousAntiTPBatEnabled = _G.AmbitiousAntiTPBatEnabled == true\n  _G.AmbitiousAntiTPBatSpam    = _G.AmbitiousAntiTPBatSpam == true\n  _G.AmbitiousAntiTPBatVersion = math.clamp(tonumber(_G.AmbitiousAntiTPBatVersion) or 1, 1, 4)\n\n  local function getHRP()\n    local c = LP.Character\n    if not c then return nil, nil end\n    return c:FindFirstChild("HumanoidRootPart"), c:FindFirstChildOfClass("Humanoid")\n  end\n\n  local function setPartAppearance(part, version)\n    local color, transparency\n    if version == 1 then\n      color, transparency = Color3.fromRGB(255, 50, 50), 0.5\n    elseif version == 2 then\n      color, transparency = Color3.fromRGB(50, 100, 255), 0.5\n    elseif version == 3 then\n      color, transparency = Color3.fromRGB(50, 255, 50), 0.5\n    elseif version == 4 then\n      color, transparency = Color3.fromRGB(200, 50, 200), 0.5\n    else\n      color, transparency = Color3.fromRGB(255, 255, 255), 1\n    end\n    pcall(function()\n      part.Color = color\n      part.Transparency = transparency\n    end)\n  end\n\n  -- Punta il PhysicsRepRootPart su target (part esca oppure di nuovo l\'HRP)\n  local function repTo(target)\n    local hrp = getHRP()\n    if hrp and sethiddenproperty and target then\n      pcall(function() sethiddenproperty(hrp, "PhysicsRepRootPart", target) end)\n    end\n  end\n\n  local function destroyVoidPart()\n    if voidPart then\n      local hrp = getHRP()\n      if hrp then repTo(hrp) end\n      pcall(function() voidPart:Destroy() end)\n      voidPart = nil\n    end\n  end\n\n  local function makePart(ver, pos)\n    local p = Instance.new("Part")\n    p.Name       = "DesyncTrapPart"\n    p.Size       = Vector3.new(1, 1, 1)\n    p.CanCollide = false\n    p.Anchored   = true\n    p.Position   = pos\n    setPartAppearance(p, ver)\n    p.Parent = workspace\n    return p\n  end\n\n  local function createVoidPart()\n    if voidPart then\n      pcall(function() voidPart:Destroy() end)\n      voidPart = nil\n    end\n    local ver = _G.AmbitiousAntiTPBatVersion or 1\n    local pos\n    if ver == 4 then\n      pos = Vector3.new(400, 0, 400)\n    elseif ver == 3 then\n      local rx, rz = math.random(-300, 300), math.random(-300, 300)\n      if rx == 0 and rz == 0 then rx, rz = 1, 1 end\n      pos = Vector3.new(rx, 0, rz)\n    elseif ver == 2 then\n      pos = Vector3.new(0, -120, 0)\n    else\n      pos = Vector3.new(99999999999, 99999999999, 99999999999)\n    end\n    voidPart = makePart(ver, pos)\n  end\n\n  local function stopVoidJitter()\n    jitterRunning = false\n    if jitterThread then\n      pcall(task.cancel, jitterThread)\n      jitterThread = nil\n    end\n  end\n\n  local function startVoidJitter()\n    stopVoidJitter()\n    jitterRunning = true\n    jitterThread = task.spawn(function()\n      while jitterRunning and ATP_active and _G.AmbitiousAntiTPBatVersion == 3 do\n        local rx, rz\n        repeat\n          rx = math.random(-300, 300)\n          rz = math.random(-300, 300)\n        until not (rx == 0 and rz == 0)\n        if voidPart then\n          pcall(function() voidPart:Destroy() end)\n          voidPart = nil\n        end\n        voidPart = makePart(3, Vector3.new(rx, 0, rz))\n        repTo(voidPart)\n        task.wait(0)\n      end\n    end)\n  end\n\n  -- ================================================================\n  -- FLOAT\n  -- Era la V5 dell\'Anti TP Bat, ora e\' una funzione a se\': non ha una riga\n  -- nella GUI, si usa da keybind o dal bottone mobile.\n  -- Non c\'entra niente col resto dell\'Anti TP Bat, che lavora sul\n  -- PhysicsRepRootPart mandando la posizione replicata su una part esca e\n  -- congelando il personaggio. Il Float non tocca la replica: sale di forza\n  -- di RISE studs rispetto a dove sei, e resta a quella quota lasciando X e\n  -- Z libere. Vive qui dentro solo perche\' riusa getHRP() di questo blocco.\n  -- La quota non e\' un numero fisso ma viene calcolata a ogni partenza\n  -- dalla tua Y del momento, cosi\' funziona uguale a terra, su una base\n  -- o su una piattaforma in alto.\n  --\n  -- La salita NON passa dalla fisica. Dare velocita\' verticale non basta:\n  -- la gravita\' la mangia e da fermo a terra lo stato Running dell\'Humanoid\n  -- annulla la spinta contro il pavimento. Qui si alza direttamente la Y di\n  -- RATE * dt a ogni frame, quindi la salita e\' esattamente quella voluta.\n  --\n  -- Ogni frame si riscrive SOLO la Y di posizione e velocita\': X/Z vengono\n  -- ricopiate identiche, altrimenti il personaggio perderebbe la spinta e\n  -- si incollerebbe a ogni passo. La rotazione va conservata a mano, se no\n  -- si gira verso Z+ sessanta volte al secondo.\n  --\n  -- Tutto dentro un\'unica tabella per non aggiungere local al chunk\n  -- principale, che e\' al limite dei 200 registri di Luau.\n  local FLOAT = {\n    RISE    = 17,     -- di quanto salire rispetto alla Y di partenza\n    RATE    = 55,     -- forza di salita, studs al secondo\n    CYCLE   = 2.5,    -- quanto si resta su prima di scendere\n    PAUSE   = 0.5,    -- pausa a terra prima di risalire\n    conn    = nil,\n    thread  = nil,\n    running = false,\n    locked  = false,  -- true da quando la quota e\' stata raggiunta\n    targetY = nil,    -- quota di questo giro, calcolata alla partenza\n  }\n\n  function FLOAT.startLoop()\n    if FLOAT.conn then return end\n    -- Il blocco scatta solo DOPO che la quota e\' stata raggiunta salendo.\n    -- Prima si teneva la Y fissa gia\' dal primo frame: partendo da un punto\n    -- piu\' alto della quota ti strappava giu\' di colpo invece di lasciarti\n    -- arrivare. Ogni ciclo riparte da capo, quindi si riazzera qui.\n    FLOAT.locked = false\n    -- La quota si ricalcola a ogni giro. Non si legge qui ma al primo\n    -- frame utile: se in questo istante si sta respawnando l\'HRP non\n    -- esiste e si prenderebbe una Y sbagliata.\n    FLOAT.targetY = nil\n    -- Staccare l\'Humanoid da terra prima di partire, se no il primo frame\n    -- di spinta viene assorbito dal pavimento.\n    local _, hum0 = getHRP()\n    if hum0 then\n      pcall(function() hum0:ChangeState(Enum.HumanoidStateType.Freefall) end)\n    end\n    FLOAT.conn = RunService.Heartbeat:Connect(function(dt)\n      local root = getHRP()\n      if not root then return end            -- morto o in respawn\n      local pos = root.Position\n      local vel = root.Velocity\n      local rot = root.CFrame - root.CFrame.Position\n      -- Primo frame del giro: la quota di arrivo e\' RISE studs sopra\n      -- quella attuale.\n      if not FLOAT.targetY then\n        FLOAT.targetY = pos.Y + FLOAT.RISE\n      end\n\n      if not FLOAT.locked then\n        -- math.min per non sfondare la quota se capita un frame lungo\n        local nextY = math.min(pos.Y + FLOAT.RATE * dt, FLOAT.targetY)\n        root.CFrame   = CFrame.new(pos.X, nextY, pos.Z) * rot\n        root.Velocity = Vector3.new(vel.X, 0, vel.Z)\n        -- quota raggiunta: da qui in poi si tiene\n        if nextY >= FLOAT.targetY then FLOAT.locked = true end\n        return\n      end\n\n      root.CFrame   = CFrame.new(pos.X, FLOAT.targetY, pos.Z) * rot\n      root.Velocity = Vector3.new(vel.X, 0, vel.Z)\n    end)\n  end\n\n  function FLOAT.stopLoop(tpDown)\n    if FLOAT.conn then\n      pcall(function() FLOAT.conn:Disconnect() end)\n      FLOAT.conn = nil\n    end\n    -- Spegnendo si torna a terra col TP Down, sempre quello NORMALE anche\n    -- se nelle impostazioni e\' selezionato Slow Fall: da quota bloccata il\n    -- rientro deve essere immediato, una discesa lenta lascerebbe il\n    -- personaggio scoperto per tutto il tragitto.\n    if tpDown and _G.AmbitiousRunTPDown then\n      pcall(_G.AmbitiousRunTPDown, true)\n    end\n  end\n\n  -- Aspetta che il personaggio abbia davvero toccato terra dopo il TP Down.\n  -- Non basta un\'attesa fissa: il TP Down sposta l\'HRP ma l\'Humanoid ci\n  -- mette qualche frame a registrare il pavimento, e se si ripartisse\n  -- subito si risalirebbe da meta\' strada senza mai arrivare a terra.\n  function FLOAT.waitGrounded(timeout)\n    local deadline = os.clock() + (timeout or 3)\n    while os.clock() < deadline do\n      if not FLOAT.running then return end\n      local hrp, hum = getHRP()\n      if not hrp or not hum then return end\n      if hum.Health <= 0 then return end\n      if hum.FloorMaterial ~= Enum.Material.Air then\n        task.wait(FLOAT.PAUSE)   -- pausa a terra, poi si risale\n        return\n      end\n      RunService.Heartbeat:Wait()\n    end\n  end\n\n  function FLOAT.enable()\n    if FLOAT.running then return end\n    FLOAT.running = true\n    FLOAT.startLoop()\n    -- Ciclo automatico: restare fermi alla stessa quota troppo a lungo e\'\n    -- proprio la condizione che fa scattare il controllo del gioco, quindi\n    -- ogni CYCLE secondi si scende e si risale.\n    FLOAT.thread = task.spawn(function()\n      while FLOAT.running do\n        local t0 = os.clock()\n        while FLOAT.running and (os.clock() - t0) < FLOAT.CYCLE do\n          task.wait(0.1)\n        end\n        if not FLOAT.running then break end\n        FLOAT.stopLoop(true)\n        -- si risale solo DOPO essere arrivati a terra, non dopo un tempo\n        -- deciso a tavolino\n        FLOAT.waitGrounded(3)\n        if not FLOAT.running then break end\n        FLOAT.startLoop()\n      end\n    end)\n  end\n\n  function FLOAT.disable()\n    if not FLOAT.running then return end\n    FLOAT.running = false\n    if FLOAT.thread then\n      pcall(task.cancel, FLOAT.thread)\n      FLOAT.thread = nil\n    end\n    FLOAT.stopLoop(true)\n  end\n\n  -- ---- API pubblica del Float ----\n  -- _G.AmbitiousFloatOn e\' la fonte di verita\' per bottone mobile e visuali.\n  _G.AmbitiousFloatOn = false\n\n  local function floatSync()\n    _G.AmbitiousFloatOn = FLOAT.running == true\n    if _G.AmbitiousRefreshMobileButtonStates then\n      pcall(_G.AmbitiousRefreshMobileButtonStates)\n    end\n  end\n\n  function _G.AmbitiousFloatStart()\n    if FLOAT.running then return end\n    -- Anti Die prima di muoversi, come per gli altri moduli.\n    if _G.AmbitiousAntiDieArmNow then pcall(_G.AmbitiousAntiDieArmNow) end\n    FLOAT.enable()\n    floatSync()\n  end\n\n  function _G.AmbitiousFloatStop()\n    if not FLOAT.running then return end\n    FLOAT.disable()\n    floatSync()\n  end\n\n  function _G.AmbitiousFloatToggle()\n    if FLOAT.running then _G.AmbitiousFloatStop() else _G.AmbitiousFloatStart() end\n  end\n\n  _G.AmbitiousFloat = {\n    start     = function() _G.AmbitiousFloatStart() end,\n    stop      = function() _G.AmbitiousFloatStop() end,\n    toggle    = function() _G.AmbitiousFloatToggle() end,\n    isEnabled = function() return FLOAT.running == true end,\n  }\n\n  local function lockMovement()\n    local hrp, hum = getHRP()\n    if not hrp then return end\n    frozenCFrame = hrp.CFrame\n    if hum then\n      savedWalkSpeed  = hum.WalkSpeed\n      savedJumpPower  = hum.JumpPower\n      savedAutoRotate = hum.AutoRotate\n      pcall(function()\n        hum.WalkSpeed  = 0\n        hum.JumpPower  = 0\n        hum.AutoRotate = false\n      end)\n    end\n    if lockConn then pcall(function() lockConn:Disconnect() end) end\n    lockConn = RunService.RenderStepped:Connect(function()\n      local r = getHRP()\n      if frozenCFrame and r and r.Parent then\n        r.CFrame = frozenCFrame\n      end\n    end)\n  end\n\n  local function unlockMovement()\n    local _, hum = getHRP()\n    if hum then\n      pcall(function()\n        hum.WalkSpeed  = savedWalkSpeed or 16\n        hum.JumpPower  = savedJumpPower or 50\n        if savedAutoRotate == nil then\n          hum.AutoRotate = true\n        else\n          hum.AutoRotate = savedAutoRotate\n        end\n      end)\n    end\n    savedWalkSpeed, savedJumpPower, savedAutoRotate = nil, nil, nil\n    if lockConn then\n      pcall(function() lockConn:Disconnect() end)\n      lockConn = nil\n    end\n    frozenCFrame = nil\n  end\n\n  local function enableCore()\n    if ATP_active then return end\n    ATP_active = true\n    -- Qui passano TUTTE le accensioni: setEnabled, setVersion, setSpam,\n    -- startSpamLoop e il watcher. Armare qui invece che nel solo\n    -- setEnabled significa che nessuna strada resta scoperta.\n    if _G.AmbitiousAntiDieArmNow then pcall(_G.AmbitiousAntiDieArmNow) end\n    createVoidPart()\n    repTo(voidPart)\n    lockMovement()\n    if _G.AmbitiousAntiTPBatVersion == 3 then startVoidJitter() end\n  end\n\n  local function disableCore()\n    if not ATP_active then return end\n    ATP_active = false\n    stopVoidJitter()\n    unlockMovement()\n    destroyVoidPart()\n  end\n\n  -- Riaggancio continuo (solo V1, V2, V4: la V3 ricrea la part da sola)\n  local function applyDesync()\n    if not ATP_active then return end\n    if _G.AmbitiousAntiTPBatVersion == 3 then return end\n    if not voidPart or not voidPart.Parent then createVoidPart() end\n    repTo(voidPart)\n  end\n\n  RunService.Heartbeat:Connect(applyDesync)\n  RunService.Stepped:Connect(applyDesync)\n\n  local function stopSpamLoop()\n    if spamThread then\n      pcall(task.cancel, spamThread)\n      spamThread = nil\n    end\n  end\n\n  local function startSpamLoop()\n    stopSpamLoop()\n    spamThread = task.spawn(function()\n      enableCore()\n      while _G.AmbitiousAntiTPBatSpam and _G.AmbitiousAntiTPBatEnabled do\n        task.wait(0.5)\n        if not (_G.AmbitiousAntiTPBatSpam and _G.AmbitiousAntiTPBatEnabled) then break end\n        disableCore()\n        task.wait(0.5)\n        if not (_G.AmbitiousAntiTPBatSpam and _G.AmbitiousAntiTPBatEnabled) then break end\n        enableCore()\n      end\n      if _G.AmbitiousAntiTPBatEnabled then enableCore() else disableCore() end\n    end)\n  end\n\n  local function refreshUI()\n    pcall(function()\n      if _G._AmbitiousAntiTPBatSetRowVisual then\n        _G._AmbitiousAntiTPBatSetRowVisual(_G.AmbitiousAntiTPBatEnabled == true)\n      end\n      if _G._AmbitiousAntiTPBatSetSpamVisual then\n        _G._AmbitiousAntiTPBatSetSpamVisual(_G.AmbitiousAntiTPBatSpam == true)\n      end\n      if _G._AmbitiousAntiTPBatSetVersionVisual then\n        _G._AmbitiousAntiTPBatSetVersionVisual(_G.AmbitiousAntiTPBatVersion or 1)\n      end\n      if _G.AmbitiousRefreshMobileButtonStates then\n        _G.AmbitiousRefreshMobileButtonStates()\n      end\n      -- L\'Anti TP Bat accende l\'Anti Die come fanno TP Bat, Bat Aimbot e\n      -- Bat Counter V2. La sync sta qui perche\' refreshUI viene chiamata da\n      -- tutte le strade che cambiano stato: setEnabled, setVersion, setSpam\n      -- e hardStop. Una sola chiamata invece di quattro sparse.\n      if _G.AmbitiousAntiDieAutoSync then _G.AmbitiousAntiDieAutoSync() end\n    end)\n  end\n  _G._AmbitiousAntiTPBatRefreshUI = refreshUI\n\n  local function saveCfg()\n    if type(saveAmbitiousConfig) == "function" then pcall(saveAmbitiousConfig) end\n  end\n\n  local function setEnabled(on, skipSave)\n    on = on and true or false\n    _G.AmbitiousAntiTPBatEnabled = on\n    if on then\n      if _G.AmbitiousAntiTPBatSpam then\n        startSpamLoop()\n      else\n        stopSpamLoop()\n        enableCore()\n      end\n    else\n      stopSpamLoop()\n      disableCore()\n    end\n    refreshUI()\n    if not skipSave then saveCfg() end\n  end\n\n  local function setSpam(on, skipSave)\n    on = on and true or false\n    _G.AmbitiousAntiTPBatSpam = on\n    if _G.AmbitiousAntiTPBatEnabled then\n      if on then\n        startSpamLoop()\n      else\n        stopSpamLoop()\n        enableCore()\n      end\n    else\n      stopSpamLoop()\n    end\n    refreshUI()\n    if not skipSave then saveCfg() end\n  end\n\n  local function setVersion(v, skipSave)\n    v = math.clamp(tonumber(v) or 1, 1, 4)\n    local changed = (v ~= _G.AmbitiousAntiTPBatVersion)\n    if changed then\n      stopSpamLoop()\n      disableCore()\n      _G.AmbitiousAntiTPBatVersion = v\n      if _G.AmbitiousAntiTPBatEnabled then\n        if _G.AmbitiousAntiTPBatSpam then startSpamLoop() else enableCore() end\n      end\n    end\n    refreshUI()\n    if changed and not skipSave then saveCfg() end\n  end\n\n  -- HARD STOP: spegne solo il modulo principale, la Spam resta come impostazione\n  local function hardStop()\n    if not (ATP_active or _G.AmbitiousAntiTPBatEnabled) then return end\n    _G.AmbitiousAntiTPBatEnabled = false\n    stopSpamLoop()\n    disableCore()\n    refreshUI()\n    saveCfg()\n  end\n\n  local function onDeadTrigger()\n    if ATP_active or _G.AmbitiousAntiTPBatEnabled then hardStop() end\n  end\n\n  -- ---- ENEMY DEATH WATCHER ----\n  local enemyListeners = {}\n\n  local function clearEnemyListeners(plr)\n    local t = enemyListeners[plr]\n    if t then\n      for _, c in ipairs(t) do pcall(function() c:Disconnect() end) end\n      enemyListeners[plr] = nil\n    end\n  end\n\n  local function watchEnemyCharacter(plr, character)\n    clearEnemyListeners(plr)\n    if not character then return end\n    local conns = {}\n    local hum = character:FindFirstChildOfClass("Humanoid")\n    if hum then\n      table.insert(conns, hum.Died:Connect(onDeadTrigger))\n      table.insert(conns, hum.HealthChanged:Connect(function(hp)\n        if hp <= 0 then onDeadTrigger() end\n      end))\n    end\n    table.insert(conns, character.AncestryChanged:Connect(function(_, parent)\n      if not parent then onDeadTrigger() end\n    end))\n    enemyListeners[plr] = conns\n  end\n\n  local function setupEnemyPlayer(plr)\n    if plr == LP then return end\n    if plr.Character then watchEnemyCharacter(plr, plr.Character) end\n    plr.CharacterAdded:Connect(function(c) watchEnemyCharacter(plr, c) end)\n  end\n\n  for _, p in ipairs(Players:GetPlayers()) do pcall(setupEnemyPlayer, p) end\n  Players.PlayerAdded:Connect(function(p) pcall(setupEnemyPlayer, p) end)\n  Players.PlayerRemoving:Connect(function(p) pcall(clearEnemyListeners, p) end)\n\n  -- ---- SELF DEATH + RAGDOLL WATCHER ----\n  local selfConns = {}\n  local wasRagdolled = false\n\n  local function clearSelfConns()\n    for _, c in ipairs(selfConns) do pcall(function() c:Disconnect() end) end\n    selfConns = {}\n  end\n\n  local function setupSelfWatchers(character)\n    clearSelfConns()\n    wasRagdolled = false\n    if not character then return end\n    local hum = character:FindFirstChildOfClass("Humanoid")\n    if hum then\n      table.insert(selfConns, hum.Died:Connect(onDeadTrigger))\n      table.insert(selfConns, hum.HealthChanged:Connect(function(hp)\n        if hp <= 0 then onDeadTrigger() end\n      end))\n      table.insert(selfConns, hum.StateChanged:Connect(function(_, newState)\n        local isRag = (newState == Enum.HumanoidStateType.Physics)\n        pcall(function()\n          if newState == Enum.HumanoidStateType.Ragdoll then isRag = true end\n        end)\n        if isRag and not wasRagdolled then\n          wasRagdolled = true\n          onDeadTrigger()\n        elseif not isRag then\n          wasRagdolled = false\n        end\n      end))\n    end\n    table.insert(selfConns, character.AncestryChanged:Connect(function(_, parent)\n      if not parent then onDeadTrigger() end\n    end))\n  end\n\n  if LP.Character then setupSelfWatchers(LP.Character) end\n\n  LP.CharacterAdded:Connect(function(c)\n    if _G._AmbitiousWaitCharReady then pcall(_G._AmbitiousWaitCharReady, c, 10) end\n    setupSelfWatchers(c)\n    -- Respawn: il vecchio HRP non esiste piu\', si riparte spenti\n    _G.AmbitiousAntiTPBatEnabled = false\n    stopSpamLoop()\n    disableCore()\n    refreshUI()\n  end)\n\n  -- ---- API PUBBLICA ----\n  _G.AmbitiousAntiTPBat = {\n    setEnabled = function(on, skipSave) setEnabled(on, skipSave) end,\n    isEnabled  = function() return _G.AmbitiousAntiTPBatEnabled == true end,\n    toggle     = function() setEnabled(not (_G.AmbitiousAntiTPBatEnabled == true)) end,\n    setSpam    = function(on, skipSave) setSpam(on, skipSave) end,\n    getSpam    = function() return _G.AmbitiousAntiTPBatSpam == true end,\n    setVersion = function(v, skipSave) setVersion(v, skipSave) end,\n    getVersion = function() return _G.AmbitiousAntiTPBatVersion or 1 end,\n    hardStop   = hardStop,\n  }\n\n  _G.AmbitiousToggleAntiTPBat = function()\n    setEnabled(not (_G.AmbitiousAntiTPBatEnabled == true))\n  end\n\n  -- Watchdog: riallinea lo stato reale al flag\n  task.spawn(function()\n    while true do\n      task.wait(0.5)\n      if _G.AmbitiousAntiTPBatEnabled then\n        if not _G.AmbitiousAntiTPBatSpam and not ATP_active then\n          pcall(enableCore)\n        end\n      elseif ATP_active then\n        pcall(disableCore)\n      end\n    end\n  end)\nend)()\n-- <<< ANTI TP BAT END')
+
+  -- TP Bat V1-V5
+  safeLoad("TPBat", '  -- >>> TP BAT VERSIONS BEGIN\n  -- V1 = logica storica (snap secco sul nemico).\n  -- V2 = orbita fissa attorno al nemico.\n  -- V3 = body spam pattern (spam di teleport ravvicinati).\n  -- V4 = body spam 0.5 stud avanti rispetto alla direzione del nemico.\n  -- V5 = vortex: spirale che si stringe/allarga (raggio max 3).\n  --\n  -- Tutte le versioni girano DENTRO questo do-block, quindi ereditano\n  -- gratis l\'infrastruttura gia\' presente:\n  --   * No Player Collision automatica (acquire/release col tag "tpbat")\n  --   * Auto Stop sul ragdoll del nemico (detector condiviso)\n  --   * Anti Void (posForPart + PhysicsRepRootPart a nil se il nemico e\' nel void)\n  --   * Auto Swing / Camera Lock / Safe Mode / save config / bottoni mobile\n  --\n  -- IMPORTANTE: Bat Aimbot V2 e Bat Counter V2 usano SEMPRE la V1.\n  -- La versione scelta dall\'utente viene ignorata mentre uno dei due comanda.\n  -- Tutti i parametri stanno in una sola tabella per non consumare local slot.\n  -- ============================================================\n  local TPB = {\n    velHist     = setmetatable({}, { __mode = "k" }),\n    orbitAngle  = 0,\n    spinAngle   = 0,\n    -- V2\n    orbitRadius = 4.2,\n    orbitSpeed  = 80,\n    -- V3 / V4\n    spinSpeed   = 48,\n    -- Stesso numero di teleport della V5, cosi\' V3 e V4 picchiano quanto lei\n    teleports   = 300,\n    -- V5\n    v5Teleports = 300,\n    v5SpinSpeed = 60,\n    v5RadiusMin = 1.5,\n    v5RadiusMax = 3,\n  }\n  _G._AmbitiousTPB = TPB   -- tuning esterno (facoltativo)\n\n  -- Velocita\' del bersaglio filtrata (stessa formula delle logiche V2..V5)\n  local function tpBatTrackVel(tr)\n      local now = os.clock()\n      local pos = tr.Position\n      local vel = tr.AssemblyLinearVelocity or Vector3.zero\n      local h = TPB.velHist[tr]\n      if h then\n          local dt = now - h.t\n          if dt > 0.004 and dt < 0.5 then\n              local measured = (pos - h.p) / dt\n              if measured.Magnitude < 180 then\n                  local blend = math.clamp(dt * 12, 0.2, 0.85)\n                  vel = (h.v or vel):Lerp(measured, blend)\n              end\n          end\n      end\n      TPB.velHist[tr] = { t = now, p = pos, v = vel }\n      return vel\n  end\n\n  -- Snap "sicuro": evita CFrame.new(p, p) quando i due punti coincidono\n  local function tpBatSnap(hrp, pos, lookAt)\n      if (pos - lookAt).Magnitude > 0.001 then\n          hrp.CFrame = CFrame.new(pos, lookAt)\n      else\n          hrp.CFrame = CFrame.new(pos)\n      end\n      hrp.AssemblyLinearVelocity = Vector3.zero\n      hrp.AssemblyAngularVelocity = Vector3.zero\n  end\n\n  local function tpBatFrame(dt)\n      if not tpBatEnabled then return end\n      dt = (type(dt) == "number" and dt > 0 and dt < 0.1) and dt or (1 / 60)\n\n      local char = LP.Character\n      if not char then return end\n      local hrp = char:FindFirstChild("HumanoidRootPart")\n      local hum = char:FindFirstChildOfClass("Humanoid")\n      if not hrp or not hum or hum.Health <= 0 then return end\n\n      local target = getClosestEnemy()\n      if not (target and target.Character) then return end\n      local tr = target.Character:FindFirstChild("HumanoidRootPart")\n      if not tr then return end\n\n      -- >>> ANTI VOID BEGIN\n      -- Nemico tpato nel void: si lavora sul punto d\'origine.\n      local _tpRaw, _tpGhost = tr.Position, false\n      if _G.AmbitiousAntiVoid then\n          _tpRaw, _tpGhost = _G.AmbitiousAntiVoid.posForPart(tr, tr.Position)\n      end\n      -- PhysicsRepRootPart si aggancia al nemico solo se e\' ancora in mappa.\n      if sethiddenproperty then\n          if _tpGhost then\n              pcall(function() sethiddenproperty(hrp, "PhysicsRepRootPart", nil) end)\n          else\n              pcall(function() sethiddenproperty(hrp, "PhysicsRepRootPart", tr) end)\n          end\n      end\n      -- <<< ANTI VOID END\n\n      -- Bat Aimbot V2 / Bat Counter V2 => SEMPRE V1\n      local forcedV1 = (_G.AmbitiousBatAimbotV2On == true)\n                    or (_G.AmbitiousBatCounterV2On == true)\n      local ver = forcedV1 and 1 or math.clamp(tonumber(_G.AmbitiousTPBatVersion) or 1, 1, 5)\n\n      if ver == 1 then\n          -- ---------- V1: logica originale ----------\n          local targetPos = _tpRaw + Vector3.new(0, 0.9, 0)\n          -- La distanza minima di 8 stud vale solo per il TP Bat avviato a mano.\n          if forcedV1 or (hrp.Position - targetPos).Magnitude > 8 then\n              hrp.CFrame = CFrame.new(targetPos)\n          end\n      else\n          -- ---------- BASE COMUNE V2..V5 ----------\n          local center = _tpRaw + Vector3.new(0, 0.9, 0)\n          local flatVel = Vector3.zero\n          if not _tpGhost then\n              local tv = tpBatTrackVel(tr)\n              flatVel = Vector3.new(tv.X, 0, tv.Z)\n              if flatVel.Magnitude > 110 then\n                  flatVel = flatVel.Unit * 110\n              end\n          end\n          local predicted = center + flatVel * 0.05\n\n          if ver == 2 then\n              -- ---------- V2: ORBITA FISSA ----------\n              TPB.orbitAngle = (TPB.orbitAngle or 0) + TPB.orbitSpeed * dt\n              local ang = TPB.orbitAngle\n              local orbitPos = predicted + Vector3.new(\n                  math.cos(ang) * TPB.orbitRadius,\n                  0,\n                  math.sin(ang) * TPB.orbitRadius\n              )\n              tpBatSnap(hrp, orbitPos, predicted)\n          else\n              local look  = tr.CFrame.LookVector\n              local right = tr.CFrame.RightVector\n\n              -- V3 resta sul punto predetto, V4/V5 si spostano 0.5 stud avanti\n              local anchor = predicted\n              if ver ~= 3 and flatVel.Magnitude > 0.5 then\n                  anchor = predicted + flatVel.Unit * 0.5\n              end\n\n              if ver == 5 then\n                  -- ---------- V5: VORTEX ----------\n                  TPB.orbitAngle = (TPB.orbitAngle or 0) + TPB.v5SpinSpeed * dt * 5\n                  local ang = TPB.orbitAngle\n                  local n = TPB.v5Teleports\n                  local rMin, rMax = TPB.v5RadiusMin, TPB.v5RadiusMax\n                  for i = 1, n do\n                      local t = i / n\n                      local radius = rMin + (rMax - rMin) * math.abs(math.sin(t * math.pi * 3))\n                      local angle = ang + t * 12\n                      local pos = anchor\n                          + right * (math.cos(angle) * radius)\n                          + look  * (math.sin(angle) * radius)\n                          + Vector3.new(0, math.sin(angle * 1.5) * 0.15, 0)\n                      tpBatSnap(hrp, pos, anchor)\n                  end\n                  local face = anchor + Vector3.new(\n                      math.sin(ang) * 0.3,\n                      0.1,\n                      math.cos(ang) * 0.3\n                  )\n                  tpBatSnap(hrp, anchor + Vector3.new(0, 0.15, 0), face)\n              else\n                  -- ---------- V3 / V4: BODY SPAM PATTERN ----------\n                  TPB.spinAngle = (TPB.spinAngle or 0) + TPB.spinSpeed * dt * 4.4\n                  local spin = TPB.spinAngle\n                  local c, s = math.cos(spin), math.sin(spin)\n                  for i = 1, TPB.teleports do\n                      local jx = ((i % 5) - 2) * 0.05\n                      local jz = ((i % 7) - 3) * 0.04\n                      local jy = ((i % 3) - 1) * 0.025\n                      local ox = jx * c - jz * s\n                      local oz = jx * s + jz * c\n                      local pos = anchor + right * ox + look * (0.12 + oz) + Vector3.new(0, jy, 0)\n                      tpBatSnap(hrp, pos, anchor)\n                  end\n                  local face = anchor + Vector3.new(\n                      math.sin(spin) * 0.4,\n                      0,\n                      math.cos(spin) * 0.4\n                  )\n                  tpBatSnap(hrp, anchor + Vector3.new(0, 0.15, 0), face)\n              end\n          end\n      end\n\n      -- CAMERA LOCK: identico per tutte le versioni\n      if tpBatCameraLockEnabled then\n          pcall(function()\n              workspace.CurrentCamera.CFrame = CFrame.new(\n                  workspace.CurrentCamera.CFrame.Position,\n                  _tpRaw   -- >>> ANTI VOID <<<\n              )\n          end)\n      end\n\n      trySwingBat()\n  end\n\n  -- Cambio versione (UI / keybind). Non riavvia il TP Bat: il dispatcher\n  -- legge _G.AmbitiousTPBatVersion ad ogni frame.\n  function _G.AmbitiousSetTPBatVersion(v)\n      v = math.clamp(tonumber(v) or 1, 1, 5)\n      _G.AmbitiousTPBatVersion = v\n      TPB.orbitAngle = 0\n      TPB.spinAngle = 0\n      table.clear(TPB.velHist)\n      if _G._AmbitiousTPBatSetVersionVisual then _G._AmbitiousTPBatSetVersionVisual(v) end\n      if saveAmbitiousConfig then saveAmbitiousConfig() end\n      return v\n  end\n  -- <<< TP BAT VERSIONS END\n\n-- ===== AVVIO / ARRESTO =====\nfunction _G.AmbitiousStartTPBat()\n  -- Anti Die SUBITO, prima riga della funzione. Stava nel wrapper in fondo\n  -- al file: funzionava solo per chi chiamava il nome globale DOPO che i\n  -- wrapper erano stati installati, e chi entrava per altre strade (o\n  -- prima) partiva scoperto. Qui non c\'e\' strada che lo salti.\n  if _G.AmbitiousAntiDieArmNow then pcall(_G.AmbitiousAntiDieArmNow) end\n    if tpBatEnabled then return end\n    if _G.AmbitiousSafeModeTryStart and not _G.AmbitiousSafeModeTryStart() then return false end\n\n    -- Ferma gli altri aimbot se attivi\n    if _G.AmbitiousStopNormalAimbot then _G.AmbitiousStopNormalAimbot() end\n    -- Se e\' il Bat Aimbot V2 a chiamarci non spegniamo il V2: e\' la sua fase 2.\n    if not _G.AmbitiousBatAimbotV2On then\n        if _G.AmbitiousStopBatAimbotV2 then _G.AmbitiousStopBatAimbotV2(false) end\n    end\n\n    tpBatEnabled = true\n    _G.AmbitiousTPBatOn = true\n\n    -- Prenota la no-collision per tutta la durata del TP Bat\n    acquireNoCollision()\n\n    -- ============================================================\n    -- LOOP PRINCIPALE (Heartbeat):\n    --   Solo snap al target + camera + autoswing.\n    --   La no-collision e\' prenotata una volta sotto, non per-frame.\n    -- ============================================================\n    -- NO-COLLISION: gestita dal modulo v3 (event-driven), non serve\n    -- rifarla ogni frame.\n    -- Il dispatcher sceglie la versione (V1..V5) ad ogni frame.\n    if tpBatLoopConn then tpBatLoopConn:Disconnect() end\n    TPB.orbitAngle = 0\n    TPB.spinAngle = 0\n    table.clear(TPB.velHist)\n    tpBatLoopConn = RunService.Heartbeat:Connect(tpBatFrame)\n\n    -- Rilevamento ragdoll nemici (PlayerAdded + esistenti)\n    if tpBatRagdollConn then tpBatRagdollConn:Disconnect() end\n    tpBatRagdollConn = Players.PlayerAdded:Connect(watchEnemyPlayer)\n    for _, plr in ipairs(Players:GetPlayers()) do\n        watchEnemyPlayer(plr)\n    end\n\n    -- Pulizia per-player quando qualcuno esce\n    if tpBatResetConn then tpBatResetConn:Disconnect() end\n    tpBatResetConn = Players.PlayerRemoving:Connect(function(plr)\n        if tpBatPlayerConns[plr] then\n            pcall(function() tpBatPlayerConns[plr]:Disconnect() end)\n            tpBatPlayerConns[plr] = nil\n        end\n    end)\n\n    if _G.AmbitiousTPBatSetVisual then _G.AmbitiousTPBatSetVisual(true) end\n    if _G.AmbitiousRefreshMobileButtonStates then _G.AmbitiousRefreshMobileButtonStates() end\n    saveAmbitiousConfig()\n    return true\nend\n\nfunction _G.AmbitiousStopTPBat()\n    tpBatEnabled = false\n    _G.AmbitiousTPBatOn = false\n    if not (_G.AmbitiousBatAimbotV2On == true) and not (_G.AmbitiousCounterState and _G.AmbitiousCounterState.batDebounce == true) then\n        _G.AmbitiousTPBatSilent = false\n    end\n\n    -- Disconnetti tutti i loop IMMEDIATAMENTE\n    if tpBatLoopConn then\n        tpBatLoopConn:Disconnect()\n        tpBatLoopConn = nil\n    end\n    if tpBatRagdollConn then\n        tpBatRagdollConn:Disconnect()\n        tpBatRagdollConn = nil\n    end\n    if tpBatResetConn then\n        tpBatResetConn:Disconnect()\n        tpBatResetConn = nil\n    end\n\n    -- Disconnetti tutte le CharacterAdded per-player IMMEDIATAMENTE\n    for plr, conn in pairs(tpBatPlayerConns) do\n        pcall(function() conn:Disconnect() end)\n    end\n    table.clear(tpBatPlayerConns)\n\n    -- >>> TP BAT VERSIONS: azzera lo stato delle logiche V2..V5 <<<\n    TPB.orbitAngle = 0\n    TPB.spinAngle = 0\n    table.clear(TPB.velHist)\n\n    -- Aggiorna UI immediatamente\n    if _G.AmbitiousTPBatSetVisual then _G.AmbitiousTPBatSetVisual(false) end\n    if _G.AmbitiousRefreshMobileButtonStates then _G.AmbitiousRefreshMobileButtonStates() end\n    saveAmbitiousConfig()\n\n    -- Rilascia la prenotazione. Se il toggle No Player Collision e\' acceso\n    -- il modulo resta attivo; altrimenti ripristina i valori ORIGINALI di\n    -- ogni parte (non un CanCollide = true a tappeto).\n    task.delay(0.5, function()\n        releaseNoCollision()\n    end)\nend\n\nfunction _G.AmbitiousToggleTPBat()\n    -- Toggle manuale: il bottone mobile deve accendersi\n    _G.AmbitiousTPBatSilent = false\n    if tpBatEnabled then\n        _G.AmbitiousStopTPBat()\n    else\n        _G.AmbitiousStartTPBat()\n    end\nend\n\n\nend -- fine do-block tpBat\n\n_G.AmbitiousTPBatOn = false  -- viene aggiornato dalle funzioni\n\n-- ========================================================\n-- RAGDOLL DETECTOR PER IL CHASE (Bat Aimbot V1 / V2)\n-- Stessa identica logica del detector del TP Bat, ciclo di vita compreso:\n-- le connessioni si creano allo start del chase e si staccano allo stop.\n-- A chase spento non resta collegato nulla.\n-- ========================================================\ndo\n  local chaseRagdollEnabled = false\n  local chaseRagdollPlayerConns = {}\n  local chaseRagdollAddedConn = nil\n  local chaseRagdollRemovingConn = nil\n\n  local function onChaseEnemyRagdollStarted()\n    if not chaseRagdollEnabled then return end\n    -- Se il TP Bat sta girando comanda il suo detector interno.\n    if _G.AmbitiousTPBatOn then return end\n    -- Disattivazione ISTANTANEA al rilevamento hit (nessun cooldown)\n    if _G.AmbitiousBatAimbotV2On then\n      -- V2: si spegne tutto (chase + TP Bat), non riparte da solo.\n      if _G.AmbitiousStopBatAimbotV2 then _G.AmbitiousStopBatAimbotV2() end\n    elseif _G.AmbitiousNormalAimbotOn then\n      if _G.AmbitiousStopNormalAimbot then _G.AmbitiousStopNormalAimbot() end\n    end\n  end\n\n  local function setupChaseRagdollDetector(enemyChar)\n    local conn = enemyChar.DescendantAdded:Connect(function(d)\n      if d:IsA("BallSocketConstraint") then onChaseEnemyRagdollStarted() end\n    end)\n    return conn\n  end\n\n  local function watchChaseEnemyPlayer(plr)\n    if plr == LP then return end\n    if chaseRagdollPlayerConns[plr] then\n      pcall(function() chaseRagdollPlayerConns[plr]:Disconnect() end)\n    end\n    chaseRagdollPlayerConns[plr] = plr.CharacterAdded:Connect(function(char)\n      if char and chaseRagdollEnabled then\n        local detectorConn = setupChaseRagdollDetector(char)\n        char.AncestryChanged:Connect(function(_, parent)\n          if not parent then pcall(function() detectorConn:Disconnect() end) end\n        end)\n      end\n    end)\n    if plr.Character then\n      local detectorConn = setupChaseRagdollDetector(plr.Character)\n      plr.Character.AncestryChanged:Connect(function(_, parent)\n        if not parent then pcall(function() detectorConn:Disconnect() end) end\n      end)\n    end\n  end\n\n  -- Avviato da StartNormalAimbot (vale sia per il V1 che per la fase 1 del V2)\n  function _G.AmbitiousStartChaseRagdollWatcher()\n    if chaseRagdollEnabled then return end\n    chaseRagdollEnabled = true\n    if chaseRagdollAddedConn then chaseRagdollAddedConn:Disconnect() end\n    chaseRagdollAddedConn = Players.PlayerAdded:Connect(watchChaseEnemyPlayer)\n    for _, plr in ipairs(Players:GetPlayers()) do\n      watchChaseEnemyPlayer(plr)\n    end\n    if chaseRagdollRemovingConn then chaseRagdollRemovingConn:Disconnect() end\n    chaseRagdollRemovingConn = Players.PlayerRemoving:Connect(function(plr)\n      if chaseRagdollPlayerConns[plr] then\n        pcall(function() chaseRagdollPlayerConns[plr]:Disconnect() end)\n        chaseRagdollPlayerConns[plr] = nil\n      end\n    end)\n  end\n\n  -- Fermato da StopNormalAimbot / StopBatAimbotV2\n  function _G.AmbitiousStopChaseRagdollWatcher()\n    chaseRagdollEnabled = false\n    if chaseRagdollAddedConn then\n      chaseRagdollAddedConn:Disconnect()\n      chaseRagdollAddedConn = nil\n    end\n    if chaseRagdollRemovingConn then\n      chaseRagdollRemovingConn:Disconnect()\n      chaseRagdollRemovingConn = nil\n    end\n    for _, conn in pairs(chaseRagdollPlayerConns) do\n      pcall(function() conn:Disconnect() end)\n    end\n    table.clear(chaseRagdollPlayerConns)\n  end\nend\n\n-- Toggle del TP Bat "manuale" (keybind / bottone mobile).\n-- Se il TP Bat attivo appartiene alla fase 2 del Bat Aimbot V2, il V2 viene\n-- smontato del tutto e si riparte con un TP Bat normale, cosi\' le due logiche\n-- non si intrecciano.\nfunction _G.AmbitiousToggleTPBatManual()\n  -- Avvio manuale: il bottone mobile deve accendersi\n  _G.AmbitiousTPBatSilent = false\n  if _G.AmbitiousBatAimbotV2On then\n    if _G.AmbitiousStopBatAimbotV2 then _G.AmbitiousStopBatAimbotV2() end\n    if _G.AmbitiousStartTPBat then _G.AmbitiousStartTPBat() end\n    return\n  end\n  if _G.AmbitiousToggleTPBat then\n    _G.AmbitiousToggleTPBat()\n  elseif _G.AmbitiousStartTPBat and _G.AmbitiousStopTPBat then\n    if _G.AmbitiousTPBatOn then _G.AmbitiousStopTPBat() else _G.AmbitiousStartTPBat() end\n  end\nend\n\n_G.__AmbitiousSetupNormalAutoSteal = function()\n  _G.AmbitiousNormalSteal = _G.AmbitiousNormalSteal or {\n    enabled = false,\n    radius = 62,\n    duration = 1.3,\n    animals = {},\n    promptCache = {},\n    internalCache = {},\n    scannerStarted = false,\n    scanning = false,\n    isStealing = false,\n    stealConn = nil,\n    refreshThread = nil,\n    lastSteal = 0,\n    cooldown = 0.08,\n  }\n  if _G.AmbitiousNormalSteal.stealConn then pcall(function() _G.AmbitiousNormalSteal.stealConn:Disconnect() end); _G.AmbitiousNormalSteal.stealConn = nil end\n  _G.AmbitiousNormalSteal.enabled = false\n  _G.AmbitiousNormalSteal.isStealing = false\n\n  local function barProgress(p)')
+
+  -- Bat Counter V1/V2
+  safeLoad("BatCounter", '-- true SOLO durante la finestra di counter del Bat Counter V2:\n-- fa ignorare al TP Bat la distanza minima di snap (come il Bat Aimbot V2)\n_G.AmbitiousBatCounterV2On = false\n\n_G.AmbitiousBatCounterSlapList = {"Bat", "Slap", "Iron Slap", "Gold Slap", "Diamond Slap", "Emerald Slap", "Ruby Slap", "Dark Matter Slap", "Flame Slap", "Nuclear Slap", "Galaxy Slap", "Glitched Slap"}\n\nfunction _G.AmbitiousFindBatForCounter()\n  local c = LP.Character\n  if not c then return nil end\n  local bp = LP:FindFirstChildOfClass("Backpack") or LP:FindFirstChild("Backpack")\n  for _, name in ipairs(_G.AmbitiousBatCounterSlapList) do\n    local t = c:FindFirstChild(name) or (bp and bp:FindFirstChild(name))\n    if t then return t end\n  end\n  for _, ch in ipairs(c:GetChildren()) do\n    if ch:IsA("Tool") and ch.Name:lower():find("bat") then return ch end\n  end\n  if bp then\n    for _, ch in ipairs(bp:GetChildren()) do\n      if ch:IsA("Tool") and ch.Name:lower():find("bat") then return ch end\n    end\n  end\n  return nil\nend\n\nfunction _G.AmbitiousSwingBatForCounter(bat, char)\n  if not bat or not char then return end\n  local hum = char:FindFirstChildOfClass("Humanoid")\n  if bat.Parent ~= char then\n    if hum then pcall(function() hum:EquipTool(bat) end) end\n    task.wait(0.05)\n  end\n  local remote = bat:FindFirstChildOfClass("RemoteEvent") or bat:FindFirstChildOfClass("RemoteFunction")\n  if remote and remote:IsA("RemoteEvent") then\n    pcall(function() remote:FireServer() end)\n    task.wait(0.15)\n    pcall(function() remote:FireServer() end)\n  else\n    pcall(function() bat:Activate() end)\n    task.wait(0.15)\n    pcall(function() bat:Activate() end)\n  end\nend\n\nfunction _G.AmbitiousCounterIsRagdoll(hum)\n  if not hum then return false end\n  local st = hum:GetState()\n  return st == Enum.HumanoidStateType.Physics\n    or st == Enum.HumanoidStateType.Ragdoll\n    or st == Enum.HumanoidStateType.FallingDown\n    or hum.PlatformStand == true\nend\n\n-- Versione usata dal bat counter: esclude FallingDown (piccoli bump non devono triggerare)\nfunction _G.AmbitiousCounterIsRagdollForBat(hum)\n  if not hum then return false end\n  local st = hum:GetState()\n  return st == Enum.HumanoidStateType.Physics\n    or st == Enum.HumanoidStateType.Ragdoll\n    or hum.PlatformStand == true\nend\n\n-- ============================================================\n-- BAT COUNTER V2: LOCK RAGDOLL NEMICO\n-- Watcher identico a quello del Ragdoll Countdown nemico\n-- (DescendantAdded -> BallSocketConstraint), ma indipendente:\n-- funziona anche col Ragdoll Countdown spento.\n-- Quando il nemico viene ragdollato parte un lock di 2.6s.\n-- Se durante quei 2.6s veniamo ragdollati, il Bat Counter V2\n-- IGNORA l\'evento e non parte (nessuna attesa, si salta e basta).\n-- Il lock e\' a TEMPO, non sullo stato: se il watcher non vede nulla\n-- il counter parte normalmente.\n-- ============================================================\n_G.AmbitiousBatCounterRagdollSeconds = _G.AmbitiousBatCounterRagdollSeconds or 2.6\n_G.AmbitiousBatCounterEnemyLock = _G.AmbitiousBatCounterEnemyLock or {}\n_G.AmbitiousBatCounterWatchConns = _G.AmbitiousBatCounterWatchConns or {}\n\nfunction _G.AmbitiousBCMarkEnemyRagdoll(plr)\n  if not plr or plr == LP then return end\n  local secs = tonumber(_G.AmbitiousBatCounterRagdollSeconds) or 2.6\n  _G.AmbitiousBatCounterEnemyLock[plr] = tick() + secs\nend\n\nfunction _G.AmbitiousStopBatCounterWatcher()\n  local conns = _G.AmbitiousBatCounterWatchConns\n  for k, c in pairs(conns) do\n    pcall(function() c:Disconnect() end)\n    conns[k] = nil\n  end\n  for k in pairs(_G.AmbitiousBatCounterEnemyLock) do\n    _G.AmbitiousBatCounterEnemyLock[k] = nil\n  end\nend\n\nfunction _G.AmbitiousStartBatCounterWatcher()\n  _G.AmbitiousStopBatCounterWatcher()\n  local conns = _G.AmbitiousBatCounterWatchConns\n\n  local function hookChar(plr, char)\n    if not char then return end\n    local key = tostring(plr.UserId) .. "_char"\n    if conns[key] then pcall(function() conns[key]:Disconnect() end) end\n    conns[key] = char.DescendantAdded:Connect(function(d)\n      if d:IsA("BallSocketConstraint") then\n        _G.AmbitiousBCMarkEnemyRagdoll(plr)\n      end\n    end)\n  end\n\n  local function watchPlayer(plr)\n    if plr == LP then return end\n    local key = tostring(plr.UserId) .. "_added"\n    if conns[key] then pcall(function() conns[key]:Disconnect() end) end\n    conns[key] = plr.CharacterAdded:Connect(function(char)\n      hookChar(plr, char)\n    end)\n    if plr.Character then hookChar(plr, plr.Character) end\n  end\n\n  conns["_playerAdded"] = Players.PlayerAdded:Connect(watchPlayer)\n  conns["_playerRemoving"] = Players.PlayerRemoving:Connect(function(plr)\n    _G.AmbitiousBatCounterEnemyLock[plr] = nil\n    local ka = tostring(plr.UserId) .. "_added"\n    local kc = tostring(plr.UserId) .. "_char"\n    if conns[ka] then pcall(function() conns[ka]:Disconnect() end) conns[ka] = nil end\n    if conns[kc] then pcall(function() conns[kc]:Disconnect() end) conns[kc] = nil end\n  end)\n\n  for _, plr in ipairs(Players:GetPlayers()) do\n    watchPlayer(plr)\n  end\nend\n\n-- Giocatore piu\' vicino a noi (vivo), senza limiti di distanza\nfunction _G.AmbitiousGetNearestEnemy()\n  local char = LP.Character\n  local hrp = char and char:FindFirstChild("HumanoidRootPart")\n  if not hrp then return nil end\n  local myPos = hrp.Position\n  local best, bestDist = nil, math.huge\n  for _, plr in ipairs(Players:GetPlayers()) do\n    if plr ~= LP then\n      local ec = plr.Character\n      local ehrp = ec and ec:FindFirstChild("HumanoidRootPart")\n      local ehum = ec and ec:FindFirstChildOfClass("Humanoid")\n      if ehrp and ehum and ehum.Health > 0 then\n        local d = (ehrp.Position - myPos).Magnitude\n        if d < bestDist then\n          bestDist = d\n          best = plr\n        end\n      end\n    end\n  end\n  return best\nend\n\n-- true se il nemico piu\' vicino e\' stato ragdollato da meno di 2.6s\nfunction _G.AmbitiousIsNearestEnemyRagdolled()\n  local plr = _G.AmbitiousGetNearestEnemy()\n  if not plr then return false end\n  local lockUntil = _G.AmbitiousBatCounterEnemyLock[plr]\n  return lockUntil ~= nil and lockUntil > tick()\nend\n\nfunction _G.AmbitiousStartBatCounter()\n  if _G.AmbitiousCounterState.batConn then return end\n  _G.AmbitiousCounterState.batDebounce = false\n  if _G.AmbitiousStartBatCounterWatcher then pcall(_G.AmbitiousStartBatCounterWatcher) end\n  _G.AmbitiousCounterState.batConn = RunService.Heartbeat:Connect(function()\n    if not batCounterEnabled then return end\n    if _G.AmbitiousCounterState.batDebounce then return end\n    local char = LP.Character\n    if not char then return end\n    local hum = char:FindFirstChildOfClass("Humanoid")\n    if not hum then return end\n    -- Morto, o Instant Reset in corso: il ragdoll che si vede in questi due\n    -- casi non e\' un colpo preso, e\' il nostro stesso reset (o la morte).\n    -- Di regola il counter risponde a un hit, quindi qui non deve partire.\n    -- Vale per V1 e V2: passano tutte e due da questo punto.\n    if hum.Health <= 0 then return end\n    if _G._AmbitiousInstantResetBusy then return end\n    if _G.AmbitiousCounterIsRagdollForBat(hum) then\n      _G.AmbitiousCounterState.batDebounce = true\n      -- ANTI DIE QUI, non dentro il task.spawn piu\' sotto. Li\' arrivava\n      -- 0.05s dopo, e questo ramo parte proprio perche\' sei GIA\' a terra\n      -- ragdollato: 0.05s in quella situazione sono un\'eternita\'. Ora la\n      -- protezione sale nello stesso frame in cui il ragdoll viene visto,\n      -- prima di qualunque attesa, teletrasporto o swing.\n      if _G.AmbitiousAntiDieArmNow then pcall(_G.AmbitiousAntiDieArmNow) end\n      if batCounterMode == "V2" then\n        -- Se il nemico e\' dentro il lock di 2.6s il counter NON parte e questo\n        -- hit viene SALTATO del tutto (niente attesa, niente ricontrollo):\n        -- il debounce si riapre solo quando usciamo dal nostro ragdoll,\n        -- cosi\' e\' pronto per la volta successiva.\n        if _G.AmbitiousIsNearestEnemyRagdolled then\n          local okRag, enemyRag = pcall(_G.AmbitiousIsNearestEnemyRagdolled)\n          if okRag and enemyRag then\n            task.spawn(function()\n              local t0 = tick()\n              while tick() - t0 < 10 do\n                local c2 = LP.Character\n                local h2 = c2 and c2:FindFirstChildOfClass("Humanoid")\n                if not h2 or not _G.AmbitiousCounterIsRagdollForBat(h2) then break end\n                task.wait(0.1)\n              end\n              task.wait(0.2)\n              _G.AmbitiousCounterState.batDebounce = false\n            end)\n            return\n          end\n        end\n        -- V2: salva CFrame, avvia tp bat in parallelo, dopo 0.4s ferma e ritorna\n        task.spawn(function()\n          task.wait(0.05)\n          local wasTPBatOn = _G.AmbitiousTPBatOn == true\n          local hrpNow = char and char:FindFirstChild("HumanoidRootPart")\n          local savedCF = hrpNow and hrpNow.CFrame or nil\n          -- tp bat parte. Il flag dice al TP Bat di ignorare la distanza minima\n          -- di 8 stud, esattamente come fa il Bat Aimbot V2.\n          _G.AmbitiousBatCounterV2On = true\n          if _G.AmbitiousAntiDieAutoSync then _G.AmbitiousAntiDieAutoSync() end\n          if not wasTPBatOn then\n            _G.AmbitiousTPBatSilent = true\n            if _G.AmbitiousStartTPBat then pcall(_G.AmbitiousStartTPBat) end\n            if _G.AmbitiousRefreshMobileButtonStates then pcall(_G.AmbitiousRefreshMobileButtonStates) end\n          end\n          local bat = _G.AmbitiousFindBatForCounter()\n          if bat then task.spawn(function() _G.AmbitiousSwingBatForCounter(bat, char) end) end\n\n          -- SNAP PROPRIO DEL COUNTER (non dipende dal loop del TP Bat).\n          -- Il loop del TP Bat puo\' non partire (Safe Mode), essere bloccato\n          -- dall\'Anti-Void o venire spento dal suo watcher ragdoll appena il\n          -- nemico va a terra: in tutti quei casi lo snap non avveniva.\n          -- Qui teletrasportiamo noi, ogni frame, senza nessuna soglia di\n          -- distanza, esattamente come la fase 2 del Bat Aimbot V2.\n          local snapConn\n          snapConn = RunService.Heartbeat:Connect(function()\n            local c2 = LP.Character\n            local h2 = c2 and c2:FindFirstChild("HumanoidRootPart")\n            local hum2 = c2 and c2:FindFirstChildOfClass("Humanoid")\n            if not h2 or not hum2 or hum2.Health <= 0 then return end\n            local t2 = _G.AmbitiousGetNearestEnemy and _G.AmbitiousGetNearestEnemy() or nil\n            local tc2 = t2 and t2.Character\n            local tr2 = tc2 and tc2:FindFirstChild("HumanoidRootPart")\n            if not tr2 then return end\n            -- >>> ANTI VOID BEGIN\n            -- Se il nemico si e\' tpato nel void si va sul punto d\'origine,\n            -- altrimenti lo snap ci porterebbe fuori mappa dietro di lui.\n            local _bcPos = tr2.Position\n            if _G.AmbitiousAntiVoid then\n              _bcPos = _G.AmbitiousAntiVoid.posForPart(tr2, _bcPos)\n            end\n            -- <<< ANTI VOID END\n            pcall(function()\n              h2.CFrame = CFrame.new(_bcPos + Vector3.new(0, 0.9, 0))\n              h2.AssemblyLinearVelocity = Vector3.zero\n              h2.AssemblyAngularVelocity = Vector3.zero\n            end)\n          end)\n\n          task.wait(0.4)\n          if snapConn then pcall(function() snapConn:Disconnect() end) snapConn = nil end\n          _G.AmbitiousBatCounterV2On = false\n          if _G.AmbitiousAntiDieAutoSync then _G.AmbitiousAntiDieAutoSync() end\n          if not wasTPBatOn then\n            if _G.AmbitiousStopTPBat then pcall(_G.AmbitiousStopTPBat) end\n            _G.AmbitiousTPBatSilent = false\n            if _G.AmbitiousRefreshMobileButtonStates then pcall(_G.AmbitiousRefreshMobileButtonStates) end\n          end\n          if savedCF then\n            local hrpBack = char and char:FindFirstChild("HumanoidRootPart")\n            if hrpBack then\n              pcall(function()\n                hrpBack.CFrame = savedCF\n                hrpBack.AssemblyLinearVelocity = Vector3.zero\n              end)\n            end\n          end\n          task.wait(0.5)\n          _G.AmbitiousCounterState.batDebounce = false\n        end)\n      else\n        -- V1: look at + bat partono insieme, dopo 0.7s si ripristina look at\n        task.spawn(function()\n          local wasLookAtEnabled = _G.AmbitiousLookAtEnabled\n          local savedRadius = _G.AmbitiousLookAtRadius\n          _G.AmbitiousLookAtRadius = math.huge\n          -- look at e bat partono insieme\n          if _G.AmbitiousStartLookAt then pcall(_G.AmbitiousStartLookAt) end\n          local bat = _G.AmbitiousFindBatForCounter()\n          if bat then task.spawn(function() _G.AmbitiousSwingBatForCounter(bat, char) end) end\n          task.wait(0.7)\n          _G.AmbitiousLookAtRadius = savedRadius\n          if wasLookAtEnabled then\n            if _G.AmbitiousStartLookAt then pcall(_G.AmbitiousStartLookAt) end\n          else\n            if _G.AmbitiousStopLookAt then pcall(_G.AmbitiousStopLookAt) end\n          end\n          task.wait(0.5)\n          _G.AmbitiousCounterState.batDebounce = false\n        end)\n      end\n    end\n  end)\nend\n\nfunction _G.AmbitiousStopBatCounter()\n  if _G.AmbitiousCounterState.batConn then\n    _G.AmbitiousCounterState.batConn:Disconnect()\n    _G.AmbitiousCounterState.batConn = nil\n  end\n  _G.AmbitiousCounterState.batDebounce = false\n  _G.AmbitiousBatCounterV2On = false\n  -- Il watcher dei ragdoll nemici serve anche al TP Ragdoll: se e\' acceso\n  -- lui, si lascia in piedi invece di spegnerlo insieme al Bat Counter.\n  if not _G.AmbitiousTPRagdollEnabled then\n    if _G.AmbitiousStopBatCounterWatcher then pcall(_G.AmbitiousStopBatCounterWatcher) end\n  end\nend\n\nstartBatCounter = _G.AmbitiousStartBatCounter\nstopBatCounter = _G.AmbitiousStopBatCounter\nsetupMedusaCounter = _G.AmbitiousStartMedCounter')
+
+  -- Wrappers
+  _G.DuelsV2_TPBat = {
+    setVersion = function(v)
+      v = math.clamp(tonumber(v) or 1, 1, 5)
+      _G.AmbitiousTPBatVersion = v
+      if _G.AmbitiousSetTPBatVersion then pcall(_G.AmbitiousSetTPBatVersion, v) end
+    end,
+    start = function() if _G.AmbitiousStartTPBat then pcall(_G.AmbitiousStartTPBat) end end,
+    stop = function() if _G.AmbitiousStopTPBat then pcall(_G.AmbitiousStopTPBat) end end,
+    toggle = function() 
+      if _G.AmbitiousToggleTPBatManual then pcall(_G.AmbitiousToggleTPBatManual)
+      elseif _G.AmbitiousToggleTPBat then pcall(_G.AmbitiousToggleTPBat) end
+    end
+  }
+
+  _G.DuelsV2_AntiTPBat = {
+    setVersion = function(v)
+      v = math.clamp(tonumber(v) or 1, 1, 4)
+      if _G.AmbitiousAntiTPBat and _G.AmbitiousAntiTPBat.setVersion then pcall(_G.AmbitiousAntiTPBat.setVersion, v) end
+    end,
+    setEnabled = function(on) if _G.AmbitiousAntiTPBat then pcall(_G.AmbitiousAntiTPBat.setEnabled, on) end end,
+    toggle = function() if _G.AmbitiousAntiTPBat then pcall(_G.AmbitiousAntiTPBat.toggle) end end,
+    setSpam = function(on) if _G.AmbitiousAntiTPBat then pcall(_G.AmbitiousAntiTPBat.setSpam, on) end end,
+  }
+
+  _G.DuelsV2_AntiVoid = {
+    setEnabled = function(on) if _G.AmbitiousAntiVoid then pcall(_G.AmbitiousAntiVoid.setEnabled, on) end end,
+  }
+
+  print("[Duels V2] All Ambitious modules ready - TP Bat V1-V5, Anti TP Bat V1-V4+Spam, Anti Void, Bat Counter V1/V2")
+
+  -- Build minimizing selectors after GUI exists
+  task.wait(1)
+  local Players = game:GetService("Players")
+  local TweenService = game:GetService("TweenService")
+  local LP = Players.LocalPlayer
+  local gui = LP.PlayerGui:FindFirstChild("DuelsV2")
+  if not gui then return end
+  local combatPage = nil
+  for _, v in ipairs(gui:GetDescendants()) do
+    if v.Name == "Combat" and v:IsA("Frame") and v:FindFirstChildOfClass("UIListLayout") then
+      combatPage = v
+      break
+    end
+  end
+  if not combatPage then return end
+
+  local function expandHolder(holder, expanded, targetH, arrow)
+    if expanded then
+      holder.Visible = true
+      TweenService:Create(holder, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1,-16,0,targetH)}):Play()
+      if arrow then arrow.Text = "▼" end
+    else
+      TweenService:Create(holder, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1,-16,0,0)}):Play()
+      task.delay(0.22, function() if holder then holder.Visible = false end end)
+      if arrow then arrow.Text = "▲" end
+    end
+  end
+
+  local function makeRow(parent, title)
+    local row = Instance.new("Frame", parent)
+    row.Name = title:gsub(" ", "").."Row"
+    row.Size = UDim2.new(1,-16,0,42)
+    row.BackgroundColor3 = Color3.fromRGB(14,22,16)
+    row.BorderSizePixel=0
+    local cr = Instance.new("UICorner", row); cr.CornerRadius = UDim.new(0,12)
+    local st = Instance.new("UIStroke", row); st.Color = Color3.fromRGB(34,76,46); st.Thickness=1; st.Transparency=0.5
+    local lbl = Instance.new("TextLabel", row)
+    lbl.Size = UDim2.new(1,-70,1,0); lbl.Position = UDim2.new(0,14,0,0)
+    lbl.BackgroundTransparency=1; lbl.Text=title; lbl.TextColor3=Color3.fromRGB(210,255,225)
+    lbl.Font = Enum.Font.GothamBold; lbl.TextSize=13; lbl.TextXAlignment=Enum.TextXAlignment.Left
+    local arrow = Instance.new("TextButton", row)
+    arrow.Size = UDim2.new(0,28,0,24); arrow.Position = UDim2.new(1,-40,0.5,-12)
+    arrow.BackgroundColor3 = Color3.fromRGB(8,8,12); arrow.BackgroundTransparency=0.18
+    arrow.Text = "▲"; arrow.TextColor3=Color3.fromRGB(255,255,255); arrow.Font=Enum.Font.GothamBold; arrow.TextSize=15; arrow.AutoButtonColor=false
+    local ac = Instance.new("UICorner", arrow); ac.CornerRadius=UDim.new(0,7)
+    return row, arrow
+  end
+
+  -- TP BAT V1-V5 SELECTOR
+  do
+    local row, arrow = makeRow(combatPage, "TP Bat Versions")
+    local holder = Instance.new("Frame", combatPage)
+    holder.Size=UDim2.new(1,-16,0,0); holder.BackgroundTransparency=1; holder.Visible=false; holder.ClipsDescendants=true
+    local verHolder = Instance.new("Frame", holder)
+    verHolder.Size=UDim2.new(1,0,0,42); verHolder.Position=UDim2.new(0,0,0,2)
+    verHolder.BackgroundColor3=Color3.fromRGB(14,22,16); verHolder.BackgroundTransparency=0.28
+    local c=Instance.new("UICorner", verHolder); c.CornerRadius=UDim.new(0,14)
+    local s=Instance.new("UIStroke", verHolder); s.Color=Color3.fromRGB(126,71,190); s.Thickness=1.4; s.Transparency=0.32
+    local slide = Instance.new("Frame", verHolder)
+    slide.BackgroundColor3=Color3.fromRGB(147,51,234); slide.AnchorPoint=Vector2.new(0.5,0.5)
+    slide.Size=UDim2.new(0.2,-4,1,-8); slide.Position=UDim2.new(0.1,0,0.5,0)
+    local sc=Instance.new("UICorner", slide); sc.CornerRadius=UDim.new(0,13)
+    local labels={}
+    for i=1,5 do
+      local list = {"V1","V2","V3","V4","V5"}
+      local txt = list[1][i]
+      local segW=0.2
+      local l=Instance.new("TextLabel", verHolder)
+      l.Text=txt; l.BackgroundTransparency=1; l.TextColor3=Color3.fromRGB(255,255,255); l.Font=Enum.Font.GothamBlack; l.TextSize=11
+      l.Size=UDim2.new(segW,0,1,0); l.Position=UDim2.new(segW*(i-0.5),0,0.5,0); l.AnchorPoint=Vector2.new(0.5,0.5); l.ZIndex=8
+      labels[i]=l
+      local b=Instance.new("TextButton", verHolder)
+      b.BackgroundTransparency=1; b.Text=""; b.Size=UDim2.new(segW,0,1,0); b.Position=UDim2.new(segW*(i-0.5),0,0.5,0); b.AnchorPoint=Vector2.new(0.5,0.5); b.ZIndex=10
+      local idx=i
+      b.MouseButton1Click:Connect(function()
+        _G.AmbitiousTPBatVersion=idx
+        if _G.AmbitiousSetTPBatVersion then pcall(_G.AmbitiousSetTPBatVersion, idx) end
+        TweenService:Create(slide,TweenInfo.new(0.18),{Position=UDim2.new(segW*(idx-0.5),0,0.5,0)}):Play()
+        for j,lab in ipairs(labels) do lab.TextTransparency = (j==idx) and 0 or 0.22 end
+      end)
+    end
+    local expanded=false
+    arrow.MouseButton1Click:Connect(function()
+      expanded=not expanded
+      expandHolder(holder, expanded, 46, arrow)
+    end)
+    local initVer = _G.AmbitiousTPBatVersion or 1
+    for j,lab in ipairs(labels) do lab.TextTransparency = (j==initVer) and 0 or 0.22 end
+    slide.Position = UDim2.new(0.2*(initVer-0.5),0,0.5,0)
+  end
+
+  -- ANTI TP BAT V1-V4 + SPAM
+  do
+    local row, arrow = makeRow(combatPage, "Anti TP Bat")
+    local holder = Instance.new("Frame", combatPage)
+    holder.Size=UDim2.new(1,-16,0,0); holder.BackgroundTransparency=1; holder.Visible=false; holder.ClipsDescendants=true
+    local verHolder = Instance.new("Frame", holder)
+    verHolder.Size=UDim2.new(1,0,0,42); verHolder.Position=UDim2.new(0,0,0,2)
+    verHolder.BackgroundColor3=Color3.fromRGB(14,22,16); verHolder.BackgroundTransparency=0.28
+    local c=Instance.new("UICorner", verHolder); c.CornerRadius=UDim.new(0,14)
+    local slide = Instance.new("Frame", verHolder)
+    slide.BackgroundColor3=Color3.fromRGB(147,51,234); slide.AnchorPoint=Vector2.new(0.5,0.5)
+    slide.Size=UDim2.new(0.25,-4,1,-8); slide.Position=UDim2.new(0.125,0,0.5,0)
+    local sc=Instance.new("UICorner", slide); sc.CornerRadius=UDim.new(0,13)
+    local labels={}
+    for i=1,4 do
+      local list = {"V1","V2","V3","V4"}
+      local txt = list[1][i]
+      local segW=0.25
+      local l=Instance.new("TextLabel", verHolder)
+      l.Text=txt; l.BackgroundTransparency=1; l.TextColor3=Color3.fromRGB(255,255,255); l.Font=Enum.Font.GothamBlack; l.TextSize=11
+      l.Size=UDim2.new(segW,0,1,0); l.Position=UDim2.new(segW*(i-0.5),0,0.5,0); l.AnchorPoint=Vector2.new(0.5,0.5); l.ZIndex=8
+      labels[i]=l
+      local b=Instance.new("TextButton", verHolder)
+      b.BackgroundTransparency=1; b.Text=""; b.Size=UDim2.new(segW,0,1,0); b.Position=UDim2.new(segW*(i-0.5),0,0.5,0); b.AnchorPoint=Vector2.new(0.5,0.5); b.ZIndex=10
+      local idx=i
+      b.MouseButton1Click:Connect(function()
+        _G.AmbitiousAntiTPBatVersion=idx
+        if _G.AmbitiousAntiTPBat and _G.AmbitiousAntiTPBat.setVersion then pcall(_G.AmbitiousAntiTPBat.setVersion, idx) end
+        TweenService:Create(slide,TweenInfo.new(0.18),{Position=UDim2.new(0.25*(idx-0.5),0,0.5,0)}):Play()
+        for j,lab in ipairs(labels) do lab.TextTransparency = (j==idx) and 0 or 0.22 end
+      end)
+    end
+    local spamRow = Instance.new("Frame", holder)
+    spamRow.Size=UDim2.new(1,0,0,34); spamRow.Position=UDim2.new(0,0,0,48)
+    spamRow.BackgroundColor3=Color3.fromRGB(14,22,16); spamRow.BackgroundTransparency=0.3
+    local crc=Instance.new("UICorner", spamRow); crc.CornerRadius=UDim.new(0,9)
+    local spamLbl=Instance.new("TextLabel", spamRow)
+    spamLbl.Text="Spam"; spamLbl.BackgroundTransparency=1; spamLbl.TextColor3=Color3.fromRGB(245,245,255); spamLbl.Font=Enum.Font.GothamSemibold; spamLbl.TextSize=12
+    spamLbl.Position=UDim2.new(0,12,0,0); spamLbl.Size=UDim2.new(1,-80,1,0); spamLbl.TextXAlignment=Enum.TextXAlignment.Left
+    local track=Instance.new("Frame", spamRow)
+    track.Size=UDim2.new(0,44,0,22); track.Position=UDim2.new(1,-54,0.5,-11); track.BackgroundColor3=Color3.fromRGB(30,36,32)
+    local tc=Instance.new("UICorner", track); tc.CornerRadius=UDim.new(0,11)
+    local fill=Instance.new("Frame", track)
+    fill.Size=UDim2.new(1,0,1,0); fill.BackgroundColor3=Color3.fromRGB(147,51,234); fill.BackgroundTransparency=1
+    local fc=Instance.new("UICorner", fill); fc.CornerRadius=UDim.new(0,11)
+    local knob=Instance.new("Frame", track)
+    knob.Size=UDim2.new(0,16,0,16); knob.Position=UDim2.new(0,3,0.5,-8); knob.BackgroundColor3=Color3.fromRGB(255,255,255)
+    local kc=Instance.new("UICorner", knob); kc.CornerRadius=UDim.new(0,999)
+    local spamBtn=Instance.new("TextButton", spamRow)
+    spamBtn.Size=UDim2.new(1,0,1,0); spamBtn.BackgroundTransparency=1; spamBtn.Text=""
+    spamBtn.MouseButton1Click:Connect(function()
+      local on = not (_G.AmbitiousAntiTPBatSpam==true)
+      if _G.AmbitiousAntiTPBat and _G.AmbitiousAntiTPBat.setSpam then pcall(_G.AmbitiousAntiTPBat.setSpam, on) else _G.AmbitiousAntiTPBatSpam=on end
+      TweenService:Create(knob,TweenInfo.new(0.18),{Position = on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)}):Play()
+      TweenService:Create(fill,TweenInfo.new(0.18),{BackgroundTransparency = on and 0 or 1}):Play()
+    end)
+    local expanded=false
+    arrow.MouseButton1Click:Connect(function()
+      expanded=not expanded
+      expandHolder(holder, expanded, 84, arrow)
+    end)
+    local initV = _G.AmbitiousAntiTPBatVersion or 1
+    for j,lab in ipairs(labels) do lab.TextTransparency = (j==initV) and 0 or 0.22 end
+    slide.Position = UDim2.new(0.25*(initV-0.5),0,0.5,0)
+    local spamOn = _G.AmbitiousAntiTPBatSpam==true
+    knob.Position = spamOn and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)
+    fill.BackgroundTransparency = spamOn and 0 or 1
+  end
+
+  print("[Duels V2] Minimizing selectors injected")
+end)
