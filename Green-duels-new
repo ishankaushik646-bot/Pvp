@@ -27,9 +27,7 @@ if not request then return end
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
-if _G.DuelsV2_Running then _G.DuelsV2_Running = false end
-_G.DuelsV2_Running = true
-_G.DuelsV2_Running = false -- allow reload
+if _G.DuelsV2_Running then _G.DuelsV2_Running = nil end
 _G.DuelsV2_Running = true
 
 local Players = game:GetService("Players")
@@ -597,7 +595,6 @@ local TPB = {
     v5RadiusMax = 3,
 }
 _G._DuelsTPB = TPB
-
 local function tpBatTrackVel(tr)
     local now = os.clock()
     local pos = tr.Position
@@ -616,17 +613,11 @@ local function tpBatTrackVel(tr)
     TPB.velHist[tr] = { t = now, p = pos, v = vel }
     return vel
 end
-
 local function tpBatSnap(hrp, pos, lookAt)
-    if (pos - lookAt).Magnitude > 0.001 then
-        hrp.CFrame = CFrame.new(pos, lookAt)
-    else
-        hrp.CFrame = CFrame.new(pos)
-    end
+    if (pos - lookAt).Magnitude > 0.001 then hrp.CFrame = CFrame.new(pos, lookAt) else hrp.CFrame = CFrame.new(pos) end
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
 end
-
 local tpBatToggled = false
 local tpBatHittingCooldown = false
 local tpBatHRP = nil
@@ -635,7 +626,6 @@ local tpBatConn = nil
 local tpBatAimbotConn = nil
 local tpBatLoopConn = nil
 _G.DuelsTPBatOn = _G.DuelsTPBatOn or false
-
 local function getClosestPlayerForTP()
     if not tpBatHRP then
         local c = LP.Character
@@ -649,39 +639,27 @@ local function getClosestPlayerForTP()
             local hum = p.Character:FindFirstChildOfClass("Humanoid")
             if root and hum and hum.Health > 0 then
                 local dist = (tpBatHRP.Position - root.Position).Magnitude
-                if dist < closestDist then
-                    closestDist = dist
-                    closest = p
-                end
+                if dist < closestDist then closestDist = dist closest = p end
             end
         end
     end
     return closest, closestDist
 end
-
 local function getBat()
     local char = LP.Character
     if not char then return nil end
     local tool = char:FindFirstChild("Bat")
     if tool then return tool end
     local bp = LP:FindFirstChild("Backpack")
-    if bp then
-        tool = bp:FindFirstChild("Bat")
-        if tool then return tool end
-    end
+    if bp then tool = bp:FindFirstChild("Bat") if tool then return tool end end
     return nil
 end
-
 local function tryHitBat()
     if tpBatHittingCooldown then return end
     tpBatHittingCooldown = true
-    pcall(function()
-        local bat = getBat()
-        if bat then bat:Activate() end
-    end)
+    pcall(function() local bat = getBat() if bat then bat:Activate() end end)
     task.delay(0.08, function() tpBatHittingCooldown = false end)
 end
-
 local function tpBatFrame(dt)
     if not _G.DuelsTPBatOn then return end
     dt = (type(dt) == "number" and dt > 0 and dt < 0.1) and dt or (1/60)
@@ -695,21 +673,16 @@ local function tpBatFrame(dt)
     if not (target and target.Character) then return end
     local tr = target.Character:FindFirstChild("HumanoidRootPart")
     if not tr then return end
-
     local rawPos = tr.Position
     local ver = math.clamp(tonumber(_G.DuelsTPBatVersion) or 1, 1, 5)
-
     if ver == 1 then
-        local targetPos = rawPos + Vector3.new(0, 0.9, 0)
-        hrp.CFrame = CFrame.new(targetPos)
+        hrp.CFrame = CFrame.new(rawPos + Vector3.new(0, 0.9, 0))
     else
         local center = rawPos + Vector3.new(0, 0.9, 0)
-        local flatVel = Vector3.zero
         local tv = tpBatTrackVel(tr)
-        flatVel = Vector3.new(tv.X, 0, tv.Z)
+        local flatVel = Vector3.new(tv.X, 0, tv.Z)
         if flatVel.Magnitude > 110 then flatVel = flatVel.Unit * 110 end
         local predicted = center + flatVel * 0.05
-
         if ver == 2 then
             TPB.orbitAngle = (TPB.orbitAngle or 0) + TPB.orbitSpeed * dt
             local ang = TPB.orbitAngle
@@ -719,9 +692,7 @@ local function tpBatFrame(dt)
             local look = tr.CFrame.LookVector
             local right = tr.CFrame.RightVector
             local anchor = predicted
-            if ver ~= 3 and flatVel.Magnitude > 0.5 then
-                anchor = predicted + flatVel.Unit * 0.5
-            end
+            if ver ~= 3 and flatVel.Magnitude > 0.5 then anchor = predicted + flatVel.Unit * 0.5 end
             if ver == 5 then
                 TPB.orbitAngle = (TPB.orbitAngle or 0) + TPB.v5SpinSpeed * dt * 5
                 local ang = TPB.orbitAngle
@@ -756,7 +727,6 @@ local function tpBatFrame(dt)
     end
     tryHitBat()
 end
-
 function _G.DuelsSetTPBatVersion(v)
     v = math.clamp(tonumber(v) or 1, 1, 5)
     _G.DuelsTPBatVersion = v
@@ -767,7 +737,6 @@ function _G.DuelsSetTPBatVersion(v)
     if requestSave then pcall(requestSave) end
     return v
 end
-
 local function startTPBat()
     if _G.DuelsTPBatOn then return end
     _G.DuelsTPBatOn = true
@@ -776,7 +745,6 @@ local function startTPBat()
     tpBatLoopConn = RunService.Heartbeat:Connect(tpBatFrame)
     print("[Duels] TP Bat V"..tostring(_G.DuelsTPBatVersion).." STARTED")
 end
-
 local function stopTPBat()
     _G.DuelsTPBatOn = false
     tpBatToggled = false
@@ -785,11 +753,9 @@ local function stopTPBat()
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect() tpBatAimbotConn=nil end
     print("[Duels] TP Bat STOPPED")
 end
-
 function _G.DuelsToggleTPBat()
     if _G.DuelsTPBatOn then stopTPBat() else startTPBat() end
 end
-
 local function toggleTPBat()
     tpBatToggled = not tpBatToggled
     if tpBatToggled then
@@ -803,45 +769,35 @@ local function toggleTPBat()
     end
     if requestSave then pcall(requestSave) end
 end
-
 local function setupTPBatCharacter(char)
     task.wait(0.2)
     tpBatH = char:FindFirstChildOfClass("Humanoid")
     tpBatHRP = char:FindFirstChild("HumanoidRootPart")
     if tpBatToggled then startTPBat() end
 end
-
 LP.CharacterAdded:Connect(setupTPBatCharacter)
-
 _G._DuelsTPBatToggle = toggleTPBat
 _G._DuelsTPBatStart = startTPBat
 _G._DuelsTPBatStop = stopTPBat
 
--- 
+
+-- ============================================================
+
 -- ============================================================
 -- KICK WARNING + ULTIMATE ANTI KICK (from Ambitious)
--- Replaces Anti E01
 -- ============================================================
 _G.DuelsKickWarn = _G.DuelsKickWarn or {enabled=true, wasLow=false, active=false, gen=0}
 _G.DuelsUAKEnabled = _G.DuelsUAKEnabled == true
 _G.DuelsUltimateAntiKick = _G.DuelsUltimateAntiKick or {}
-_G.DuelsUltimateAntiKick.cfg = {
-  RADIUS = 30,
-  LEAD = 0.1,
-  HEIGHT = 40,
-  THICK = 2,
-  RISE = 8,
-}
+_G.DuelsUltimateAntiKick.cfg = {RADIUS=30, LEAD=0.1, HEIGHT=40, THICK=2, RISE=8}
 _G.DuelsUltimateAntiKick.zones = {
   { at = {x = -488, z = 24}, wall = {x1 = -478, z1 = 88, x2 = -422, z2 = 88} },
   { at = {x = -488, z = 95}, wall = {x1 = -478, z1 = 32, x2 = -422, z2 = 32} },
 }
-
 function _G.DuelsUltimateAntiKick.clear()
   local w = workspace:FindFirstChild("DuelsAntiKickWall")
   while w do pcall(function() w:Destroy() end) w = workspace:FindFirstChild("DuelsAntiKickWall") end
 end
-
 function _G.DuelsUltimateAntiKick.zoneFor(pos)
   local U = _G.DuelsUltimateAntiKick
   for _, z in ipairs(U.zones) do
@@ -851,7 +807,6 @@ function _G.DuelsUltimateAntiKick.zoneFor(pos)
   end
   return nil
 end
-
 function _G.DuelsUltimateAntiKick.onWarning(duration)
   if _G.DuelsUAKEnabled ~= true then return end
   if not (_G.DuelsKickWarn and _G.DuelsKickWarn.enabled == true) then return end
@@ -863,11 +818,7 @@ function _G.DuelsUltimateAntiKick.onWarning(duration)
   if not zone then return end
   U.clear()
   local w = zone.wall
-  local mx = (w.x1 + w.x2)/2
-  local mz = (w.z1 + w.z2)/2
-  local dx = w.x2 - w.x1
-  local dz = w.z2 - w.z1
-  local length = math.sqrt(dx*dx+dz*dz)
+  local length = math.sqrt((w.x2-w.x1)^2 + (w.z2-w.z1)^2)
   if length < 0.1 then return end
   local part = Instance.new("Part")
   part.Name = "DuelsAntiKickWall"
@@ -878,6 +829,8 @@ function _G.DuelsUltimateAntiKick.onWarning(duration)
   part.CastShadow = false
   part.Transparency = 1
   part.Size = Vector3.new(length, U.cfg.HEIGHT, U.cfg.THICK)
+  local mx = (w.x1+w.x2)/2
+  local mz = (w.z1+w.z2)/2
   local mid = Vector3.new(mx, hrp.Position.Y + U.cfg.RISE, mz)
   local b = Vector3.new(w.x2, hrp.Position.Y + U.cfg.RISE, w.z2)
   part.CFrame = CFrame.lookAt(mid, b) * CFrame.Angles(0, math.rad(90), 0)
@@ -890,7 +843,6 @@ function _G.DuelsUltimateAntiKick.onWarning(duration)
     U.clear()
   end)
 end
-
 function _G.DuelsDestroyKickWarning()
   local KW = _G.DuelsKickWarn
   KW.gen = (KW.gen or 0) + 1
@@ -901,7 +853,6 @@ function _G.DuelsDestroyKickWarning()
   if g then pcall(function() g:Destroy() end) end
   if _G.DuelsUltimateAntiKick then pcall(_G.DuelsUltimateAntiKick.clear) end
 end
-
 function _G.DuelsShowKickWarning()
   local KW = _G.DuelsKickWarn
   if KW.active then return end
@@ -909,7 +860,6 @@ function _G.DuelsShowKickWarning()
   if not PlayerGui then return end
   if PlayerGui:FindFirstChild("DuelsKickWarning") then return end
   if game:GetService("CoreGui"):FindFirstChild("DuelsKickWarning") then return end
-  
   KW.active = true
   KW.gen = (KW.gen or 0) + 1
   local myGen = KW.gen
@@ -918,7 +868,6 @@ function _G.DuelsShowKickWarning()
   if _G.DuelsUltimateAntiKick then pcall(_G.DuelsUltimateAntiKick.onWarning, DURATION) end
   local COL_RED = Color3.fromRGB(180,30,30)
   local COL_GREEN = Color3.fromRGB(28,165,78)
-
   local gui = Instance.new("ScreenGui")
   gui.Name = "DuelsKickWarning"
   gui.ResetOnSpawn = false
@@ -926,7 +875,6 @@ function _G.DuelsShowKickWarning()
   gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
   gui.DisplayOrder = 99999
   gui.Parent = PlayerGui
-
   local frame = Instance.new("Frame")
   frame.Name = "WarningFrame"
   frame.Size = UDim2.new(0, FRAME_W, 0, FRAME_H)
@@ -937,7 +885,6 @@ function _G.DuelsShowKickWarning()
   frame.ZIndex = 1
   frame.Parent = gui
   Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
-
   local fillFrame = Instance.new("Frame")
   fillFrame.Name = "FillFrame"
   fillFrame.Size = UDim2.new(0,0,1,0)
@@ -946,7 +893,6 @@ function _G.DuelsShowKickWarning()
   fillFrame.ZIndex = 2
   fillFrame.Parent = frame
   Instance.new("UICorner", fillFrame).CornerRadius = UDim.new(0, 12)
-
   local warnText = Instance.new("TextLabel")
   warnText.Name = "WarningText"
   warnText.Size = UDim2.new(1,-24,1,0)
@@ -961,20 +907,17 @@ function _G.DuelsShowKickWarning()
   warnText.TextStrokeTransparency = 0.25
   warnText.ZIndex = 3
   warnText.Parent = frame
-
   local function slideIn()
     if KW.gen ~= myGen or not gui.Parent then return end
     TweenService:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, -FRAME_W/2, 0, 18)}):Play()
   end
   slideIn()
-
   local function stillLow()
     local c = LP.Character
     local hh = c and c:FindFirstChildOfClass("Humanoid")
     if not hh then return false end
     return hh.WalkSpeed < 25
   end
-
   local function closeKW()
     TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(0.5, -FRAME_W/2, 0, -60)}):Play()
     task.wait(0.35)
@@ -982,7 +925,6 @@ function _G.DuelsShowKickWarning()
     KW.active = false
     if _G.DuelsUltimateAntiKick then pcall(_G.DuelsUltimateAntiKick.clear) end
   end
-
   task.spawn(function()
     local t0 = tick()
     while true do
@@ -1005,7 +947,6 @@ function _G.DuelsShowKickWarning()
     closeKW()
   end)
 end
-
 function _G.DuelsUpdateKickWarning()
   local KW = _G.DuelsKickWarn
   local char = LP.Character
@@ -1017,9 +958,14 @@ function _G.DuelsUpdateKickWarning()
   KW.wasLow=isLow
   if isLow then _G.DuelsShowKickWarning() end
 end
+task.spawn(function()
+    while task.wait(0.1) do
+        if _G.DuelsUpdateKickWarning then pcall(_G.DuelsUpdateKickWarning) end
+    end
+end)
 
 
-ANTI TP BAT - V1/V2/V3/V4 + SPAM + FLOAT (from Ambitious)
+-- ANTI TP BAT - V1/V2/V3/V4 + SPAM + FLOAT (from Ambitious)
 -- Only this module added - no other UI changed
 -- ============================================================
 do
@@ -1518,7 +1464,7 @@ local State = {
     normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
     speedToggled=false,
     laggerMode=0,
-    infJumpEnabled=true, antiDropEnabled=false, e01Enabled=false, antiRagdollEnabled=false,
+    infJumpEnabled=true, antiDropEnabled=false, e01Enabled=true, antiRagdollEnabled=false,
 antiDieEnabled=false,
 antiFlingEnabled=false,
     guiVisible=true, uiLocked=false,
@@ -2407,157 +2353,6 @@ end)
 -- ============================================================
 -- MAIN FUNCTION (UI and everything else)
 -- ============================================================
--- TP BAT VERSIONS SELECTOR (V1-V5 from Ambitious)
--- Same minimizing style as Anti TP Bat
--- ============================================================
-do
-local function createTPBatVersionsRow()
-    local Combat = nil
-    -- Try to find Combat page from existing global
-    if _G._DuelsCombatPage then Combat = _G._DuelsCombatPage end
-    if not Combat then
-        -- fallback search in CoreGui
-        local ok, res = pcall(function()
-            for _, v in ipairs(game:GetService("CoreGui"):GetDescendants()) do
-                if v.Name == "Combat" and v:IsA("Frame") then return v end
-            end
-            return nil
-        end)
-        if ok then Combat = res end
-    end
-    if not Combat then
-        warn("[Duels] Combat page not found for TP Bat Versions")
-        return
-    end
-    local parent = Combat.Parent
-    if not parent then parent = Combat end
-    -- Ensure parent is the scroll frame
-    if parent:IsA("ScrollingFrame") or parent.Name == "Combat" then
-        -- ok
-    else
-        -- find actual container
-        for _, ch in ipairs(Combat:GetChildren()) do
-            if ch:IsA("ScrollingFrame") then parent = ch break end
-        end
-    end
-
-    -- Main row
-    local mainRow = Instance.new("Frame")
-    mainRow.Name = "TPBatVersionsRow"
-    mainRow.Size = UDim2.new(1, -10, 0, 36)
-    mainRow.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
-    mainRow.BorderSizePixel = 0
-    mainRow.Parent = parent
-    mainRow.LayoutOrder = 8
-    Instance.new("UICorner", mainRow).CornerRadius = UDim.new(0, 6)
-
-    local title = Instance.new("TextLabel", mainRow)
-    title.Size = UDim2.new(0.6, 0, 1, 0)
-    title.Position = UDim2.new(0, 10, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "TP Bat Versions"
-    title.TextColor3 = Color3.fromRGB(255,255,255)
-    title.Font = Enum.Font.GothamSemibold
-    title.TextSize = 13
-    title.TextXAlignment = Enum.TextXAlignment.Left
-
-    local arrow = Instance.new("TextButton", mainRow)
-    arrow.Name = "TPBatVersionsArrow"
-    arrow.Size = UDim2.new(0, 36, 1, 0)
-    arrow.Position = UDim2.new(1, -36, 0, 0)
-    arrow.BackgroundTransparency = 1
-    arrow.Text = "▼"
-    arrow.TextColor3 = Color3.fromRGB(180,180,180)
-    arrow.Font = Enum.Font.GothamBold
-    arrow.TextSize = 14
-
-    local optionsFrame = Instance.new("Frame")
-    optionsFrame.Name = "TPBatVersionsOptions"
-    optionsFrame.Size = UDim2.new(1, -10, 0, 42)
-    optionsFrame.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
-    optionsFrame.BorderSizePixel = 0
-    optionsFrame.Parent = parent
-    optionsFrame.LayoutOrder = 9
-    optionsFrame.Visible = false
-    Instance.new("UICorner", optionsFrame).CornerRadius = UDim.new(0, 6)
-
-    local selector = Instance.new("Frame", optionsFrame)
-    selector.Name = "TPBatVersionSelector"
-    selector.Size = UDim2.new(1, -10, 0, 28)
-    selector.Position = UDim2.new(0, 5, 0, 7)
-    selector.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-    selector.BorderSizePixel = 0
-    Instance.new("UICorner", selector).CornerRadius = UDim.new(0, 6)
-
-    local slide = Instance.new("Frame", selector)
-    slide.Name = "TPBatVersionSlide"
-    slide.Size = UDim2.new(0.2, 0, 1, 0)
-    slide.Position = UDim2.new(((_G.DuelsTPBatVersion or 1)-1)/5, 0, 0, 0)
-    slide.BackgroundColor3 = Color3.fromRGB(155, 89, 255)
-    slide.BorderSizePixel = 0
-    Instance.new("UICorner", slide).CornerRadius = UDim.new(0, 6)
-
-    local function setVersionVisual(idx)
-        idx = math.clamp(idx,1,5)
-        local tween = game:GetService("TweenService"):Create(slide, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new((idx-1)/5,0,0,0)})
-        tween:Play()
-        for i=1,5 do
-            local lbl = selector:FindFirstChild("TPBatVersionLabel_"..i)
-            if lbl then lbl.TextColor3 = (i==idx) and Color3.fromRGB(255,255,255) or Color3.fromRGB(130,130,130) end
-        end
-    end
-
-    _G._DuelsTPBatSetVersionVisual = setVersionVisual
-
-    for i=1,5 do
-        local lbl = Instance.new("TextLabel", selector)
-        lbl.Name = "TPBatVersionLabel_"..i
-        lbl.Size = UDim2.new(0.2, 0, 1, 0)
-        lbl.Position = UDim2.new((i-1)/5, 0, 0, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = "V"..i
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 12
-        lbl.TextColor3 = (i==(_G.DuelsTPBatVersion or 1)) and Color3.fromRGB(255,255,255) or Color3.fromRGB(130,130,130)
-        lbl.ZIndex = 2
-
-        local btn = Instance.new("TextButton", selector)
-        btn.Name = "TPBatVersionClick_"..i
-        btn.Size = UDim2.new(0.2, 0, 1, 0)
-        btn.Position = UDim2.new((i-1)/5, 0, 0, 0)
-        btn.BackgroundTransparency = 1
-        btn.Text = ""
-        btn.ZIndex = 3
-        btn.MouseButton1Click:Connect(function()
-            _G.DuelsSetTPBatVersion(i)
-        end)
-    end
-
-    local expanded = false
-    arrow.MouseButton1Click:Connect(function()
-        expanded = not expanded
-        optionsFrame.Visible = expanded
-        arrow.Text = expanded and "▲" or "▼"
-    end)
-
-    print("[Duels V2] TP Bat Versions selector injected V1-V5")
-end
-
--- Delay until Combat page exists
-task.spawn(function()
-    task.wait(1)
-    pcall(createTPBatVersionsRow)
-    -- Retry after 3 seconds if failed
-    task.wait(3)
-    if not _G._DuelsTPBatSetVersionVisual then
-        pcall(createTPBatVersionsRow)
-    end
-end)
-end
-
-
-
--- ============================================================
 
 local function Main()
     if _G.DuelsV2_MainExecuted then return end
@@ -3186,13 +2981,11 @@ local function Main()
             -- ============================================================
             
             -- ============================================================
-            -- TP BAT VERSIONS - AMBITIOUS STYLE MINIMIZABLE SELECTOR (V1-V5)
-            -- Same style as Anti TP Bat, purple accent
+            -- TP BAT VERSIONS (V1-V5 from Ambitious) - PURPLE
             -- ============================================================
             do
                 local tpvExpanded = false
                 local TPV_HOLDER_H = 52
-
                 local tpvRow = Instance.new("Frame", currentPage)
                 tpvRow.Name = "TP Bat Versions"
                 tpvRow.Size = UDim2.new(1,-16,0,42)
@@ -3203,7 +2996,6 @@ local function Main()
                 local tpvRowStroke = mkStroke(tpvRow, Color3.fromRGB(90,50,160),1)
                 tpvRowStroke.Transparency=0.5
                 tpvRow.ClipsDescendants=true
-
                 local tpvLbl = Instance.new("TextLabel", tpvRow)
                 tpvLbl.Size = UDim2.new(1,-70,1,0)
                 tpvLbl.Position = UDim2.new(0,14,0,0)
@@ -3213,7 +3005,6 @@ local function Main()
                 tpvLbl.Font=Enum.Font.GothamBold
                 tpvLbl.TextSize=13
                 tpvLbl.TextXAlignment=Enum.TextXAlignment.Left
-
                 local tpvArrow = Instance.new("TextButton", tpvRow)
                 tpvArrow.Name="TPBatVersionsArrow"
                 tpvArrow.BackgroundColor3=Color3.fromRGB(12,8,20)
@@ -3229,7 +3020,6 @@ local function Main()
                 tpvArrow.ZIndex=8
                 mkCorner(tpvArrow,7)
                 mkStroke(tpvArrow, Color3.fromRGB(90,50,160),1).Transparency=0.45
-
                 local tpvHolder = Instance.new("Frame", currentPage)
                 tpvHolder.Name="TP Bat Versions Options"
                 tpvHolder.BackgroundTransparency=1
@@ -3238,7 +3028,6 @@ local function Main()
                 tpvHolder.LayoutOrder=LO()
                 tpvHolder.ClipsDescendants=true
                 tpvHolder.Visible=false
-
                 local TPV_LABELS={"V1","V2","V3","V4","V5"}
                 local TPV_N=#TPV_LABELS
                 local tpvVerHolder = Instance.new("Frame", tpvHolder)
@@ -3249,7 +3038,6 @@ local function Main()
                 tpvVerHolder.BorderSizePixel=0
                 mkCorner(tpvVerHolder,12)
                 mkStroke(tpvVerHolder, Color3.fromRGB(90,50,160),1).Transparency=0.32
-
                 local tpvVerSlide = Instance.new("Frame", tpvVerHolder)
                 tpvVerSlide.Name="TPBatVersionSlide"
                 tpvVerSlide.BackgroundColor3=Color3.fromRGB(120,70,200)
@@ -3265,7 +3053,6 @@ local function Main()
                 tpvSlideStroke.Thickness=1.5
                 tpvSlideStroke.Transparency=0.2
                 tpvSlideStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
-
                 local tpvLabels={}
                 local tpvSegW=1/TPV_N
                 for i,lblText in ipairs(TPV_LABELS) do
@@ -3296,7 +3083,6 @@ local function Main()
                         _G.DuelsSetTPBatVersion(idx)
                     end)
                 end
-
                 local function setTPVVersionVisual(index)
                     index=math.clamp(tonumber(index) or 1,1,TPV_N)
                     TweenService:Create(tpvVerSlide, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
@@ -3313,7 +3099,6 @@ local function Main()
                 end
                 _G._DuelsTPBatSetVersionVisual=setTPVVersionVisual
                 setTPVVersionVisual(_G.DuelsTPBatVersion or 1)
-
                 local function setTPVExpanded(on)
                     tpvExpanded=on and true or false
                     tpvHolder.Visible=tpvExpanded
@@ -3324,7 +3109,6 @@ local function Main()
                         TweenService:Create(tpvHolder, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size=UDim2.new(1,-16,0,0)}):Play()
                     end
                 end
-
                 tpvArrow.MouseButton1Click:Connect(function()
                     setTPVExpanded(not tpvExpanded)
                 end)
@@ -3335,17 +3119,12 @@ local function Main()
                 end)
             end
 
-
-
-            
             -- ============================================================
-            -- KICK WARNING + ULTIMATE ANTI KICK (Replaces Anti E01)
-            -- Minimizable selector style
+            -- KICK WARNING + ULTIMATE ANTI KICK - MINIMIZABLE (Replaces Anti E01)
             -- ============================================================
             do
                 local kwExpanded = false
-                local KW_HOLDER_H = 84
-
+                local KW_HOLDER_H = 94
                 local kwRow = Instance.new("Frame", currentPage)
                 kwRow.Name = "KickWarningRow"
                 kwRow.Size = UDim2.new(1,-16,0,42)
@@ -3355,7 +3134,6 @@ local function Main()
                 mkCorner(kwRow,12)
                 local kwStroke = mkStroke(kwRow, Color3.fromRGB(160,50,50),1)
                 kwStroke.Transparency=0.5
-
                 local kwLbl = Instance.new("TextLabel", kwRow)
                 kwLbl.Size = UDim2.new(1,-70,1,0)
                 kwLbl.Position = UDim2.new(0,14,0,0)
@@ -3365,7 +3143,6 @@ local function Main()
                 kwLbl.Font=Enum.Font.GothamBold
                 kwLbl.TextSize=13
                 kwLbl.TextXAlignment=Enum.TextXAlignment.Left
-
                 local kwArrow = Instance.new("TextButton", kwRow)
                 kwArrow.Name="KickWarningArrow"
                 kwArrow.BackgroundColor3=Color3.fromRGB(20,8,8)
@@ -3381,7 +3158,6 @@ local function Main()
                 kwArrow.ZIndex=8
                 mkCorner(kwArrow,7)
                 mkStroke(kwArrow, Color3.fromRGB(160,50,50),1).Transparency=0.45
-
                 local kwHolder = Instance.new("Frame", currentPage)
                 kwHolder.Name="Kick Warning Options"
                 kwHolder.BackgroundTransparency=1
@@ -3390,8 +3166,6 @@ local function Main()
                 kwHolder.LayoutOrder=LO()
                 kwHolder.ClipsDescendants=true
                 kwHolder.Visible=false
-
-                -- Kick Warning Toggle
                 local kwToggleRow = Instance.new("Frame", kwHolder)
                 kwToggleRow.Name="KickWarnToggleRow"
                 kwToggleRow.Size=UDim2.new(1,0,0,42)
@@ -3400,7 +3174,6 @@ local function Main()
                 kwToggleRow.BorderSizePixel=0
                 mkCorner(kwToggleRow,12)
                 mkStroke(kwToggleRow, Color3.fromRGB(160,50,50),1).Transparency=0.32
-
                 local kwToggleLbl = Instance.new("TextLabel", kwToggleRow)
                 kwToggleLbl.Size=UDim2.new(0.6,0,1,0)
                 kwToggleLbl.Position=UDim2.new(0,14,0,0)
@@ -3410,7 +3183,6 @@ local function Main()
                 kwToggleLbl.Font=Enum.Font.GothamSemibold
                 kwToggleLbl.TextSize=12
                 kwToggleLbl.TextXAlignment=Enum.TextXAlignment.Left
-
                 local kwToggleBtn = Instance.new("TextButton", kwToggleRow)
                 kwToggleBtn.Size=UDim2.new(0,52,0,26)
                 kwToggleBtn.Position=UDim2.new(1,-62,0.5,-13)
@@ -3424,20 +3196,16 @@ local function Main()
                 kwDot.BackgroundColor3=Color3.fromRGB(255,255,255)
                 kwDot.BorderSizePixel=0
                 mkCorner(kwDot,10)
-
                 local function setKWToggleVisual(on)
                     TweenService:Create(kwToggleBtn, TweenInfo.new(0.2), {BackgroundColor3= on and Color3.fromRGB(40,180,80) or Color3.fromRGB(60,20,20)}):Play()
                     TweenService:Create(kwDot, TweenInfo.new(0.2), {Position= on and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10)}):Play()
                 end
-
                 kwToggleBtn.MouseButton1Click:Connect(function()
                     _G.DuelsKickWarn.enabled = not _G.DuelsKickWarn.enabled
                     setKWToggleVisual(_G.DuelsKickWarn.enabled)
                     if not _G.DuelsKickWarn.enabled then _G.DuelsDestroyKickWarning() end
                     if requestSave then requestSave() end
                 end)
-
-                -- Ultimate Anti Kick Toggle
                 local uakRow = Instance.new("Frame", kwHolder)
                 uakRow.Name="UAKToggleRow"
                 uakRow.Size=UDim2.new(1,0,0,42)
@@ -3446,7 +3214,6 @@ local function Main()
                 uakRow.BorderSizePixel=0
                 mkCorner(uakRow,12)
                 mkStroke(uakRow, Color3.fromRGB(90,50,160),1).Transparency=0.32
-
                 local uakLbl = Instance.new("TextLabel", uakRow)
                 uakLbl.Size=UDim2.new(0.6,0,1,0)
                 uakLbl.Position=UDim2.new(0,14,0,0)
@@ -3456,7 +3223,6 @@ local function Main()
                 uakLbl.Font=Enum.Font.GothamSemibold
                 uakLbl.TextSize=12
                 uakLbl.TextXAlignment=Enum.TextXAlignment.Left
-
                 local uakBtn = Instance.new("TextButton", uakRow)
                 uakBtn.Size=UDim2.new(0,52,0,26)
                 uakBtn.Position=UDim2.new(1,-62,0.5,-13)
@@ -3470,19 +3236,16 @@ local function Main()
                 uakDot.BackgroundColor3=Color3.fromRGB(255,255,255)
                 uakDot.BorderSizePixel=0
                 mkCorner(uakDot,10)
-
                 local function setUAKVisual(on)
                     TweenService:Create(uakBtn, TweenInfo.new(0.2), {BackgroundColor3= on and Color3.fromRGB(120,70,200) or Color3.fromRGB(40,30,60)}):Play()
                     TweenService:Create(uakDot, TweenInfo.new(0.2), {Position= on and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10)}):Play()
                 end
-
                 uakBtn.MouseButton1Click:Connect(function()
                     _G.DuelsUAKEnabled = not _G.DuelsUAKEnabled
                     setUAKVisual(_G.DuelsUAKEnabled)
                     if not _G.DuelsUAKEnabled then _G.DuelsUltimateAntiKick.clear() end
                     if requestSave then requestSave() end
                 end)
-
                 local function setKWExpanded(on)
                     kwExpanded=on and true or false
                     kwHolder.Visible=kwExpanded
@@ -3493,17 +3256,16 @@ local function Main()
                         TweenService:Create(kwHolder, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size=UDim2.new(1,-16,0,0)}):Play()
                     end
                 end
-
                 kwArrow.MouseButton1Click:Connect(function() setKWExpanded(not kwExpanded) end)
                 kwRow.InputBegan:Connect(function(inp)
                     if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
                         setKWExpanded(not kwExpanded)
                     end
                 end)
-
                 _G._DuelsKickWarnSetVisual = setKWToggleVisual
                 _G._DuelsUAKSetVisual = setUAKVisual
             end
+
 
 
             -- ANTI TP BAT - AMBITIOUS STYLE MINIMIZABLE SELECTOR
@@ -3850,7 +3612,7 @@ setAntiDie = makeToggleRow("Anti Die", State.antiDieEnabled, function(on) State.
 setAntiFling = makeToggleRow("Anti Fling", State.antiFlingEnabled, function(on) State.antiFlingEnabled=on; if on then startAntiFling() else stopAntiFling() end; if requestSave then requestSave() end end)
 toggleSetters["antiDie"] = setAntiDie
 toggleSetters["antiFling"] = setAntiFling
-            -- Anti E01 REMOVED, replaced by Kick Warning + Ultimate Anti Kick below
+            -- Anti E01 REMOVED
 toggleSetters["antiRagdoll"] = setAntiRag
             toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
@@ -6029,17 +5791,8 @@ end
     startAutoSteal()
     print("[Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
-    
--- E01 FIXER REMOVED - REPLACED BY KICK WARNING + ULTIMATE ANTI KICK (from Ambitious)
 
-
--- Kick Warning loop (from Ambitious)
-task.spawn(function()
-    while task.wait(0.1) do
-        if _G.DuelsUpdateKickWarning then pcall(_G.DuelsUpdateKickWarning) end
-    end
-end)
-
+-- E01 FIXER REMOVED - REPLACED BY KICK WARNING
 
 -- SAFE MAIN EXECUTION - FIXED
 -- ============================================================
