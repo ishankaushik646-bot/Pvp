@@ -1935,6 +1935,407 @@ stopDrop = function()
 end
 
 -- ============================================================
+
+-- >>> ANTI VOID FROM AMBITIOUS PORTED TO DUELS V2 <<<
+-- >>> ANTI VOID BEGIN
+-- ============================================================
+-- ANTI VOID
+-- Sempre attivo dall'esecuzione. Un thread per giocatore tiene 0.07s
+-- di storico dei CFrame: se in quella finestra copre 150 stud totali
+-- oppure 100 stud di sola Y, e' un teletrasporto. La posizione buona e'
+-- quella del campione piu' vecchio dello storico, e il TP viene contato
+-- solo se partiva dalla Safe Zone. Da li' in poi TP Bat, aimbot V1/V2,
+-- Bat Counter, Look At Enemy, ESP e tracker puntano al punto d'origine.
+-- ============================================================
+do
+  -- Limiti di coordinate della Safe Zone
+  local MAP_BOUNDS = {
+    MinX = -535.7,
+    MaxX = -422.0,
+    MinY = -7.9,
+    MaxY = 115.0,
+    MinZ = -72.0,
+    MaxZ = 193.3,
+  }
+
+  -- Finestra UNICA da 0.07s per tutti gli assi:
+  --   150 stud di distanza totale (X/Z/Y)  oppure  100 stud di sola Y
+  local TP_TOTAL   = 150
+  local TP_DELTA_Y = 100
+  local WINDOW     = 0.07
+  -- Il fantasma non sparisce rientrando nella zona: sparisce quando il
+  -- giocatore ha camminato WALK_CLEAR stud ORIZZONTALI dentro la zona.
+  -- La Y e' esclusa dal conteggio: cadere o salire non lo cancella.
+  local WALK_CLEAR = 15
+  local STEP_MAX   = 50   -- oltre questo non e' camminata, non si accumula
+
+  local function enabled() return _G.AmbitiousAntiVoidEnabled == true end
+
+  local ghost   = setmetatable({}, { __mode = "k" })  -- [player] = posizione d'origine
+  local ghostCF = setmetatable({}, { __mode = "k" })  -- [player] = CFrame d'origine
+  local isOutOf = setmetatable({}, { __mode = "k" })  -- [player] = bool
+  local tracked = setmetatable({}, { __mode = "k" })  -- [player] = true (thread gia' avviato)
+
+  local function isWithinBounds(pos)
+    if typeof(pos) ~= "Vector3" then return false end
+    return pos.X >= MAP_BOUNDS.MinX and pos.X <= MAP_BOUNDS.MaxX
+       and pos.Y >= MAP_BOUNDS.MinY and pos.Y <= MAP_BOUNDS.MaxY
+       and pos.Z >= MAP_BOUNDS.MinZ and pos.Z <= MAP_BOUNDS.MaxZ
+  end
+
+  -- Richiamata SOLO quando un teleport viene confermato
+  local function onTeleportDetected(player, originCFrame)
+    isOutOf[player] = true
+    ghostCF[player] = originCFrame
+    ghost[player]   = originCFrame.Position
+  end
+
+
+  -- ============================================================
+  -- RESCUE (rete di sicurezza per LP)
+  -- Se LP finisce fuori dalla Safe Zone (void part assente, fling,
+  -- micro-bug) viene riportato all'ultima posizione sicura a terra.
+  -- Attivo solo quando Anti Void e' acceso. Cooldown zero: interviene
+  -- ad ogni Heartbeat finche' LP non e' rientrato nella zona.
+  -- ============================================================
+  local _rescueLastSafePos = nil   -- ultima pos a terra dentro la zona
+  local _rescueSpawnOrigin = nil   -- prima pos sicura rilevata all'accensione
+  local _rescueLastRescue  = 0     -- os.clock() dell'ultimo rescue
+  local RESCUE_COOLDOWN    = 0     -- istantaneo (come in Ambitious_2_)
+  local RESCUE_UPDATE_INT  = 0.1   -- ogni quanto aggiornare il checkpoint
+  local _rescueLastUpdate  = 0
+
+  local function _rescueUpdateCheckpoint()
+    local c   = LP.Character
+    local hrp = c and c:FindFirstChild("HumanoidRootPart")
+    local hum = c and c:FindFirstChildOfClass("Humanoid")
+    if not (hrp and hum) then return end
+    local now = os.clock()
+    if now - _rescueLastUpdate < RESCUE_UPDATE_INT then return end
+    _rescueLastUpdate = now
+    local pos = hrp.Position
+    if not _rescueSpawnOrigin and isWithinBounds(pos) then
+      _rescueSpawnOrigin = pos
+    end
+    -- salva checkpoint solo se e' a terra (non in aria) e dentro la zona
+    if hum.FloorMaterial ~= Enum.Material.Air and isWithinBounds(pos) then
+      _rescueLastSafePos = pos
+    end
+  end
+
+  local function _rescueTryRescue()
+    local c   = LP.Character
+    local hrp = c and c:FindFirstChild("HumanoidRootPart")
+    if not (hrp and hrp.Parent) then return end
+    if isWithinBounds(hrp.Position) then return end
+    local now = os.clock()
+    if now - _rescueLastRescue < RESCUE_COOLDOWN then return end
+    _rescueLastRescue = now
+    local dest = _rescueLastSafePos or _rescueSpawnOrigin
+    if dest and isWithinBounds(dest) then
+      pcall(function()
+        hrp.AssemblyLinearVelocity  = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        hrp.CFrame = CFrame.new(dest + Vector3.new(0, 3, 0))
+      end)
+    end
+  end
+
+  -- Heartbeat dedicato al rescue LP. Si registra una sola volta
+  -- e controlla enabled() ogni frame: zero overhead quando spento.
+  RunService.Heartbeat:Connect(function()
+    if not enabled() then return end
+    _rescueUpdateCheckpoint()
+    _rescueTryRescue()
+  end)
+
+  -- Resetta il checkpoint al respawn di LP: la nuova vita riparte da zero
+  LP.CharacterAdded:Connect(function()
+    _rescueLastSafePos = nil
+    _rescueSpawnOrigin = nil
+    _rescueLastRescue  = 0
+    _rescueLastUpdate  = 0
+  end)
+  -- ============================================================
+  -- FINE RESCUE
+  -- ============================================================
+
+  local function trackPlayer(player)
+    if player == LP then return end
+    if tracked[player] then return end
+    tracked[player] = true
+
+    local history      = {}
+    local walkedXZ     = 0     -- spostamento orizzontale accumulato a piedi
+    local lastCheckPos = nil
+
+    task.spawn(function()
+      while player and player.Parent do
+        -- Poll passivo finche' l'Anti Void e' spento: nessun overhead.
+        -- Il giocatore e' gia' in tracked, quindi se viene acceso basta
+        -- uscire dal poll e il ciclo attivo riparte immediatamente.
+        if not enabled() then
+          -- Resetta lo stato in modo che la prima rilevazione sia pulita
+          isOutOf[player] = false
+          history      = {}
+          walkedXZ     = 0
+          lastCheckPos = nil
+          task.wait(0.5)
+        else
+          local char = player.Character
+          local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+          local hum  = char and char:FindFirstChildOfClass("Humanoid")
+
+          if hrp and hum and hum.Health > 0 then
+            local now = tick()
+            local currentCFrame = hrp.CFrame
+            local currentPos = currentCFrame.Position
+
+            if isOutOf[player] then
+              -- FASE 1: fantasma attivo, si misura solo la camminata X/Z
+              if lastCheckPos then
+                local moveVector = currentPos - lastCheckPos
+                local moveXZ = Vector3.new(moveVector.X, 0, moveVector.Z).Magnitude
+                if moveXZ < STEP_MAX and isWithinBounds(currentPos) then
+                  walkedXZ = walkedXZ + moveXZ
+                end
+              end
+              lastCheckPos = currentPos
+
+              if walkedXZ >= WALK_CLEAR then
+                isOutOf[player] = false
+                ghost[player]   = currentPos
+                ghostCF[player] = currentCFrame
+                history      = {}
+                walkedXZ     = 0
+                lastCheckPos = nil
+              end
+            else
+              -- FASE 2: nessun fantasma, si cerca il teletrasporto
+              walkedXZ     = 0
+              lastCheckPos = currentPos
+              ghost[player]   = currentPos
+              ghostCF[player] = currentCFrame
+
+              table.insert(history, {time = now, cframe = currentCFrame})
+              while #history > 0 and (now - history[1].time) > WINDOW do
+                table.remove(history, 1)
+              end
+
+              local oldest = history[1]
+              if oldest then
+                local totalDistance = (currentPos - oldest.cframe.Position).Magnitude
+                local deltaY = math.abs(currentPos.Y - oldest.cframe.Position.Y)
+
+                if totalDistance >= TP_TOTAL or deltaY >= TP_DELTA_Y then
+                  local refCFrame = oldest.cframe
+                  local refPos = refCFrame.Position
+                  local studsTraveledVector = currentPos - refPos
+                  local exactOriginPos = currentPos - studsTraveledVector
+                  local exactCFrame = CFrame.new(exactOriginPos) * (refCFrame - refCFrame.Position)
+
+                  if isWithinBounds(exactOriginPos) then
+                    onTeleportDetected(player, exactCFrame)
+                  end
+                  history = {}
+                end
+              end
+            end
+          else
+            -- morto o senza character: niente fantasma
+            isOutOf[player] = false
+            history      = {}
+            walkedXZ     = 0
+            lastCheckPos = nil
+          end
+          RunService.Heartbeat:Wait()
+        end
+      end
+      tracked[player] = nil
+    end)
+  end
+
+  Players.PlayerAdded:Connect(trackPlayer)
+
+  -- I thread partono all'accensione e muoiono allo spegnimento: da spento
+  -- il modulo non tiene niente in esecuzione.
+  local function startAll()
+    for _, plr in ipairs(Players:GetPlayers()) do trackPlayer(plr) end
+  end
+
+  local function stopAll()
+    for plr in pairs(isOutOf) do isOutOf[plr] = false end
+  end
+
+  local function posFor(player, rawPos)
+    if not player or not enabled() then return rawPos, false end
+    if isOutOf[player] then
+      local g = ghost[player]
+      if g then return g, true end
+    end
+    return rawPos, false
+  end
+
+  -- Come sopra ma partendo da una BasePart del nemico
+  local function posForPart(part, rawPos)
+    if not part then return rawPos, false end
+    local model = part:FindFirstAncestorOfClass("Model")
+    local player = model and Players:GetPlayerFromCharacter(model)
+    return posFor(player, rawPos or part.Position)
+  end
+
+  _G.AmbitiousAntiVoidEnabled = _G.AmbitiousAntiVoidEnabled == true
+
+  -- Avvia subito un thread per ogni giocatore gia' presente.
+  -- I thread fanno poll passivo se Anti Void e' spento, tracking attivo
+  -- se e' acceso: nessun giocatore viene perso indipendentemente dallo stato.
+  startAll()
+
+  _G.AmbitiousAntiVoid = {
+    setEnabled = function(on)
+      on = on and true or false
+      local was = _G.AmbitiousAntiVoidEnabled == true
+      _G.AmbitiousAntiVoidEnabled = on
+      if on and not was then
+        -- Per sicurezza: aggiunge thread per giocatori entrati nel frattempo
+        startAll()
+      elseif (not on) and was then
+        stopAll()
+      end
+    end,
+    isEnabled  = function() return _G.AmbitiousAntiVoidEnabled == true end,
+    bounds     = MAP_BOUNDS,
+    posFor     = posFor,
+    posForPart = posForPart,
+    isOut      = function(player) return player and isOutOf[player] == true end,
+    ghostOf    = function(player) return player and ghost[player] or nil end,
+  }
+
+  -- ---------- REPLICA ESP SULLA POSIZIONE FANTASMA ----------
+  -- Al TP si congela una copia del corpo sul CFrame d'origine calcolato
+  -- dal tracker, con lo stesso contorno e overhead dell'ESP. L'ESP vero
+  -- viene nascosto, cosi' non lo segue nel void.
+  -- NB: ghostCF e' quello dichiarato sopra dal tracker, non ridichiararlo
+  -- qui o la replica leggerebbe una tabella sempre vuota.
+  local replicas   = {}
+  local ghostFolder = nil
+
+  local function ensureFolder()
+    if ghostFolder and ghostFolder.Parent then return ghostFolder end
+    ghostFolder = Instance.new("Folder")
+    ghostFolder.Name = "AmbitiousAntiVoid"
+    ghostFolder.Parent = workspace
+    return ghostFolder
+  end
+
+  -- Mostra o nasconde l'ESP reale del nemico
+  local function setRealESP(char, visible)
+    if not char then return end
+    local hl = char:FindFirstChild("AmbitiousHubESP")
+    if hl then pcall(function() hl.Enabled = visible end) end
+    local head = char:FindFirstChild("Head")
+    local tag = head and head:FindFirstChild("AmbitiousHubESPTag")
+    if tag then pcall(function() tag.Enabled = visible end) end
+  end
+
+  local function clearReplica(plr)
+    local r = replicas[plr]
+    if r then pcall(function() r:Destroy() end) end
+    replicas[plr] = nil
+  end
+
+  local function buildReplica(plr, char, cf)
+    clearReplica(plr)
+    -- ESP spento: non si crea niente. Il resto (TP Bat, aimbot, tracker,
+    -- Look At Enemy) continua a funzionare sulla posizione fantasma.
+    if not char:FindFirstChild("AmbitiousHubESP") then return end
+    local ok, clone = pcall(function()
+      char.Archivable = true
+      return char:Clone()
+    end)
+    if not ok or not clone then return end
+
+    -- Congela la copia: niente script, niente fisica, niente collisioni
+    for _, d in ipairs(clone:GetDescendants()) do
+      if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("Humanoid") then
+        pcall(function() d:Destroy() end)
+      elseif d:IsA("BasePart") then
+        d.Anchored   = true
+        d.CanCollide = false
+        d.CanQuery   = false
+        d.CanTouch   = false
+      end
+    end
+    clone.Name = "GhostReplica_" .. tostring(plr.Name)
+    clone.Parent = ensureFolder()
+    pcall(function() clone:PivotTo(cf) end)
+
+    -- L'ESP e il suo overhead sono figli del personaggio, quindi la copia
+    -- se li porta dietro identici e congelati sull'ultimo valore.
+    local hl = clone:FindFirstChild("AmbitiousHubESP")
+    if hl then pcall(function() hl.Enabled = true end) end
+
+    local cloneHead = clone:FindFirstChild("Head")
+    local tag = cloneHead and cloneHead:FindFirstChild("AmbitiousHubESPTag")
+    if tag then
+      pcall(function() tag.Enabled = true end)
+      -- scritta VOID sotto la velocita', al posto dove stava il nome
+      local box = tag:FindFirstChildOfClass("Frame") or tag
+      local vl = Instance.new("TextLabel")
+      vl.Name = "VoidTag"
+      vl.Size = UDim2.new(1, -10, 0, 16)
+      vl.Position = UDim2.new(0, 5, 0, 19)
+      vl.BackgroundTransparency = 1
+      vl.TextColor3 = Color3.fromRGB(255, 255, 255)
+      vl.Font = Enum.Font.GothamBlack
+      vl.TextSize = 16
+      vl.TextStrokeTransparency = 0.4
+      vl.Text = "VOID"
+      vl.Parent = box
+    end
+
+    replicas[plr] = clone
+  end
+
+  -- Repliche ESP: lo stato lo tiene gia' il thread di tracciamento
+  local lastMarkerTick = 0
+  RunService.Heartbeat:Connect(function()
+    local now = os.clock()
+    if now - lastMarkerTick < 0.1 then return end
+    lastMarkerTick = now
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+      if plr ~= LP then
+        local c   = plr.Character
+        local hrp = c and c:FindFirstChild("HumanoidRootPart")
+        local hum = c and c:FindFirstChildOfClass("Humanoid")
+        local out = enabled() and (hrp ~= nil) and (hum ~= nil) and hum.Health > 0 and isOutOf[plr] == true
+        if out and ghostCF[plr] then
+          setRealESP(c, false)
+          if not replicas[plr] or not replicas[plr].Parent then
+            buildReplica(plr, c, ghostCF[plr])
+          end
+        else
+          if replicas[plr] then
+            clearReplica(plr)
+            setRealESP(c, true)
+          end
+        end
+      end
+    end
+  end)
+
+  Players.PlayerRemoving:Connect(function(plr)
+    ghost[plr] = nil
+    isOutOf[plr] = nil
+    ghostCF[plr] = nil
+    tracked[plr] = nil
+    clearReplica(plr)
+  end)
+end
+-- <<< ANTI VOID END
+-- <<< ANTI VOID END PORTED >>>
+
 -- ANTI RAGDOLL (Improved with constraints removal)
 -- ============================================================
 
@@ -4069,6 +4470,14 @@ toggleSetters["antiDie"] = setAntiDie
 toggleSetters["antiFling"] = setAntiFling
             -- Anti E01 REMOVED
 toggleSetters["antiRagdoll"] = setAntiRag
+
+            setAntiVoid = makeToggleRow("Anti Void (Ambitious)", _G.DuelsAntiVoidEnabled == true or _G.AmbitiousAntiVoidEnabled == true, function(on)
+                _G.DuelsAntiVoidEnabled = on
+                _G.AmbitiousAntiVoidEnabled = on
+                if _G.AmbitiousAntiVoid then _G.AmbitiousAntiVoid.setEnabled(on) end
+                if requestSave then requestSave() end
+            end)
+            toggleSetters["antiVoid"] = setAntiVoid
             toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
             makeKeybindRow("Auto Left", Keys.autoLeft, function(k) Keys.autoLeft=k end, "autoLeft")
@@ -6182,6 +6591,16 @@ end
                 kickWarnEnabled = _G.DuelsKickWarn and _G.DuelsKickWarn.enabled == true,
                 uakEnabled = _G.DuelsUAKEnabled == true,
                 batCounterMode = State.batCounterMode or _G.DuelsBatCounterMode or "V1",
+                -- Ambitious Auto Steal Save
+                selectedStealMode = _G.Duels_SelectedStealMode or "Normal",
+                selectedSemiMode = _G.Duels_SelectedSemiMode or "V2",
+                ambitiousStealRadii = _G.AmbitiousStealRadii or {Normal = 60, Semi = 60, SemiV2Radius = 60, SemiV2SemiRadius = 8},
+                semiAutoGrabDelay = _G.AmbitiousSemiSteal and _G.AmbitiousSemiSteal.autoGrabSetDelayRadius or 8,
+                semiAutoGrabStopTime = _G.AmbitiousSemiSteal and _G.AmbitiousSemiSteal.autoGrabStopTime or 1.29,
+                semiAutoGrabStopPercent = _G.AmbitiousSemiSteal and _G.AmbitiousSemiSteal.autoGrabStopPercent or 75,
+                antiVoidEnabled = _G.DuelsAntiVoidEnabled == true or _G.AmbitiousAntiVoidEnabled == true,
+                ragdollCountdownEnabled = State.ragdollCountdownEnabled == true,
+
             }
             local encoded = HttpService:JSONEncode(cfg)
             _writefile(CONFIG_FILE, encoded)
@@ -6449,6 +6868,16 @@ end
             _G.DuelsBatCounterMode = decErr.batCounterMode
             if _G._DuelsBCSetMode then pcall(function() _G._DuelsBCSetMode(decErr.batCounterMode) end) end
         end
+        -- Ambitious Auto Steal & Anti Void & Ragdoll Countdown Load
+        if decErr.selectedStealMode ~= nil then _G.Duels_SelectedStealMode = decErr.selectedStealMode; Steal.StealMode = (decErr.selectedStealMode=="Semi" and "semi" or "normal"); if _G._SetStealMode then pcall(_G._SetStealMode, decErr.selectedStealMode) end end
+        if decErr.selectedSemiMode ~= nil then _G.Duels_SelectedSemiMode = decErr.selectedSemiMode; if _G._SetSemiMode then pcall(_G._SetSemiMode, decErr.selectedSemiMode) end end
+        if decErr.ambitiousStealRadii ~= nil then _G.AmbitiousStealRadii = decErr.ambitiousStealRadii end
+        if decErr.semiAutoGrabDelay ~= nil then _G._AmbitiousSemiStealPending = _G._AmbitiousSemiStealPending or {}; _G._AmbitiousSemiStealPending.autoGrabSetDelayRadius = decErr.semiAutoGrabDelay end
+        if decErr.semiAutoGrabStopTime ~= nil then _G._AmbitiousSemiStealPending = _G._AmbitiousSemiStealPending or {}; _G._AmbitiousSemiStealPending.autoGrabStopTime = decErr.semiAutoGrabStopTime end
+        if decErr.semiAutoGrabStopPercent ~= nil then _G._AmbitiousSemiStealPending = _G._AmbitiousSemiStealPending or {}; _G._AmbitiousSemiStealPending.autoGrabStopPercent = decErr.semiAutoGrabStopPercent end
+        if decErr.antiVoidEnabled ~= nil then _G.DuelsAntiVoidEnabled = decErr.antiVoidEnabled; _G.AmbitiousAntiVoidEnabled = decErr.antiVoidEnabled; if _G.AmbitiousAntiVoid then pcall(_G.AmbitiousAntiVoid.setEnabled, decErr.antiVoidEnabled) end; if toggleSetters["antiVoid"] then toggleSetters["antiVoid"](decErr.antiVoidEnabled) end end
+        if decErr.ragdollCountdownEnabled ~= nil then State.ragdollCountdownEnabled = decErr.ragdollCountdownEnabled; if State.ragdollCountdownEnabled then hookRagdollCountdown(LP.Character) else stopRagdollCountdown() end; if toggleSetters["ragdollCountdown"] then toggleSetters["ragdollCountdown"](decErr.ragdollCountdownEnabled) end end
+
         if decErr.antiTPBatEnabled ~= nil then
             _G.DuelsAntiTPBatEnabled = decErr.antiTPBatEnabled == true
             if _G._DuelsAntiTPBatSetRowVisual then pcall(function() _G._DuelsAntiTPBatSetRowVisual(_G.DuelsAntiTPBatEnabled) end) end
