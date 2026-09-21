@@ -2549,11 +2549,58 @@ local function Main()
     mainPad.PaddingLeft = UDim.new(0,8); mainPad.PaddingRight = UDim.new(0,8)
     mainPad.PaddingTop = UDim.new(0,6); mainPad.PaddingBottom = UDim.new(0,12)
 
+    -- ============================================================
+    -- AMBITIOUS-STYLE TABS - injected, colors unchanged
+    -- ============================================================
     local TABS = {"Speed", "Combat", "Auto Steal", "Movement", "Visual", "Settings"}
     local tabPages = {}
+    local pages = tabPages -- alias for ambitious compatibility
+    local tabButtons = {}
     local currentPage = nil
+    local activeTab = "Speed"
     local lo = 0
     local function LO() lo = lo+1; return lo end
+
+    -- Create Tabs bar like Ambitious
+    local Tabs = Instance.new("Frame")
+    Tabs.Name = "Tabs"
+    Tabs.BackgroundTransparency = 1
+    Tabs.Position = UDim2.new(0, 8, 0, TITLE_H + 6)
+    Tabs.Size = UDim2.new(1, -16, 0, 34)
+    Tabs.ZIndex = 10
+    Tabs.Parent = mainOuter
+
+    local TabLayout = Instance.new("UIListLayout")
+    TabLayout.FillDirection = Enum.FillDirection.Horizontal
+    TabLayout.Padding = UDim.new(0, 4)
+    TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    TabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    TabLayout.Parent = Tabs
+
+    local Content = contentBg -- reuse Duels contentBg as Content
+    Content.Position = UDim2.new(0,0,0,TITLE_H + 44)
+    Content.Size = UDim2.new(1,0,1,-(TITLE_H + 44))
+
+    local function setTab(name)
+        activeTab = name
+        for pageName, page in pairs(tabPages) do
+            page.Visible = pageName == name
+        end
+        for tabName, btn in pairs(tabButtons) do
+            local on = tabName == name
+            -- Keep Duels V2 green colors, just ambitious logic
+            btn.BackgroundColor3 = on and Color3.fromRGB(30,132,73) or Color3.fromRGB(14,22,16)
+            btn.BackgroundTransparency = on and 0.1 or 0.4
+            btn.TextColor3 = on and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,200,180)
+            local st = btn:FindFirstChildOfClass("UIStroke")
+            if st then
+                st.Transparency = on and 0.1 or 0.5
+                st.Color = on and Color3.fromRGB(80,255,120) or Color3.fromRGB(34,76,46)
+            end
+        end
+    end
+    _G.DuelsSetTab = setTab
+
 
     local function makeGap(px) local f=Instance.new("Frame",currentPage); f.Size=UDim2.new(1,0,0,px or 6); f.BackgroundTransparency=1; f.BorderSizePixel=0; f.LayoutOrder=LO() end
     local function makeSectionHeader(label)
@@ -2847,7 +2894,7 @@ local function Main()
     end
 
     -- ============================================================
-    -- BUILD PAGES
+    -- BUILD PAGES - AMBITIOUS STYLE (same logic, different tab buttons)
     -- ============================================================
     local function buildPage(tabName, buildFn)
         local page = Instance.new("Frame", mainScroll)
@@ -2857,8 +2904,44 @@ local function Main()
         ll.Padding = UDim.new(0,4); ll.HorizontalAlignment = Enum.HorizontalAlignment.Center
         tabPages[tabName] = page
         currentPage = page; lo = 0; buildFn(); currentPage = nil
+
+        -- Create ambitious-style tab button (Duels V2 colors)
+        local btn = Instance.new("TextButton")
+        btn.Name = tabName
+        btn.Size = UDim2.new(0, 56, 0, 30)
+        btn.BackgroundColor3 = Color3.fromRGB(14,22,16)
+        btn.BackgroundTransparency = 0.4
+        btn.BorderSizePixel = 0
+        btn.Text = tabName:upper()
+        btn.TextColor3 = Color3.fromRGB(180,200,180)
+        btn.TextSize = 9
+        btn.Font = Enum.Font.GothamBlack
+        btn.AutoButtonColor = false
+        btn.ZIndex = 11
+        btn.Parent = Tabs
+        mkCorner(btn, 8)
+        local st = mkStroke(btn, Color3.fromRGB(34,76,46), 1)
+        st.Transparency = 0.5
+        tabButtons[tabName] = btn
+        btn.MouseButton1Click:Connect(function()
+            setTab(tabName)
+        end)
+
         return page
     end
+
+    local function finalizeTabs()
+        -- hide all pages except first, set active
+        for name, pg in pairs(tabPages) do
+            pg.Visible = false
+        end
+        local first = TABS[1]
+        if tabPages[first] then
+            tabPages[first].Visible = true
+            setTab(first)
+        end
+    end
+
 
     -- Speed Page
     do
