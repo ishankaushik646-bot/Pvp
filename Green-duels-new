@@ -3811,7 +3811,8 @@ local function Main()
     end
 
 
-    -- Auto Steal Page - EXACT AMBITIOUS CLONE WITH DUELS GREEN COLORS
+    
+    -- Auto Steal Page - EXACT AMBITIOUS CLONE WITH DUELS GREEN COLORS - V7 FIX V1/V2/V3 SWITCH
     do
         local page = buildPage("Auto Steal", function()
             _G.Duels_SelectedStealMode = _G.Duels_SelectedStealMode or (Steal.StealMode == "semi" and "Semi" or "Normal")
@@ -3826,7 +3827,6 @@ local function Main()
             local function getSemiMode() return _G.Duels_SelectedSemiMode end
             local function setSemiMode(v) _G.Duels_SelectedSemiMode = v end
 
-            -- Selector creator with size param
             local function createAmbitiousSelector(parent, options, current, onChange, isSmall)
                 local h = isSmall and 36 or 46
                 local corner = isSmall and 10 or 14
@@ -3893,7 +3893,10 @@ local function Main()
                     buttons[opt] = btn
                 end
 
-                local function setMode(mode)
+                local internalUpdating = false
+                local function setMode(mode, skipCallback)
+                    if internalUpdating then return end
+                    internalUpdating = true
                     for opt, lbl in pairs(labels) do
                         local isOn = (opt == mode)
                         TweenService:Create(lbl, TweenInfo.new(0.14), {TextTransparency = isOn and 0 or 0.5}):Play()
@@ -3903,20 +3906,20 @@ local function Main()
                             TweenService:Create(slide, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(btnWidth*idx, 4, 0, 4)}):Play()
                         end
                     end
-                    if onChange then onChange(mode) end
+                    internalUpdating = false
+                    if not skipCallback and onChange then onChange(mode) end
                 end
 
                 for opt, btn in pairs(buttons) do
-                    btn.MouseButton1Click:Connect(function() setMode(opt) end)
+                    btn.MouseButton1Click:Connect(function() setMode(opt, false) end)
                 end
 
-                setMode(current)
+                setMode(current, true)
                 return holder, setMode
             end
 
             makeGap(2); makeSectionHeader("Auto Steal"); makeGap(2)
 
-            -- 1. Main selector NORMAL / SEMI (large green)
             local mainHolder, setMainMode
             mainHolder, setMainMode = createAmbitiousSelector(currentPage, {"Normal", "Semi"}, getSelMode(), function(mode)
                 setSelMode(mode)
@@ -3925,7 +3928,6 @@ local function Main()
                 if requestSave then requestSave() end
             end, false)
 
-            -- 2. Semi selector V1 / V2 / V3 (SMALLER - like ambitious image)
             local semiHolder
             local semiSelector, setSemiSelectorMode
             semiHolder = Instance.new("Frame")
@@ -3937,16 +3939,28 @@ local function Main()
 
             semiSelector, setSemiSelectorMode = createAmbitiousSelector(semiHolder, {"V1", "V2", "V3"}, getSemiMode(), function(mode)
                 setSemiMode(mode)
-                if _G._SetSemiMode then _G._SetSemiMode(mode) end
+                -- Update engine directly
+                if _G.AmbitiousAutoStealSync then _G.AmbitiousAutoStealSync() end
+                if _G.RefreshSemiSub then _G.RefreshSemiSub() end
+                if requestSave then requestSave() end
+            end, true)
+
+            -- External setters that update UI without triggering loop
+            _G._SetStealMode = function(m) 
+                local target = (m=="semi" or m=="Semi") and "Semi" or "Normal"
+                setSelMode(target)
+                setMainMode(target, true)
                 if _G.RefreshSemiSub then _G.RefreshSemiSub() end
                 if _G.AmbitiousAutoStealSync then _G.AmbitiousAutoStealSync() end
-                if requestSave then requestSave() end
-            end, true) -- true = small
+            end
+            _G._SetSemiMode = function(m)
+                local target = m or "V1"
+                setSemiMode(target)
+                setSemiSelectorMode(target, true)
+                if _G.RefreshSemiSub then _G.RefreshSemiSub() end
+                if _G.AmbitiousAutoStealSync then _G.AmbitiousAutoStealSync() end
+            end
 
-            _G._SetStealMode = function(m) if m=="semi" or m=="Semi" then setMainMode("Semi") else setMainMode("Normal") end end
-            _G._SetSemiMode = function(m) setSemiSelectorMode(m) end
-
-            -- 3. Toggles (like ambitious)
             setInstaGrab = makeToggleRow("Auto Steal", Steal.AutoStealEnabled, function(on) 
                 Steal.AutoStealEnabled=on
                 if on then if _G.AmbitiousAutoStealSync then _G.AmbitiousAutoStealSync() end else if _G.AmbitiousNormalAutoStealStop then _G.AmbitiousNormalAutoStealStop() end; if _G.AmbitiousSemiAutoStealStop then _G.AmbitiousSemiAutoStealStop() end; if _G.AmbitiousSemiV2AutoStealStop then _G.AmbitiousSemiV2AutoStealStop() end end
@@ -3955,34 +3969,26 @@ local function Main()
             toggleSetters["autoSteal"] = setInstaGrab
 
             local syncToggle = makeToggleRow("Synchronize After Hit", _G.Duels_SyncAfterHit, function(on) _G.Duels_SyncAfterHit = on; if requestSave then requestSave() end end)
-            local circleToggle = makeToggleRow("Radius Circle", _G.Duels_RadiusCircle, function(on) _G.Duels_RadiusCircle = on; if _G.AmbitiousRadiusCircleEnabled ~= nil then _G.AmbitiousRadiusCircleEnabled = on end; if requestSave then requestSave() end end)
+            local circleToggle = makeToggleRow("Radius Circle", _G.Duels_RadiusCircle, function(on) _G.Duels_RadiusCircle = on; if requestSave then requestSave() end end)
 
             makeGap(6); makeSectionHeader("Steal Config"); makeGap(2)
 
-            -- Inputs - capture both box and row for proper visibility
             local stealBox, stealRow = makeInputRow("Radius", tostring(_G.AmbitiousStealRadii.Normal or 60), function(n) if n and n>=1 and n<=500 then _G.AmbitiousStealRadii.Normal = n; _G.Duels_AutoStealRadius = n; Steal.StealRadius = n; if _G.AmbitiousNormalAutoStealSetRadius then _G.AmbitiousNormalAutoStealSetRadius(n) end; if _G.AmbitiousAutoStealSync then _G.AmbitiousAutoStealSync() end end end)
             stealRadBox = stealBox
 
-            local semiPrimeBox, semiPrimeRow = makeInputRow("Prime Radius [Semi]", tostring(_G.AmbitiousStealRadii.SemiV2Radius or 60), function(n) if n and n>=1 and n<=500 then _G.AmbitiousStealRadii.SemiV2Radius = n; if _G.AmbitiousSemiV2SetRadius then _G.AmbitiousSemiV2SetRadius(n) end end end)
+            local semiPrimeBox, semiPrimeRow = makeInputRow("Prime Radius [Semi V2]", tostring(_G.AmbitiousStealRadii.SemiV2Radius or 60), function(n) if n and n>=1 and n<=500 then _G.AmbitiousStealRadii.SemiV2Radius = n; if _G.AmbitiousSemiV2SetRadius then _G.AmbitiousSemiV2SetRadius(n) end end end)
             local semiTriggerBox, semiTriggerRow = makeInputRow("Semi Radius", tostring(_G.AmbitiousStealRadii.SemiV2SemiRadius or 8), function(n) if n and n>=1 and n<=500 then _G.AmbitiousStealRadii.SemiV2SemiRadius = n; if _G.AmbitiousSemiV2SetSemiRadius then _G.AmbitiousSemiV2SetSemiRadius(n) end end end)
 
             local delayBox, delayRow = makeInputRow("Delay Radius [V1/V3]", tostring(_G.AmbitiousSemiSteal and _G.AmbitiousSemiSteal.autoGrabSetDelayRadius or 8), function(n) if n and n>=1 and n<=500 then if _G.AmbitiousSemiSteal then _G.AmbitiousSemiSteal.autoGrabSetDelayRadius = n end end end)
             local stopTimeBox, stopTimeRow = makeInputRow("Stop Time (s) [V1]", tostring(_G.AmbitiousSemiSteal and _G.AmbitiousSemiSteal.autoGrabStopTime or 1.29), function(n) if n and n>=0.01 and n<=1.29 then if _G.AmbitiousSemiSteal then _G.AmbitiousSemiSteal.autoGrabStopTime = n end end end)
             local stopPctBox, stopPctRow = makeInputRow("Stop Time (%) [V3]", tostring(_G.AmbitiousSemiSteal and _G.AmbitiousSemiSteal.autoGrabStopPercent or 75), function(n) if n and n>=1 and n<=100 then if _G.AmbitiousSemiSteal then _G.AmbitiousSemiSteal.autoGrabStopPercent = n end end end)
 
-            -- Visibility logic - exactly like ambitious
             _G.RefreshSemiSub = function()
                 local mode = getSelMode()
                 local semiMode = getSemiMode()
                 local isSemi = (mode == "Semi")
                 semiHolder.Visible = isSemi
 
-                -- Prime radius visible for Normal and Semi V2
-                local showPrime = (mode == "Normal") or (isSemi and semiMode == "V2")
-                -- For Normal, show Radius, hide Semi Radius
-                -- For Semi V2, show both Prime and Semi Radius
-                -- For V1/V3, show Prime (as general radius) and Delay/Stop
-                if stealRow then stealRow.Visible = (mode == "Normal") or (isSemi and semiMode ~= "V2") or false end
                 if mode == "Normal" then
                     if stealRow then stealRow.Visible = true end
                     if semiPrimeRow then semiPrimeRow.Visible = false end
@@ -3990,7 +3996,6 @@ local function Main()
                     if delayRow then delayRow.Visible = false end
                     if stopTimeRow then stopTimeRow.Visible = false end
                     if stopPctRow then stopPctRow.Visible = false end
-                    -- Update label
                     if stealBox then stealBox.Text = tostring(_G.AmbitiousStealRadii.Normal or 60) end
                 elseif semiMode == "V2" then
                     if stealRow then stealRow.Visible = false end
@@ -4022,6 +4027,7 @@ local function Main()
         end)
         page.LayoutOrder = 3
     end
+
 
 
 
