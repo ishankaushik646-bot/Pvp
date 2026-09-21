@@ -2989,11 +2989,11 @@ local function Main()
                 local tpvRow = Instance.new("Frame", currentPage)
                 tpvRow.Name = "TP Bat Versions"
                 tpvRow.Size = UDim2.new(1,-16,0,42)
-                tpvRow.BackgroundColor3 = Color3.fromRGB(18,14,28)
+                tpvRow.BackgroundColor3 = Color3.fromRGB(14,22,16)
                 tpvRow.BorderSizePixel=0
                 tpvRow.LayoutOrder=LO()
                 mkCorner(tpvRow,12)
-                local tpvRowStroke = mkStroke(tpvRow, Color3.fromRGB(90,50,160),1)
+                local tpvRowStroke = mkStroke(tpvRow, Color3.fromRGB(34,76,46),1)
                 tpvRowStroke.Transparency=0.5
                 tpvRow.ClipsDescendants=true
                 local tpvLbl = Instance.new("TextLabel", tpvRow)
@@ -3007,19 +3007,19 @@ local function Main()
                 tpvLbl.TextXAlignment=Enum.TextXAlignment.Left
                 local tpvArrow = Instance.new("TextButton", tpvRow)
                 tpvArrow.Name="TPBatVersionsArrow"
-                tpvArrow.BackgroundColor3=Color3.fromRGB(12,8,20)
+                tpvArrow.BackgroundColor3=Color3.fromRGB(8,12,10)
                 tpvArrow.BackgroundTransparency=0.18
                 tpvArrow.BorderSizePixel=0
                 tpvArrow.Size=UDim2.new(0,28,0,24)
                 tpvArrow.Position=UDim2.new(1,-40,0.5,-12)
                 tpvArrow.Text="▼"
-                tpvArrow.TextColor3=Color3.fromRGB(200,180,255)
+                tpvArrow.TextColor3=Color3.fromRGB(200,255,200)
                 tpvArrow.TextSize=14
                 tpvArrow.Font=Enum.Font.GothamBold
                 tpvArrow.AutoButtonColor=false
                 tpvArrow.ZIndex=8
                 mkCorner(tpvArrow,7)
-                mkStroke(tpvArrow, Color3.fromRGB(90,50,160),1).Transparency=0.45
+                mkStroke(tpvArrow, Color3.fromRGB(34,76,46),1).Transparency=0.45
                 local tpvHolder = Instance.new("Frame", currentPage)
                 tpvHolder.Name="TP Bat Versions Options"
                 tpvHolder.BackgroundTransparency=1
@@ -3032,15 +3032,15 @@ local function Main()
                 local TPV_N=#TPV_LABELS
                 local tpvVerHolder = Instance.new("Frame", tpvHolder)
                 tpvVerHolder.Name="TPBatVersionSelector"
-                tpvVerHolder.BackgroundColor3=Color3.fromRGB(18,14,28)
+                tpvVerHolder.BackgroundColor3=Color3.fromRGB(14,22,16)
                 tpvVerHolder.Size=UDim2.new(1,0,0,42)
                 tpvVerHolder.Position=UDim2.new(0,0,0,2)
                 tpvVerHolder.BorderSizePixel=0
                 mkCorner(tpvVerHolder,12)
-                mkStroke(tpvVerHolder, Color3.fromRGB(90,50,160),1).Transparency=0.32
+                mkStroke(tpvVerHolder, Color3.fromRGB(34,76,46),1).Transparency=0.32
                 local tpvVerSlide = Instance.new("Frame", tpvVerHolder)
                 tpvVerSlide.Name="TPBatVersionSlide"
-                tpvVerSlide.BackgroundColor3=Color3.fromRGB(120,70,200)
+                tpvVerSlide.BackgroundColor3=Color3.fromRGB(30,132,73)
                 tpvVerSlide.BackgroundTransparency=0.1
                 tpvVerSlide.AnchorPoint=Vector2.new(0.5,0.5)
                 tpvVerSlide.Size=UDim2.new(1/TPV_N,-4,1,-8)
@@ -3049,7 +3049,7 @@ local function Main()
                 tpvVerSlide.ZIndex=5
                 mkCorner(tpvVerSlide,10)
                 local tpvSlideStroke=Instance.new("UIStroke", tpvVerSlide)
-                tpvSlideStroke.Color=Color3.fromRGB(155,89,255)
+                tpvSlideStroke.Color=Color3.fromRGB(80,255,120)
                 tpvSlideStroke.Thickness=1.5
                 tpvSlideStroke.Transparency=0.2
                 tpvSlideStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
@@ -3060,7 +3060,7 @@ local function Main()
                     lbl.Name="TPBatVersionLabel_"..tostring(i)
                     lbl.BackgroundTransparency=1
                     lbl.Text=lblText
-                    lbl.TextColor3=Color3.fromRGB(200,180,255)
+                    lbl.TextColor3=Color3.fromRGB(220,255,220)
                     lbl.TextSize=11
                     lbl.Font=Enum.Font.GothamBlack
                     lbl.TextXAlignment=Enum.TextXAlignment.Center
@@ -3093,7 +3093,7 @@ local function Main()
                         local sel=(i==index)
                         TweenService:Create(lbl, TweenInfo.new(0.14), {
                             TextTransparency=sel and 0 or 0.4,
-                            TextColor3=sel and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,160,210)
+                            TextColor3=sel and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,200,180)
                         }):Play()
                     end
                 end
@@ -3128,11 +3128,11 @@ local function Main()
                 local kwRow = Instance.new("Frame", currentPage)
                 kwRow.Name = "KickWarningRow"
                 kwRow.Size = UDim2.new(1,-16,0,42)
-                kwRow.BackgroundColor3 = Color3.fromRGB(28,14,14)
+                kwRow.BackgroundColor3 = Color3.fromRGB(14,22,16)
                 kwRow.BorderSizePixel=0
                 kwRow.LayoutOrder=LO()
                 mkCorner(kwRow,12)
-                local kwStroke = mkStroke(kwRow, Color3.fromRGB(160,50,50),1)
+                local kwStroke = mkStroke(kwRow, Color3.fromRGB(34,76,46),1)
                 kwStroke.Transparency=0.5
                 local kwLbl = Instance.new("TextLabel", kwRow)
                 kwLbl.Size = UDim2.new(1,-70,1,0)
@@ -3145,19 +3145,19 @@ local function Main()
                 kwLbl.TextXAlignment=Enum.TextXAlignment.Left
                 local kwArrow = Instance.new("TextButton", kwRow)
                 kwArrow.Name="KickWarningArrow"
-                kwArrow.BackgroundColor3=Color3.fromRGB(20,8,8)
+                kwArrow.BackgroundColor3=Color3.fromRGB(8,12,10)
                 kwArrow.BackgroundTransparency=0.18
                 kwArrow.BorderSizePixel=0
                 kwArrow.Size=UDim2.new(0,28,0,24)
                 kwArrow.Position=UDim2.new(1,-40,0.5,-12)
                 kwArrow.Text="▼"
-                kwArrow.TextColor3=Color3.fromRGB(255,180,180)
+                kwArrow.TextColor3=Color3.fromRGB(200,255,200)
                 kwArrow.TextSize=14
                 kwArrow.Font=Enum.Font.GothamBold
                 kwArrow.AutoButtonColor=false
                 kwArrow.ZIndex=8
                 mkCorner(kwArrow,7)
-                mkStroke(kwArrow, Color3.fromRGB(160,50,50),1).Transparency=0.45
+                mkStroke(kwArrow, Color3.fromRGB(34,76,46),1).Transparency=0.45
                 local kwHolder = Instance.new("Frame", currentPage)
                 kwHolder.Name="Kick Warning Options"
                 kwHolder.BackgroundTransparency=1
@@ -3170,16 +3170,16 @@ local function Main()
                 kwToggleRow.Name="KickWarnToggleRow"
                 kwToggleRow.Size=UDim2.new(1,0,0,42)
                 kwToggleRow.Position=UDim2.new(0,0,0,2)
-                kwToggleRow.BackgroundColor3=Color3.fromRGB(28,14,14)
+                kwToggleRow.BackgroundColor3=Color3.fromRGB(14,22,16)
                 kwToggleRow.BorderSizePixel=0
                 mkCorner(kwToggleRow,12)
-                mkStroke(kwToggleRow, Color3.fromRGB(160,50,50),1).Transparency=0.32
+                mkStroke(kwToggleRow, Color3.fromRGB(34,76,46),1).Transparency=0.32
                 local kwToggleLbl = Instance.new("TextLabel", kwToggleRow)
                 kwToggleLbl.Size=UDim2.new(0.6,0,1,0)
                 kwToggleLbl.Position=UDim2.new(0,14,0,0)
                 kwToggleLbl.BackgroundTransparency=1
                 kwToggleLbl.Text="Enable Kick Warning"
-                kwToggleLbl.TextColor3=Color3.fromRGB(255,200,200)
+                kwToggleLbl.TextColor3=Color3.fromRGB(220,255,220)
                 kwToggleLbl.Font=Enum.Font.GothamSemibold
                 kwToggleLbl.TextSize=12
                 kwToggleLbl.TextXAlignment=Enum.TextXAlignment.Left
@@ -3210,23 +3210,23 @@ local function Main()
                 uakRow.Name="UAKToggleRow"
                 uakRow.Size=UDim2.new(1,0,0,42)
                 uakRow.Position=UDim2.new(0,0,0,48)
-                uakRow.BackgroundColor3=Color3.fromRGB(22,18,32)
+                uakRow.BackgroundColor3=Color3.fromRGB(14,22,16)
                 uakRow.BorderSizePixel=0
                 mkCorner(uakRow,12)
-                mkStroke(uakRow, Color3.fromRGB(90,50,160),1).Transparency=0.32
+                mkStroke(uakRow, Color3.fromRGB(34,76,46),1).Transparency=0.32
                 local uakLbl = Instance.new("TextLabel", uakRow)
                 uakLbl.Size=UDim2.new(0.6,0,1,0)
                 uakLbl.Position=UDim2.new(0,14,0,0)
                 uakLbl.BackgroundTransparency=1
                 uakLbl.Text="Ultimate Anti Kick"
-                uakLbl.TextColor3=Color3.fromRGB(200,180,255)
+                uakLbl.TextColor3=Color3.fromRGB(220,255,220)
                 uakLbl.Font=Enum.Font.GothamSemibold
                 uakLbl.TextSize=12
                 uakLbl.TextXAlignment=Enum.TextXAlignment.Left
                 local uakBtn = Instance.new("TextButton", uakRow)
                 uakBtn.Size=UDim2.new(0,52,0,26)
                 uakBtn.Position=UDim2.new(1,-62,0.5,-13)
-                uakBtn.BackgroundColor3= _G.DuelsUAKEnabled and Color3.fromRGB(120,70,200) or Color3.fromRGB(40,30,60)
+                uakBtn.BackgroundColor3= _G.DuelsUAKEnabled and Color3.fromRGB(30,132,73) or Color3.fromRGB(20,40,25)
                 uakBtn.Text=""
                 uakBtn.BorderSizePixel=0
                 mkCorner(uakBtn,13)
