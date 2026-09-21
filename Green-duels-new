@@ -4031,7 +4031,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(2); makeSectionHeader("Performance"); makeGap(2)
             antiLagSetter = makeToggleRow("Anti-Lag (recommended)", State.antiLagEnabled, function(on) State.antiLagEnabled=on; if on then enableAntiLag() else disableAntiLag() end end)
             do
-                local function setRagdollCountdown(on)
+                local function setRCD(on)
                     State.ragdollCountdownEnabled = on and true or false
                     if State.ragdollCountdownEnabled then
                         hookRagdollCountdown(LP.Character)
@@ -4040,7 +4040,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
                     end
                     if requestSave then requestSave() end
                 end
-                local setVis = makeToggleRow("Ragdoll Countdown", State.ragdollCountdownEnabled, setRagdollCountdown)
+                local setVis = makeToggleRow("Ragdoll Countdown", State.ragdollCountdownEnabled, setRCD)
                 toggleSetters["ragdollCountdown"] = setVis
             end
 
@@ -4615,7 +4615,6 @@ toggleSetters["antiRagdoll"] = setAntiRag
         if State.antiDropEnabled then startAntiDrop() end
         if State.antiRagdollEnabled then task.wait(0.5); startAntiRagdoll() end
         if State.medusaCounterEnabled then setupMedusaCounter(char) end
-        if State.ragdollCountdownEnabled then task.wait(0.2); hookRagdollCountdown(char) end
         if State.batAimbotToggled then stopBatAimbot(); task.wait(0.2); pcall(startBatAimbot) end
         if State.batCounterEnabled then task.wait(0.3); startBatCounter() end
         if State.bodyLockEnabled then task.wait(0.3); startBodyLock() end
@@ -5125,7 +5124,11 @@ end
     stopMedusaCounter = function() for _,c2 in pairs(Conns.anchor) do pcall(function() c2:Disconnect() end) end; Conns.anchor={} end
 
 
-    -- OLD RAGDOLL TIMER DISABLED - REPLACED BY AMBITIOUS COUNTDOWN
+    -- OLD TIMER DISABLED
+    local _rtTimerActive = false
+    local function getRagTimerLbl() return nil end
+    local function startRagTimerGui() end
+    local function startRagTimerDetection(char) end
     if false then
     local _rtTimerActive = false
     local function getRagTimerLbl()
@@ -5266,254 +5269,236 @@ end
     end
 
     -- ============================================================
-    -- AMBITIOUS RAGDOLL COUNTDOWN - GREEN VERSION (SAFE)
+    -- NEW RAGDOLL COUNTDOWN FROM AMBITIOUS (FIXED NAMES)
     -- ============================================================
-    local ragdollCountdownLabel = nil
-    local overheadGui = nil
+    local _rcdGui = nil
+    local _rcdLabel = nil
     _G._DuelsRCD = _G._DuelsRCD or {conn=nil, charConn=nil, endTime=0, seconds=2.6}
-    _G._DuelsMedusaHitTime = _G._DuelsMedusaHitTime or 0
-    local enemyRagdollData = {}
-    _G.DuelsEnemyRagdollData = enemyRagdollData
-    local enemyRagdollConn = nil
-    local enemyCountdownConns = {}
-    local enemyCountdownUpdateLoop = nil
-    local ENEMY_RAGDOLL_SECONDS = 2.6
+    _G._DuelsMedusaTime = _G._DuelsMedusaTime or 0
+    local _enemyRagData = {}
+    local _enemyRagConn = nil
+    local _enemyRagConns = {}
+    local _enemyRagLoop = nil
+    local _enemyRagRemoving = nil
+    local _ENEMY_SECONDS = 2.6
 
-    local function setupOverheadInfo(char)
-        if overheadGui then pcall(function() overheadGui:Destroy() end) overheadGui=nil ragdollCountdownLabel=nil end
+    local function _setupOverhead(char)
+        if _rcdGui then pcall(function() _rcdGui:Destroy() end) _rcdGui=nil _rcdLabel=nil end
         if not char then return end
         local head = char:FindFirstChild("Head") or char:WaitForChild("Head", 5)
         if not head then return end
-        overheadGui = Instance.new("BillboardGui")
-        overheadGui.Name = "DuelsV2OverheadInfo"
-        overheadGui.Size = UDim2.new(0, 250, 0, 40)
-        overheadGui.StudsOffset = Vector3.new(0, 2.5, 0)
-        overheadGui.AlwaysOnTop = true
-        overheadGui.LightInfluence = 0
-        overheadGui.Parent = head
-        ragdollCountdownLabel = Instance.new("TextLabel")
-        ragdollCountdownLabel.Name = "RagdollCountdown"
-        ragdollCountdownLabel.Size = UDim2.new(1,0,0,26)
-        ragdollCountdownLabel.Position = UDim2.new(0,0,0,0)
-        ragdollCountdownLabel.BackgroundTransparency = 1
-        ragdollCountdownLabel.Text = ""
-        ragdollCountdownLabel.Visible = false
-        ragdollCountdownLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
-        ragdollCountdownLabel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
-        ragdollCountdownLabel.TextStrokeTransparency = 0
-        ragdollCountdownLabel.Font = Enum.Font.GothamBlack
-        ragdollCountdownLabel.TextSize = 20
-        ragdollCountdownLabel.TextXAlignment = Enum.TextXAlignment.Center
-        ragdollCountdownLabel.ZIndex = 10
-        ragdollCountdownLabel.Parent = overheadGui
+        _rcdGui = Instance.new("BillboardGui")
+        _rcdGui.Name = "DuelsV2_RCD"
+        _rcdGui.Size = UDim2.new(0, 250, 0, 40)
+        _rcdGui.StudsOffset = Vector3.new(0, 2.5, 0)
+        _rcdGui.AlwaysOnTop = true
+        _rcdGui.LightInfluence = 0
+        _rcdGui.Parent = head
+        _rcdLabel = Instance.new("TextLabel")
+        _rcdLabel.Name = "RagdollCountdown"
+        _rcdLabel.Size = UDim2.new(1,0,0,26)
+        _rcdLabel.BackgroundTransparency = 1
+        _rcdLabel.Text = ""
+        _rcdLabel.Visible = false
+        _rcdLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
+        _rcdLabel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+        _rcdLabel.TextStrokeTransparency = 0
+        _rcdLabel.Font = Enum.Font.GothamBlack
+        _rcdLabel.TextSize = 20
+        _rcdLabel.TextXAlignment = Enum.TextXAlignment.Center
+        _rcdLabel.ZIndex = 10
+        _rcdLabel.Parent = _rcdGui
     end
 
-    function _G.DuelsIsMedusaHit()
-        return (tick() - (_G._DuelsMedusaHitTime or 0)) < 4
+    local function _isMedusaHit()
+        return (tick() - (_G._DuelsMedusaTime or 0)) < 4
     end
 
-    -- base stop function
-    local function _baseStopRagdoll()
-      if _G._DuelsRCD.conn then _G._DuelsRCD.conn:Disconnect(); _G._DuelsRCD.conn=nil end
-      if _G._DuelsRCD.charConn then _G._DuelsRCD.charConn:Disconnect(); _G._DuelsRCD.charConn=nil end
-      if ragdollCountdownLabel then ragdollCountdownLabel.Visible=false ragdollCountdownLabel.Text="" end
+    local function _stopRCDInternal()
+        if _G._DuelsRCD.conn then _G._DuelsRCD.conn:Disconnect() _G._DuelsRCD.conn=nil end
+        if _G._DuelsRCD.charConn then _G._DuelsRCD.charConn:Disconnect() _G._DuelsRCD.charConn=nil end
+        if _rcdLabel then _rcdLabel.Visible=false _rcdLabel.Text="" end
     end
 
-    function _G.DuelsStartEnemyRagdollCountdown()
-        if enemyRagdollConn then return end
-        enemyCountdownUpdateLoop = RunService.Heartbeat:Connect(function()
+    function _G.DuelsStartEnemyRCD()
+        if _enemyRagConn then return end
+        _enemyRagLoop = RunService.Heartbeat:Connect(function()
             local now = tick()
-            for plr,data in pairs(enemyRagdollData) do
-                if not data or not data.gui or not data.gui.Parent then enemyRagdollData[plr]=nil continue end
+            for plr,data in pairs(_enemyRagData) do
+                if not data or not data.gui or not data.gui.Parent then _enemyRagData[plr]=nil continue end
                 if data.endTime and data.endTime > now then
                     local left = data.endTime - now
-                    local label = data.gui:FindFirstChild("Countdown")
-                    if label then
-                        label.Text = string.format("RAGDOLL %.1f", left)
-                        label.TextColor3 = left <= 1 and Color3.fromRGB(255,230,90) or Color3.fromRGB(80,255,120)
+                    local lbl = data.gui:FindFirstChild("Countdown")
+                    if lbl then
+                        lbl.Text = string.format("RAGDOLL %.1f", left)
+                        lbl.TextColor3 = left <= 1 and Color3.fromRGB(255,230,90) or Color3.fromRGB(80,255,120)
                     end
                 else
                     pcall(function() data.gui:Destroy() end)
-                    enemyRagdollData[plr]=nil
+                    _enemyRagData[plr]=nil
                 end
             end
         end)
-        local function setupEnemyDetector(enemyChar, plr)
-            if enemyCountdownConns[plr] then
-                local old = enemyCountdownConns[plr]
-                pcall(function() if old.ragdollDetect then old.ragdollDetect:Disconnect() end end)
-                pcall(function() if old.stateChange then old.stateChange:Disconnect() end end)
-                enemyCountdownConns[plr]=nil
+        local function setupDetector(enemyChar, plr)
+            if _enemyRagConns[plr] then
+                local old = _enemyRagConns[plr]
+                pcall(function() if old.det then old.det:Disconnect() end end)
+                pcall(function() if old.st then old.st:Disconnect() end end)
+                _enemyRagConns[plr]=nil
             end
             local conn = enemyChar.DescendantAdded:Connect(function(d)
                 if d:IsA("BallSocketConstraint") then
                     local now = tick()
-                    local data = enemyRagdollData[plr]
+                    local data = _enemyRagData[plr]
                     if not data then
                         local head = enemyChar:FindFirstChild("Head")
                         if head then
                             local pg = LP:FindFirstChild("PlayerGui")
                             if not pg then return end
                             local bb = Instance.new("BillboardGui")
-                            bb.Name = "DuelsEnemyRagdollCountdown"
+                            bb.Name = "DuelsEnemyRCD"
                             bb.Adornee = head
                             bb.Size = UDim2.new(0, 120, 0, 30)
                             bb.StudsOffset = Vector3.new(0, 3.2, 0)
                             bb.AlwaysOnTop = true
                             bb.LightInfluence = 0
                             bb.Parent = pg
-                            local label = Instance.new("TextLabel")
-                            label.Name = "Countdown"
-                            label.Size = UDim2.new(1,0,1,0)
-                            label.BackgroundTransparency = 1
-                            label.Text = ""
-                            label.TextColor3 = Color3.fromRGB(80,255,120)
-                            label.TextStrokeColor3 = Color3.fromRGB(0,0,0)
-                            label.TextStrokeTransparency = 0
-                            label.Font = Enum.Font.GothamBlack
-                            label.TextSize = 18
-                            label.TextXAlignment = Enum.TextXAlignment.Center
-                            label.ZIndex = 10
-                            label.Parent = bb
-                            enemyRagdollData[plr] = {gui=bb, endTime=now+ENEMY_RAGDOLL_SECONDS}
+                            local lbl = Instance.new("TextLabel")
+                            lbl.Name = "Countdown"
+                            lbl.Size = UDim2.new(1,0,1,0)
+                            lbl.BackgroundTransparency = 1
+                            lbl.Text = ""
+                            lbl.TextColor3 = Color3.fromRGB(80,255,120)
+                            lbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+                            lbl.TextStrokeTransparency = 0
+                            lbl.Font = Enum.Font.GothamBlack
+                            lbl.TextSize = 18
+                            lbl.TextXAlignment = Enum.TextXAlignment.Center
+                            lbl.ZIndex = 10
+                            lbl.Parent = bb
+                            _enemyRagData[plr] = {gui=bb, endTime=now+_ENEMY_SECONDS}
                         end
                     else
-                        data.endTime = now+ENEMY_RAGDOLL_SECONDS
+                        data.endTime = now+_ENEMY_SECONDS
                     end
                 end
             end)
             local hum = enemyChar:FindFirstChildOfClass("Humanoid")
-            local stateConn
+            local stConn
             if hum then
-                stateConn = hum.StateChanged:Connect(function(_, newState)
-                    local still = (newState == Enum.HumanoidStateType.Physics or newState == Enum.HumanoidStateType.Ragdoll)
+                stConn = hum.StateChanged:Connect(function(_, ns)
+                    local still = (ns == Enum.HumanoidStateType.Physics or ns == Enum.HumanoidStateType.Ragdoll)
                     if not still then
-                        local data = enemyRagdollData[plr]
+                        local data = _enemyRagData[plr]
                         if data and tick() >= (data.endTime or 0) then
                             if data.gui then pcall(function() data.gui:Destroy() end) end
-                            enemyRagdollData[plr]=nil
+                            _enemyRagData[plr]=nil
                         end
                     end
                 end)
             end
-            enemyCountdownConns[plr] = {ragdollDetect=conn, stateChange=stateConn}
+            _enemyRagConns[plr] = {det=conn, st=stConn}
         end
-        local function watchPlayer(plr)
+        local function watch(plr)
             if plr == LP then return end
-            if enemyCountdownConns[plr] and enemyCountdownConns[plr].charAdded then pcall(function() enemyCountdownConns[plr].charAdded:Disconnect() end) end
-            local charConn = plr.CharacterAdded:Connect(function(char) if char then setupEnemyDetector(char, plr) end end)
-            if not enemyCountdownConns[plr] then enemyCountdownConns[plr]={} end
-            enemyCountdownConns[plr].charAdded = charConn
-            if plr.Character then setupEnemyDetector(plr.Character, plr) end
+            if _enemyRagConns[plr] and _enemyRagConns[plr].ch then pcall(function() _enemyRagConns[plr].ch:Disconnect() end) end
+            local chConn = plr.CharacterAdded:Connect(function(ch) if ch then setupDetector(ch, plr) end end)
+            if not _enemyRagConns[plr] then _enemyRagConns[plr]={} end
+            _enemyRagConns[plr].ch = chConn
+            if plr.Character then setupDetector(plr.Character, plr) end
         end
-        for _,conns in pairs(enemyCountdownConns) do
-            pcall(function()
-                if conns.ragdollDetect then conns.ragdollDetect:Disconnect() end
-                if conns.stateChange then conns.stateChange:Disconnect() end
-                if conns.charAdded then conns.charAdded:Disconnect() end
-            end)
-        end
-        enemyCountdownConns = {}
-        enemyRagdollConn = Players.PlayerAdded:Connect(watchPlayer)
-        for _,plr in ipairs(Players:GetPlayers()) do watchPlayer(plr) end
-        if _G._DuelsEnemyRemoving then pcall(function() _G._DuelsEnemyRemoving:Disconnect() end) end
-        _G._DuelsEnemyRemoving = Players.PlayerRemoving:Connect(function(plr)
-            local data = enemyRagdollData[plr]
+        for _,c in pairs(_enemyRagConns) do pcall(function() if c.det then c.det:Disconnect() end if c.st then c.st:Disconnect() end if c.ch then c.ch:Disconnect() end end) end
+        _enemyRagConns = {}
+        _enemyRagConn = Players.PlayerAdded:Connect(watch)
+        for _,plr in ipairs(Players:GetPlayers()) do watch(plr) end
+        if _enemyRagRemoving then pcall(function() _enemyRagRemoving:Disconnect() end) end
+        _enemyRagRemoving = Players.PlayerRemoving:Connect(function(plr)
+            local data = _enemyRagData[plr]
             if data and data.gui then pcall(function() data.gui:Destroy() end) end
-            enemyRagdollData[plr]=nil
-            if enemyCountdownConns[plr] then
+            _enemyRagData[plr]=nil
+            if _enemyRagConns[plr] then
                 pcall(function()
-                    if enemyCountdownConns[plr].ragdollDetect then enemyCountdownConns[plr].ragdollDetect:Disconnect() end
-                    if enemyCountdownConns[plr].stateChange then enemyCountdownConns[plr].stateChange:Disconnect() end
-                    if enemyCountdownConns[plr].charAdded then enemyCountdownConns[plr].charAdded:Disconnect() end
+                    if _enemyRagConns[plr].det then _enemyRagConns[plr].det:Disconnect() end
+                    if _enemyRagConns[plr].st then _enemyRagConns[plr].st:Disconnect() end
+                    if _enemyRagConns[plr].ch then _enemyRagConns[plr].ch:Disconnect() end
                 end)
-                enemyCountdownConns[plr]=nil
+                _enemyRagConns[plr]=nil
             end
         end)
     end
 
-    function _G.DuelsStopEnemyRagdollCountdown()
-        if enemyRagdollConn then enemyRagdollConn:Disconnect(); enemyRagdollConn=nil end
-        if enemyCountdownUpdateLoop then enemyCountdownUpdateLoop:Disconnect(); enemyCountdownUpdateLoop=nil end
-        if _G._DuelsEnemyRemoving then pcall(function() _G._DuelsEnemyRemoving:Disconnect() end) _G._DuelsEnemyRemoving=nil end
-        for _,conns in pairs(enemyCountdownConns) do
-            pcall(function()
-                if conns.ragdollDetect then conns.ragdollDetect:Disconnect() end
-                if conns.stateChange then conns.stateChange:Disconnect() end
-                if conns.charAdded then conns.charAdded:Disconnect() end
-            end)
-        end
-        enemyCountdownConns={}
-        for plr,data in pairs(enemyRagdollData) do if data and data.gui then pcall(function() data.gui:Destroy() end) end end
-        for plr in pairs(enemyRagdollData) do enemyRagdollData[plr]=nil end
+    function _G.DuelsStopEnemyRCD()
+        if _enemyRagConn then _enemyRagConn:Disconnect() _enemyRagConn=nil end
+        if _enemyRagLoop then _enemyRagLoop:Disconnect() _enemyRagLoop=nil end
+        if _enemyRagRemoving then pcall(function() _enemyRagRemoving:Disconnect() end) _enemyRagRemoving=nil end
+        for _,c in pairs(_enemyRagConns) do pcall(function() if c.det then c.det:Disconnect() end if c.st then c.st:Disconnect() end if c.ch then c.ch:Disconnect() end end) end
+        _enemyRagConns={}
+        for plr,data in pairs(_enemyRagData) do if data and data.gui then pcall(function() data.gui:Destroy() end) end end
+        for plr in pairs(_enemyRagData) do _enemyRagData[plr]=nil end
     end
 
     function stopRagdollCountdown()
-      _baseStopRagdoll()
-      _G.DuelsStopEnemyRagdollCountdown()
+        _stopRCDInternal()
+        _G.DuelsStopEnemyRCD()
     end
 
     function hookRagdollCountdown(char)
-      stopRagdollCountdown()
-      if not State.ragdollCountdownEnabled then return end
-      _G.DuelsStartEnemyRagdollCountdown()
-      char = char or LP.Character
-      if not char then return end
-      if not overheadGui or not overheadGui.Parent then setupOverheadInfo(char) end
-      local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 4)
-      if not hum then return end
-      local function beginCountdown()
-        local duration = _G.DuelsIsMedusaHit() and 3.6 or _G._DuelsRCD.seconds
-        _G._DuelsRCD.endTime = tick() + duration
-        if ragdollCountdownLabel then ragdollCountdownLabel.Visible=true end
-      end
-      local function isRagdoll()
-        local st = hum:GetState()
-        return hum.PlatformStand or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll
-      end
-      _G._DuelsRCD.charConn = hum.StateChanged:Connect(function(_, newState)
-        if newState==Enum.HumanoidStateType.Physics or newState==Enum.HumanoidStateType.Ragdoll then beginCountdown() end
-      end)
-      _G._DuelsRCD.conn = RunService.RenderStepped:Connect(function()
-        if not State.ragdollCountdownEnabled then stopRagdollCountdown(); return end
-        if not ragdollCountdownLabel or not ragdollCountdownLabel.Parent then return end
-        if isRagdoll() and _G._DuelsRCD.endTime < tick() then beginCountdown() end
-        local left = math.max(0, _G._DuelsRCD.endTime - tick())
-        if left > 0 then
-          ragdollCountdownLabel.Visible=true
-          ragdollCountdownLabel.Text = string.format("RAGDOLL %.1f", left)
-          ragdollCountdownLabel.TextColor3 = left <= 1 and Color3.fromRGB(255,230,90) or Color3.fromRGB(80,255,120)
-        else
-          ragdollCountdownLabel.Visible=false
-          ragdollCountdownLabel.Text=""
+        stopRagdollCountdown()
+        if not State.ragdollCountdownEnabled then return end
+        _G.DuelsStartEnemyRCD()
+        char = char or LP.Character
+        if not char then return end
+        if not _rcdGui or not _rcdGui.Parent then _setupOverhead(char) end
+        local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 4)
+        if not hum then return end
+        local function begin()
+            local dur = _isMedusaHit() and 3.6 or _G._DuelsRCD.seconds
+            _G._DuelsRCD.endTime = tick() + dur
+            if _rcdLabel then _rcdLabel.Visible=true end
         end
-      end)
+        local function isDown()
+            local st = hum:GetState()
+            return hum.PlatformStand or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll
+        end
+        _G._DuelsRCD.charConn = hum.StateChanged:Connect(function(_, ns)
+            if ns==Enum.HumanoidStateType.Physics or ns==Enum.HumanoidStateType.Ragdoll then begin() end
+        end)
+        _G._DuelsRCD.conn = RunService.RenderStepped:Connect(function()
+            if not State.ragdollCountdownEnabled then stopRagdollCountdown() return end
+            if not _rcdLabel or not _rcdLabel.Parent then return end
+            if isDown() and _G._DuelsRCD.endTime < tick() then begin() end
+            local left = math.max(0, _G._DuelsRCD.endTime - tick())
+            if left > 0 then
+                _rcdLabel.Visible=true
+                _rcdLabel.Text = string.format("RAGDOLL %.1f", left)
+                _rcdLabel.TextColor3 = left <= 1 and Color3.fromRGB(255,230,90) or Color3.fromRGB(80,255,120)
+            else
+                _rcdLabel.Visible=false
+                _rcdLabel.Text=""
+            end
+        end)
     end
 
-    -- Medusa watcher
+    -- Medusa anchor watcher for 3.6s detection
     do
-        local _medusaConns={}
-        local function _clear() for _,c in ipairs(_medusaConns) do pcall(function() c:Disconnect() end) end _medusaConns={} end
-        local function _hook(part)
-            if not part:IsA("BasePart") then return end
-            local c = part:GetPropertyChangedSignal("Anchored"):Connect(function()
-                if part.Anchored and part.Transparency==1 then _G._DuelsMedusaHitTime = tick() end
+        local _mConns={}
+        local function _clr() for _,c in ipairs(_mConns) do pcall(function() c:Disconnect() end) end _mConns={} end
+        local function _hook(p)
+            if not p:IsA("BasePart") then return end
+            local c = p:GetPropertyChangedSignal("Anchored"):Connect(function()
+                if p.Anchored and p.Transparency==1 then _G._DuelsMedusaTime = tick() end
             end)
-            table.insert(_medusaConns, c)
+            table.insert(_mConns, c)
         end
-        local function _attach(char)
-            _clear() _G._DuelsMedusaHitTime=0
-            if not char then return end
-            for _,p in ipairs(char:GetDescendants()) do _hook(p) end
-            table.insert(_medusaConns, char.DescendantAdded:Connect(function(p) _hook(p) end))
+        local function _att(ch)
+            _clr() _G._DuelsMedusaTime=0
+            if not ch then return end
+            for _,pt in ipairs(ch:GetDescendants()) do _hook(pt) end
+            table.insert(_mConns, ch.DescendantAdded:Connect(function(pt) _hook(pt) end))
         end
-        if LP.Character then _attach(LP.Character) end
-        LP.CharacterAdded:Connect(function(char) task.wait(0.2) _attach(char) end)
+        if LP.Character then _att(LP.Character) end
+        LP.CharacterAdded:Connect(function(ch) task.wait(0.2) _att(ch) end)
     end
-
-    getRagTimerLbl = function() return ragdollCountdownLabel end
-    startRagTimerGui = function() if State.ragdollCountdownEnabled then hookRagdollCountdown(LP.Character) end end
-    startRagTimerDetection = function(char) if State.ragdollCountdownEnabled then hookRagdollCountdown(char) end end
 
 
     _G.GreenSafeModeTryStart = function()
