@@ -27,7 +27,9 @@ if not request then return end
 local LP = Players.LocalPlayer
 if not LP then LP = Players.PlayerAdded:Wait() end
 
-if _G.DuelsV2_Running then return end
+if _G.DuelsV2_Running then _G.DuelsV2_Running = false end
+_G.DuelsV2_Running = true
+_G.DuelsV2_Running = false -- allow reload
 _G.DuelsV2_Running = true
 
 local Players = game:GetService("Players")
@@ -576,11 +578,9 @@ local function instaReset()
     end)
 end
 
--- ============================================================
--- 
+
 -- ============================================================
 -- TP BAT V1-V5 (from Ambitious) - TOGGLE
--- V1 = snap, V2 = orbit, V3 = body spam, V4 = forward 0.5, V5 = vortex
 -- ============================================================
 _G.DuelsTPBatVersion = _G.DuelsTPBatVersion or 1
 local TPB = {
@@ -627,8 +627,7 @@ local function tpBatSnap(hrp, pos, lookAt)
     hrp.AssemblyAngularVelocity = Vector3.zero
 end
 
--- Existing globals from original file
-local tpBatToggled = _G._DuelsTPBatToggled or false
+local tpBatToggled = false
 local tpBatHittingCooldown = false
 local tpBatHRP = nil
 local tpBatH = nil
@@ -637,32 +636,50 @@ local tpBatAimbotConn = nil
 local tpBatLoopConn = nil
 _G.DuelsTPBatOn = _G.DuelsTPBatOn or false
 
--- Helper: closest enemy (reuse if exists else create)
-local function getClosestEnemy()
-    local closest, dist = nil, math.huge
-    local lpChar = LP.Character
-    if not lpChar then return nil end
-    local lpHrp = lpChar:FindFirstChild("HumanoidRootPart")
-    if not lpHrp then return nil end
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LP and plr.Character then
-            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum and hum.Health > 0 then
-                local d = (lpHrp.Position - hrp.Position).Magnitude
-                if d < dist then
-                    dist = d
-                    closest = plr
+local function getClosestPlayerForTP()
+    if not tpBatHRP then
+        local c = LP.Character
+        if c then tpBatHRP = c:FindFirstChild("HumanoidRootPart") end
+        if not tpBatHRP then return nil end
+    end
+    local closest, closestDist = nil, math.huge
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character then
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if root and hum and hum.Health > 0 then
+                local dist = (tpBatHRP.Position - root.Position).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closest = p
                 end
             end
         end
     end
-    return closest
+    return closest, closestDist
 end
 
-local function trySwingBat()
-    -- placeholder for swing logic if present, will be overwritten by bat aimbot hook
-    if _G._DuelsTrySwing then pcall(_G._DuelsTrySwing) end
+local function getBat()
+    local char = LP.Character
+    if not char then return nil end
+    local tool = char:FindFirstChild("Bat")
+    if tool then return tool end
+    local bp = LP:FindFirstChild("Backpack")
+    if bp then
+        tool = bp:FindFirstChild("Bat")
+        if tool then return tool end
+    end
+    return nil
+end
+
+local function tryHitBat()
+    if tpBatHittingCooldown then return end
+    tpBatHittingCooldown = true
+    pcall(function()
+        local bat = getBat()
+        if bat then bat:Activate() end
+    end)
+    task.delay(0.08, function() tpBatHittingCooldown = false end)
 end
 
 local function tpBatFrame(dt)
@@ -673,47 +690,30 @@ local function tpBatFrame(dt)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
-    local target = getClosestEnemy()
+    tpBatHRP = hrp
+    local target = getClosestPlayerForTP()
     if not (target and target.Character) then return end
     local tr = target.Character:FindFirstChild("HumanoidRootPart")
     if not tr then return end
 
-    -- Anti Void ghost check if available
-    local rawPos, isGhost = tr.Position, false
-    if _G.AmbitiousAntiVoid or _G.DuelsAntiVoid then
-        local av = _G.AmbitiousAntiVoid or _G.DuelsAntiVoid
-        if av.posForPart then
-            rawPos, isGhost = av.posForPart(tr, tr.Position)
-        end
-    end
-
+    local rawPos = tr.Position
     local ver = math.clamp(tonumber(_G.DuelsTPBatVersion) or 1, 1, 5)
 
     if ver == 1 then
         local targetPos = rawPos + Vector3.new(0, 0.9, 0)
-        if (hrp.Position - targetPos).Magnitude > 8 or true then
-            hrp.CFrame = CFrame.new(targetPos)
-        end
+        hrp.CFrame = CFrame.new(targetPos)
     else
         local center = rawPos + Vector3.new(0, 0.9, 0)
         local flatVel = Vector3.zero
-        if not isGhost then
-            local tv = tpBatTrackVel(tr)
-            flatVel = Vector3.new(tv.X, 0, tv.Z)
-            if flatVel.Magnitude > 110 then
-                flatVel = flatVel.Unit * 110
-            end
-        end
+        local tv = tpBatTrackVel(tr)
+        flatVel = Vector3.new(tv.X, 0, tv.Z)
+        if flatVel.Magnitude > 110 then flatVel = flatVel.Unit * 110 end
         local predicted = center + flatVel * 0.05
 
         if ver == 2 then
             TPB.orbitAngle = (TPB.orbitAngle or 0) + TPB.orbitSpeed * dt
             local ang = TPB.orbitAngle
-            local orbitPos = predicted + Vector3.new(
-                math.cos(ang) * TPB.orbitRadius,
-                0,
-                math.sin(ang) * TPB.orbitRadius
-            )
+            local orbitPos = predicted + Vector3.new(math.cos(ang) * TPB.orbitRadius, 0, math.sin(ang) * TPB.orbitRadius)
             tpBatSnap(hrp, orbitPos, predicted)
         else
             local look = tr.CFrame.LookVector
@@ -731,22 +731,18 @@ local function tpBatFrame(dt)
                     local t = i / n
                     local radius = rMin + (rMax - rMin) * math.abs(math.sin(t * math.pi * 3))
                     local angle = ang + t * 12
-                    local pos = anchor
-                        + right * (math.cos(angle) * radius)
-                        + look * (math.sin(angle) * radius)
-                        + Vector3.new(0, math.sin(angle * 1.5) * 0.15, 0)
+                    local pos = anchor + right * (math.cos(angle) * radius) + look * (math.sin(angle) * radius) + Vector3.new(0, math.sin(angle * 1.5) * 0.15, 0)
                     tpBatSnap(hrp, pos, anchor)
                 end
                 local face = anchor + Vector3.new(math.sin(ang)*0.3, 0.1, math.cos(ang)*0.3)
                 tpBatSnap(hrp, anchor + Vector3.new(0,0.15,0), face)
             else
-                -- V3 / V4
                 TPB.spinAngle = (TPB.spinAngle or 0) + TPB.spinSpeed * dt * 4.4
                 local spin = TPB.spinAngle
                 local c, s = math.cos(spin), math.sin(spin)
                 for i = 1, TPB.teleports do
                     local jx = ((i % 5) - 2) * 0.05
-                    local jz = ((i % 7) - 3) * 0.04)
+                    local jz = ((i % 7) - 3) * 0.04
                     local jy = ((i % 3) - 1) * 0.025
                     local ox = jx * c - jz * s
                     local oz = jx * s + jz * c
@@ -758,7 +754,7 @@ local function tpBatFrame(dt)
             end
         end
     end
-    trySwingBat()
+    tryHitBat()
 end
 
 function _G.DuelsSetTPBatVersion(v)
@@ -766,9 +762,9 @@ function _G.DuelsSetTPBatVersion(v)
     _G.DuelsTPBatVersion = v
     TPB.orbitAngle = 0
     TPB.spinAngle = 0
-    table.clear(TPB.velHist)
+    if TPB.velHist then table.clear(TPB.velHist) end
     if _G._DuelsTPBatSetVersionVisual then _G._DuelsTPBatSetVersionVisual(v) end
-    if requestSave then requestSave() end
+    if requestSave then pcall(requestSave) end
     return v
 end
 
@@ -776,26 +772,50 @@ local function startTPBat()
     if _G.DuelsTPBatOn then return end
     _G.DuelsTPBatOn = true
     tpBatToggled = true
-    _G._DuelsTPBatToggled = true
     if tpBatLoopConn then tpBatLoopConn:Disconnect() end
     tpBatLoopConn = RunService.Heartbeat:Connect(tpBatFrame)
-    print("[Duels V2] TP Bat V"..tostring(_G.DuelsTPBatVersion).." STARTED")
+    print("[Duels] TP Bat V"..tostring(_G.DuelsTPBatVersion).." STARTED")
 end
 
 local function stopTPBat()
     _G.DuelsTPBatOn = false
     tpBatToggled = false
-    _G._DuelsTPBatToggled = false
     if tpBatLoopConn then tpBatLoopConn:Disconnect() tpBatLoopConn=nil end
     if tpBatConn then tpBatConn:Disconnect() tpBatConn=nil end
     if tpBatAimbotConn then tpBatAimbotConn:Disconnect() tpBatAimbotConn=nil end
-    print("[Duels V2] TP Bat STOPPED")
+    print("[Duels] TP Bat STOPPED")
 end
 
 function _G.DuelsToggleTPBat()
     if _G.DuelsTPBatOn then stopTPBat() else startTPBat() end
 end
 
+local function toggleTPBat()
+    tpBatToggled = not tpBatToggled
+    if tpBatToggled then
+        local char = LP.Character
+        if char then tpBatHRP = char:FindFirstChild("HumanoidRootPart") end
+        startTPBat()
+        if stackBtnRefs and stackBtnRefs.tpBat then stackBtnRefs.tpBat.setOn(true) end
+    else
+        stopTPBat()
+        if stackBtnRefs and stackBtnRefs.tpBat then stackBtnRefs.tpBat.setOn(false) end
+    end
+    if requestSave then pcall(requestSave) end
+end
+
+local function setupTPBatCharacter(char)
+    task.wait(0.2)
+    tpBatH = char:FindFirstChildOfClass("Humanoid")
+    tpBatHRP = char:FindFirstChild("HumanoidRootPart")
+    if tpBatToggled then startTPBat() end
+end
+
+LP.CharacterAdded:Connect(setupTPBatCharacter)
+
+_G._DuelsTPBatToggle = toggleTPBat
+_G._DuelsTPBatStart = startTPBat
+_G._DuelsTPBatStop = stopTPBat
 
 -- ANTI TP BAT - V1/V2/V3/V4 + SPAM + FLOAT (from Ambitious)
 -- Only this module added - no other UI changed
@@ -2185,6 +2205,157 @@ end)
 -- ============================================================
 -- MAIN FUNCTION (UI and everything else)
 -- ============================================================
+-- TP BAT VERSIONS SELECTOR (V1-V5 from Ambitious)
+-- Same minimizing style as Anti TP Bat
+-- ============================================================
+do
+local function createTPBatVersionsRow()
+    local Combat = nil
+    -- Try to find Combat page from existing global
+    if _G._DuelsCombatPage then Combat = _G._DuelsCombatPage end
+    if not Combat then
+        -- fallback search in CoreGui
+        local ok, res = pcall(function()
+            for _, v in ipairs(game:GetService("CoreGui"):GetDescendants()) do
+                if v.Name == "Combat" and v:IsA("Frame") then return v end
+            end
+            return nil
+        end)
+        if ok then Combat = res end
+    end
+    if not Combat then
+        warn("[Duels] Combat page not found for TP Bat Versions")
+        return
+    end
+    local parent = Combat.Parent
+    if not parent then parent = Combat end
+    -- Ensure parent is the scroll frame
+    if parent:IsA("ScrollingFrame") or parent.Name == "Combat" then
+        -- ok
+    else
+        -- find actual container
+        for _, ch in ipairs(Combat:GetChildren()) do
+            if ch:IsA("ScrollingFrame") then parent = ch break end
+        end
+    end
+
+    -- Main row
+    local mainRow = Instance.new("Frame")
+    mainRow.Name = "TPBatVersionsRow"
+    mainRow.Size = UDim2.new(1, -10, 0, 36)
+    mainRow.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
+    mainRow.BorderSizePixel = 0
+    mainRow.Parent = parent
+    mainRow.LayoutOrder = 8
+    Instance.new("UICorner", mainRow).CornerRadius = UDim.new(0, 6)
+
+    local title = Instance.new("TextLabel", mainRow)
+    title.Size = UDim2.new(0.6, 0, 1, 0)
+    title.Position = UDim2.new(0, 10, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "TP Bat Versions"
+    title.TextColor3 = Color3.fromRGB(255,255,255)
+    title.Font = Enum.Font.GothamSemibold
+    title.TextSize = 13
+    title.TextXAlignment = Enum.TextXAlignment.Left
+
+    local arrow = Instance.new("TextButton", mainRow)
+    arrow.Name = "TPBatVersionsArrow"
+    arrow.Size = UDim2.new(0, 36, 1, 0)
+    arrow.Position = UDim2.new(1, -36, 0, 0)
+    arrow.BackgroundTransparency = 1
+    arrow.Text = "▼"
+    arrow.TextColor3 = Color3.fromRGB(180,180,180)
+    arrow.Font = Enum.Font.GothamBold
+    arrow.TextSize = 14
+
+    local optionsFrame = Instance.new("Frame")
+    optionsFrame.Name = "TPBatVersionsOptions"
+    optionsFrame.Size = UDim2.new(1, -10, 0, 42)
+    optionsFrame.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
+    optionsFrame.BorderSizePixel = 0
+    optionsFrame.Parent = parent
+    optionsFrame.LayoutOrder = 9
+    optionsFrame.Visible = false
+    Instance.new("UICorner", optionsFrame).CornerRadius = UDim.new(0, 6)
+
+    local selector = Instance.new("Frame", optionsFrame)
+    selector.Name = "TPBatVersionSelector"
+    selector.Size = UDim2.new(1, -10, 0, 28)
+    selector.Position = UDim2.new(0, 5, 0, 7)
+    selector.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    selector.BorderSizePixel = 0
+    Instance.new("UICorner", selector).CornerRadius = UDim.new(0, 6)
+
+    local slide = Instance.new("Frame", selector)
+    slide.Name = "TPBatVersionSlide"
+    slide.Size = UDim2.new(0.2, 0, 1, 0)
+    slide.Position = UDim2.new(((_G.DuelsTPBatVersion or 1)-1)/5, 0, 0, 0)
+    slide.BackgroundColor3 = Color3.fromRGB(155, 89, 255)
+    slide.BorderSizePixel = 0
+    Instance.new("UICorner", slide).CornerRadius = UDim.new(0, 6)
+
+    local function setVersionVisual(idx)
+        idx = math.clamp(idx,1,5)
+        local tween = game:GetService("TweenService"):Create(slide, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new((idx-1)/5,0,0,0)})
+        tween:Play()
+        for i=1,5 do
+            local lbl = selector:FindFirstChild("TPBatVersionLabel_"..i)
+            if lbl then lbl.TextColor3 = (i==idx) and Color3.fromRGB(255,255,255) or Color3.fromRGB(130,130,130) end
+        end
+    end
+
+    _G._DuelsTPBatSetVersionVisual = setVersionVisual
+
+    for i=1,5 do
+        local lbl = Instance.new("TextLabel", selector)
+        lbl.Name = "TPBatVersionLabel_"..i
+        lbl.Size = UDim2.new(0.2, 0, 1, 0)
+        lbl.Position = UDim2.new((i-1)/5, 0, 0, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = "V"..i
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = 12
+        lbl.TextColor3 = (i==(_G.DuelsTPBatVersion or 1)) and Color3.fromRGB(255,255,255) or Color3.fromRGB(130,130,130)
+        lbl.ZIndex = 2
+
+        local btn = Instance.new("TextButton", selector)
+        btn.Name = "TPBatVersionClick_"..i
+        btn.Size = UDim2.new(0.2, 0, 1, 0)
+        btn.Position = UDim2.new((i-1)/5, 0, 0, 0)
+        btn.BackgroundTransparency = 1
+        btn.Text = ""
+        btn.ZIndex = 3
+        btn.MouseButton1Click:Connect(function()
+            _G.DuelsSetTPBatVersion(i)
+        end)
+    end
+
+    local expanded = false
+    arrow.MouseButton1Click:Connect(function()
+        expanded = not expanded
+        optionsFrame.Visible = expanded
+        arrow.Text = expanded and "▲" or "▼"
+    end)
+
+    print("[Duels V2] TP Bat Versions selector injected V1-V5")
+end
+
+-- Delay until Combat page exists
+task.spawn(function()
+    task.wait(1)
+    pcall(createTPBatVersionsRow)
+    -- Retry after 3 seconds if failed
+    task.wait(3)
+    if not _G._DuelsTPBatSetVersionVisual then
+        pcall(createTPBatVersionsRow)
+    end
+end)
+end
+
+
+
+-- ============================================================
 
 local function Main()
     if _G.DuelsV2_MainExecuted then return end
@@ -2815,138 +2986,7 @@ local function Main()
             -- Row only label + arrow, expands to Spam toggle + V1-V4 slider
             -- No other UI changed
             -- ============================================================
-            
--- ============================================================
--- TP BAT VERSIONS - AMBITIOUS STYLE MINIMIZABLE SELECTOR
--- Same style as Anti TP Bat, but for TP Bat V1-V5
--- ============================================================
-do
-local Combat = _G._DuelsCombatPage or (function()
-    for _, v in ipairs(game:GetService("CoreGui"):GetDescendants()) do
-        if v.Name == "Combat" and v:IsA("Frame") then return v.Parent end
-    end
-    return nil
-end)()
-
-if Combat then
-local function createTPBatVersionsSelector()
-    local mainRow = Instance.new("Frame")
-    mainRow.Name = "TPBatVersionsRow"
-    mainRow.Size = UDim2.new(1, -10, 0, 36)
-    mainRow.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
-    mainRow.BorderSizePixel = 0
-    mainRow.Parent = Combat
-    mainRow.LayoutOrder = 9
-    local corner = Instance.new("UICorner", mainRow)
-    corner.CornerRadius = UDim.new(0, 6)
-
-    local title = Instance.new("TextLabel", mainRow)
-    title.Name = "Title"
-    title.Size = UDim2.new(0.55, 0, 1, 0)
-    title.Position = UDim2.new(0, 10, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "TP Bat Versions"
-    title.TextColor3 = Color3.fromRGB(255,255,255)
-    title.Font = Enum.Font.GothamSemibold
-    title.TextSize = 13
-    title.TextXAlignment = Enum.TextXAlignment.Left
-
-    local arrow = Instance.new("TextButton", mainRow)
-    arrow.Name = "TPBatVersionsArrow"
-    arrow.Size = UDim2.new(0, 36, 0, 36)
-    arrow.Position = UDim2.new(1, -36, 0, 0)
-    arrow.BackgroundTransparency = 1
-    arrow.Text = "▼"
-    arrow.TextColor3 = Color3.fromRGB(180,180,180)
-    arrow.Font = Enum.Font.GothamBold
-    arrow.TextSize = 14
-
-    local optionsFrame = Instance.new("Frame")
-    optionsFrame.Name = "TP Bat Versions Options"
-    optionsFrame.Size = UDim2.new(1, -10, 0, 42)
-    optionsFrame.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
-    optionsFrame.BorderSizePixel = 0
-    optionsFrame.Parent = Combat
-    optionsFrame.LayoutOrder = 10
-    optionsFrame.Visible = false
-    local c2 = Instance.new("UICorner", optionsFrame)
-    c2.CornerRadius = UDim.new(0, 6)
-
-    local selector = Instance.new("Frame", optionsFrame)
-    selector.Name = "TPBatVersionSelector"
-    selector.Size = UDim2.new(1, -10, 0, 28)
-    selector.Position = UDim2.new(0, 5, 0, 7)
-    selector.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-    selector.BorderSizePixel = 0
-    Instance.new("UICorner", selector).CornerRadius = UDim.new(0, 6)
-
-    local slide = Instance.new("Frame", selector)
-    slide.Name = "TPBatVersionSlide"
-    slide.Size = UDim2.new(0.2, 0, 1, 0)
-    slide.BackgroundColor3 = Color3.fromRGB(155, 89, 255) -- purple for TP Bat
-    slide.BorderSizePixel = 0
-    Instance.new("UICorner", slide).CornerRadius = UDim.new(0, 6)
-
-    local function setVersionVisual(idx)
-        idx = math.clamp(idx,1,5)
-        local xPos = (idx-1)/5
-        TweenService:Create(slide, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(xPos,0,0,0)}):Play()
-        for i=1,5 do
-            local lbl = selector:FindFirstChild("TPBatVersionLabel_"..i)
-            if lbl then
-                lbl.TextColor3 = (i==idx) and Color3.fromRGB(255,255,255) or Color3.fromRGB(150,150,150)
-            end
-        end
-    end
-
-    _G._DuelsTPBatSetVersionVisual = setVersionVisual
-
-    for i=1,5 do
-        local lbl = Instance.new("TextLabel", selector)
-        lbl.Name = "TPBatVersionLabel_"..tostring(i)
-        lbl.Size = UDim2.new(0.2, 0, 1, 0)
-        lbl.Position = UDim2.new((i-1)/5, 0, 0, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = "V"..tostring(i)
-        lbl.TextColor3 = (i==(_G.DuelsTPBatVersion or 1)) and Color3.fromRGB(255,255,255) or Color3.fromRGB(150,150,150)
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 12
-        lbl.ZIndex = 2
-
-        local btn = Instance.new("TextButton", selector)
-        btn.Name = "TPBatVersionClick_"..tostring(i)
-        btn.Size = UDim2.new(0.2, 0, 1, 0)
-        btn.Position = UDim2.new((i-1)/5, 0, 0, 0)
-        btn.BackgroundTransparency = 1
-        btn.Text = ""
-        btn.ZIndex = 3
-        btn.MouseButton1Click:Connect(function()
-            _G.DuelsSetTPBatVersion(i)
-        end)
-    end
-
-    local expanded = false
-    arrow.MouseButton1Click:Connect(function()
-        expanded = not expanded
-        optionsFrame.Visible = expanded
-        arrow.Text = expanded and "▲" or "▼"
-        if expanded then
-            TweenService:Create(mainRow, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40,40,50)}):Play()
-        else
-            TweenService:Create(mainRow, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(32,32,38)}):Play()
-        end
-    end)
-
-    setVersionVisual(_G.DuelsTPBatVersion or 1)
-    print("[Duels V2] TP Bat Versions selector created V1-V5")
-end
-
-pcall(createTPBatVersionsSelector)
-end
-end
-
-
-do
+            do
                 local atpExpanded = false
                 local ATP_HOLDER_H = 84
 
