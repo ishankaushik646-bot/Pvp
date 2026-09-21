@@ -332,6 +332,7 @@ do
   end
 
   _G.AmbitiousAntiVoidEnabled = false
+  _G.DuelsAntiVoidEnabled = false
 
   -- Avvia subito un thread per ogni giocatore gia' presente.
   -- I thread fanno poll passivo se Anti Void e' spento, tracking attivo
@@ -3929,7 +3930,7 @@ local function Main()
             makeGap(8); makeSectionHeader("Defense"); makeGap(2)
             setAntiRag = makeToggleRow("Anti Ragdoll", State.antiRagdollEnabled, function(on) State.antiRagdollEnabled=on; if on then startAntiRagdoll() else stopAntiRagdoll() end; if requestSave then requestSave() end end)
 
-            -- ANTI VOID TOGGLE - FIXED SAVE
+            -- ANTI VOID TOGGLE
             local setAntiVoid = makeToggleRow("Anti Void", State.antiVoidEnabled, function(on) 
                 State.antiVoidEnabled=on
                 _G.AmbitiousAntiVoidEnabled = on
@@ -3946,6 +3947,7 @@ toggleSetters["antiFling"] = setAntiFling
             -- Anti E01 REMOVED
 toggleSetters["antiRagdoll"] = setAntiRag
             toggleSetters["antiVoid"] = setAntiVoid
+            toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
             makeKeybindRow("Auto Left", Keys.autoLeft, function(k) Keys.autoLeft=k end, "autoLeft")
             makeKeybindRow("Auto Right", Keys.autoRight, function(k) Keys.autoRight=k end, "autoRight")
@@ -6077,8 +6079,6 @@ end
                 antiDrop = State.antiDropEnabled,
                 e01Enabled = State.e01Enabled,
                 antiRagdoll = State.antiRagdollEnabled,
-                antiVoid = State.antiVoidEnabled,
-                ragdollCountdown = State.ragdollCountdownEnabled,
                 antiDie = State.antiDieEnabled,
                 antiFling = State.antiFlingEnabled,
                 medusaCounter = State.medusaCounterEnabled,
@@ -6117,6 +6117,15 @@ end
                 kickWarnEnabled = _G.DuelsKickWarn and _G.DuelsKickWarn.enabled == true,
                 uakEnabled = _G.DuelsUAKEnabled == true,
                 batCounterMode = State.batCounterMode or _G.DuelsBatCounterMode or "V1",
+                selectedAimbotMode = _G.DuelsSelectedAimbotMode or "V2",
+                aimbotV1Speed = _G.DuelsAimbotV1Speed or 58,
+                aimbotV1LaggerSpeed = _G.DuelsAimbotV1LaggerSpeed or 40,
+                aimbotV2Speed = _G.DuelsAimbotV2Speed or 58,
+                aimbotV2LaggerSpeed = _G.DuelsAimbotV2LaggerSpeed or 40,
+                aimbotChaseV1 = (_G._DuelsAimbotChase and _G._DuelsAimbotChase.V1) or "NORMAL",
+                aimbotChaseV2 = (_G._DuelsAimbotChase and _G._DuelsAimbotChase.V2) or "NORMAL",
+                antiVoid = State.antiVoidEnabled,
+                ragdollCountdown = State.ragdollCountdownEnabled,
             }
             local encoded = HttpService:JSONEncode(cfg)
             _writefile(CONFIG_FILE, encoded)
@@ -6216,8 +6225,12 @@ end
         end
 
         -- RESTORE AIMBOT MODE
-        if decErr.aimbotMode and (decErr.aimbotMode == "original" or decErr.aimbotMode == "sakura") then
-            State.aimbotMode = decErr.aimbotMode
+        if decErr.aimbotMode and (decErr.aimbotMode == "original" or decErr.aimbotMode == "sakura" or decErr.aimbotMode == "V1" or decErr.aimbotMode == "V2") then
+            -- backward compat: original -> V1, sakura -> V2
+            local m = decErr.aimbotMode
+            if m=="original" then m="V1" elseif m=="sakura" then m="V2" end
+            State.aimbotMode = m
+            _G.DuelsSelectedAimbotMode = m
             print("[Duels] Restored Aimbot Mode:", State.aimbotMode)
         end
 
@@ -6384,6 +6397,23 @@ end
             _G.DuelsBatCounterMode = decErr.batCounterMode
             if _G._DuelsBCSetMode then pcall(function() _G._DuelsBCSetMode(decErr.batCounterMode) end) end
         end
+        if decErr.selectedAimbotMode ~= nil then
+            _G.DuelsSelectedAimbotMode = decErr.selectedAimbotMode
+            State.aimbotMode = decErr.selectedAimbotMode
+            if _G._DuelsAimbotV1V2Visual then pcall(function() _G._DuelsAimbotV1V2Visual() end) end
+            if _G.DuelsRefreshAimbotSpeedBoxes then pcall(function() _G.DuelsRefreshAimbotSpeedBoxes() end) end
+            if _G._DuelsChaseModeVisual then pcall(function() _G._DuelsChaseModeVisual() end) end
+        end
+        if decErr.aimbotV1Speed ~= nil then _G.DuelsAimbotV1Speed = tonumber(decErr.aimbotV1Speed) or 58; AIMBOT_SPEED = _G.DuelsAimbotV1Speed end
+        if decErr.aimbotV1LaggerSpeed ~= nil then _G.DuelsAimbotV1LaggerSpeed = tonumber(decErr.aimbotV1LaggerSpeed) or 40; LAGGER_AIMBOT_SPEED = _G.DuelsAimbotV1LaggerSpeed end
+        if decErr.aimbotV2Speed ~= nil then _G.DuelsAimbotV2Speed = tonumber(decErr.aimbotV2Speed) or 58 end
+        if decErr.aimbotV2LaggerSpeed ~= nil then _G.DuelsAimbotV2LaggerSpeed = tonumber(decErr.aimbotV2LaggerSpeed) or 40 end
+        if decErr.aimbotChaseV1 or decErr.aimbotChaseV2 then
+            _G._DuelsAimbotChase = _G._DuelsAimbotChase or {V1="NORMAL", V2="NORMAL"}
+            if decErr.aimbotChaseV1 then _G._DuelsAimbotChase.V1 = decErr.aimbotChaseV1 end
+            if decErr.aimbotChaseV2 then _G._DuelsAimbotChase.V2 = decErr.aimbotChaseV2 end
+            if _G._DuelsChaseModeVisual then pcall(function() _G._DuelsChaseModeVisual() end) end
+        end
         if decErr.antiTPBatEnabled ~= nil then
             _G.DuelsAntiTPBatEnabled = decErr.antiTPBatEnabled == true
             if _G._DuelsAntiTPBatSetRowVisual then pcall(function() _G._DuelsAntiTPBatSetRowVisual(_G.DuelsAntiTPBatEnabled) end) end
@@ -6463,6 +6493,13 @@ end
                     if d.antiRagdoll ~= nil then State.antiRagdollEnabled=d.antiRagdoll; if toggleSetters["antiRagdoll"] then toggleSetters["antiRagdoll"](d.antiRagdoll) end end
                     if d.antiVoid ~= nil then State.antiVoidEnabled=d.antiVoid; _G.AmbitiousAntiVoidEnabled=d.antiVoid; _G.DuelsAntiVoidEnabled=d.antiVoid; if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.setEnabled then _G.AmbitiousAntiVoid.setEnabled(d.antiVoid) end; if toggleSetters["antiVoid"] then toggleSetters["antiVoid"](d.antiVoid) end end
                     if d.ragdollCountdown ~= nil then State.ragdollCountdownEnabled=d.ragdollCountdown; if State.ragdollCountdownEnabled then hookRagdollCountdown(LP.Character) else stopRagdollCountdown() end; if toggleSetters["ragdollCountdown"] then toggleSetters["ragdollCountdown"](d.ragdollCountdown) end end
+                    if d.selectedAimbotMode ~= nil then _G.DuelsSelectedAimbotMode=d.selectedAimbotMode; State.aimbotMode=d.selectedAimbotMode; if _G._DuelsAimbotV1V2Visual then pcall(_G._DuelsAimbotV1V2Visual) end; if _G.DuelsRefreshAimbotSpeedBoxes then pcall(_G.DuelsRefreshAimbotSpeedBoxes) end end
+                    if d.batCounterMode ~= nil then State.batCounterMode=d.batCounterMode; _G.DuelsBatCounterMode=d.batCounterMode; if _G._DuelsBCSetMode then pcall(_G._DuelsBCSetMode, d.batCounterMode) end end
+                    if d.aimbotV1Speed ~= nil then _G.DuelsAimbotV1Speed=tonumber(d.aimbotV1Speed) or 58 end
+                    if d.aimbotV1LaggerSpeed ~= nil then _G.DuelsAimbotV1LaggerSpeed=tonumber(d.aimbotV1LaggerSpeed) or 40 end
+                    if d.aimbotV2Speed ~= nil then _G.DuelsAimbotV2Speed=tonumber(d.aimbotV2Speed) or 58 end
+                    if d.aimbotV2LaggerSpeed ~= nil then _G.DuelsAimbotV2LaggerSpeed=tonumber(d.aimbotV2LaggerSpeed) or 40 end
+                    if d.aimbotChaseV1 ~= nil or d.aimbotChaseV2 ~= nil then _G._DuelsAimbotChase=_G._DuelsAimbotChase or {V1="NORMAL", V2="NORMAL"}; if d.aimbotChaseV1 then _G._DuelsAimbotChase.V1=d.aimbotChaseV1 end; if d.aimbotChaseV2 then _G._DuelsAimbotChase.V2=d.aimbotChaseV2 end; if _G._DuelsChaseModeVisual then pcall(_G._DuelsChaseModeVisual) end end
                     if d.antiDie ~= nil then State.antiDieEnabled=d.antiDie; if toggleSetters["antiDie"] then toggleSetters["antiDie"](d.antiDie) end end
                     if d.antiFling ~= nil then State.antiFlingEnabled=d.antiFling; if toggleSetters["antiFling"] then toggleSetters["antiFling"](d.antiFling) end end
                 end)
@@ -6472,21 +6509,9 @@ end
     end
     loadConfig()
 
-    -- Anti Ragdoll + Anti Void + Ragdoll Countdown + Anti Die + Anti Fling persistence + save fix
+    -- Anti Ragdoll + Anti Die + Anti Fling persistence + save fix
     task.spawn(function()
         task.wait(1)
-        if State.antiVoidEnabled then
-            _G.AmbitiousAntiVoidEnabled = true
-            _G.DuelsAntiVoidEnabled = true
-            if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.setEnabled then
-                pcall(function() _G.AmbitiousAntiVoid.setEnabled(true) end)
-            end
-            if toggleSetters["antiVoid"] then pcall(toggleSetters["antiVoid"], true) end
-        end
-        if State.ragdollCountdownEnabled then
-            pcall(function() hookRagdollCountdown(LP.Character) end)
-            if toggleSetters["ragdollCountdown"] then pcall(toggleSetters["ragdollCountdown"], true) end
-        end
         if State.antiDropEnabled then
             pcall(function() stopAntiDrop() end)
             task.wait(0.2)
