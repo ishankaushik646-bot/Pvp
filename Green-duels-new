@@ -331,8 +331,7 @@ do
     return posFor(player, rawPos or part.Position)
   end
 
-  _G.AmbitiousAntiVoidEnabled = false -- PATCHED: controlled by toggle
-  _G.DuelsAntiVoidEnabled = false
+  _G.AmbitiousAntiVoidEnabled = false
 
   -- Avvia subito un thread per ogni giocatore gia' presente.
   -- I thread fanno poll passivo se Anti Void e' spento, tracking attivo
@@ -1461,8 +1460,10 @@ local State = {
     normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
     speedToggled=false,
     laggerMode=0,
-    infJumpEnabled=true, antiDropEnabled=false, e01Enabled=true, antiRagdollEnabled=false, antiVoidEnabled=false,
+    infJumpEnabled=true, antiDropEnabled=false, e01Enabled=true, antiRagdollEnabled=false,
 antiDieEnabled=false,
+    ragdollCountdownEnabled=false,
+    antiVoidEnabled=false,
 antiFlingEnabled=false,
     guiVisible=true, uiLocked=false,
     isStealing=false, stealStartTime=nil, lastStealTick=0,
@@ -3928,7 +3929,7 @@ local function Main()
             makeGap(8); makeSectionHeader("Defense"); makeGap(2)
             setAntiRag = makeToggleRow("Anti Ragdoll", State.antiRagdollEnabled, function(on) State.antiRagdollEnabled=on; if on then startAntiRagdoll() else stopAntiRagdoll() end; if requestSave then requestSave() end end)
 
-            -- ANTI VOID TOGGLE - ADDED
+            -- ANTI VOID TOGGLE - FIXED SAVE
             local setAntiVoid = makeToggleRow("Anti Void", State.antiVoidEnabled, function(on) 
                 State.antiVoidEnabled=on
                 _G.AmbitiousAntiVoidEnabled = on
@@ -4138,7 +4139,7 @@ toggleSetters["antiRagdoll"] = setAntiRag
                 pcall(function() if _G._RemoveAccOn and _G._removeAccStop then _G._removeAccStop() end end)
                 applySky(nil)
                 State.normalSpeed=60; State.carrySpeed=30; State.laggerSpeed=10.1; State.laggerCarrySpeed=15
-                State.speedToggled=false; State.laggerMode=0; State.infJumpEnabled=true; State.antiDropEnabled=false; State.antiRagdollEnabled=false; State.antiVoidEnabled=false
+                State.speedToggled=false; State.laggerMode=0; State.infJumpEnabled=true; State.antiDropEnabled=false; State.antiRagdollEnabled=false; State.antiVoidEnabled=false; State.ragdollCountdownEnabled=false
                 State.antiLagEnabled=false; State.stretchedResEnabled=false
                 State.stretchFOV=120; State.activeSky=nil; State.medusaCounterEnabled=false; State.batCounterEnabled=false
                 State.batAimbotToggled=false; State.autoSwingEnabled=false; State.autoLeftEnabled=false; State.autoRightEnabled=false
@@ -6076,7 +6077,8 @@ end
                 antiDrop = State.antiDropEnabled,
                 e01Enabled = State.e01Enabled,
                 antiRagdoll = State.antiRagdollEnabled,
-            antiVoid = State.antiVoidEnabled,
+                antiVoid = State.antiVoidEnabled,
+                ragdollCountdown = State.ragdollCountdownEnabled,
                 antiDie = State.antiDieEnabled,
                 antiFling = State.antiFlingEnabled,
                 medusaCounter = State.medusaCounterEnabled,
@@ -6250,7 +6252,7 @@ end
 
         local bools = {
             stackButtonsHidden="stackButtonsHidden", stackButtonsLocked="stackButtonsLocked",
-            infJump="infJumpEnabled", antiDrop="antiDropEnabled", e01Enabled="e01Enabled", antiRagdoll="antiRagdollEnabled", antiVoid="antiVoidEnabled",
+            infJump="infJumpEnabled", antiDrop="antiDropEnabled", e01Enabled="e01Enabled", antiRagdoll="antiRagdollEnabled", antiVoid="antiVoidEnabled", ragdollCountdown="ragdollCountdownEnabled",
             antiDie="antiDieEnabled", antiFling="antiFlingEnabled",
             medusaCounter="medusaCounterEnabled", batCounter="batCounterEnabled",
             autoStealEnabled="autoStealEnabled", autoSwing="autoSwingEnabled",
@@ -6459,6 +6461,8 @@ end
                     if d.autoTPHeight then State.autoTPHeight=d.autoTPHeight; if autoTPHeightBox then autoTPHeightBox.Text=tostring(d.autoTPHeight) end end
                     if d.antiDrop ~= nil then State.antiDropEnabled=d.antiDrop; if toggleSetters["antiDrop"] then toggleSetters["antiDrop"](d.antiDrop) end end
                     if d.antiRagdoll ~= nil then State.antiRagdollEnabled=d.antiRagdoll; if toggleSetters["antiRagdoll"] then toggleSetters["antiRagdoll"](d.antiRagdoll) end end
+                    if d.antiVoid ~= nil then State.antiVoidEnabled=d.antiVoid; _G.AmbitiousAntiVoidEnabled=d.antiVoid; _G.DuelsAntiVoidEnabled=d.antiVoid; if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.setEnabled then _G.AmbitiousAntiVoid.setEnabled(d.antiVoid) end; if toggleSetters["antiVoid"] then toggleSetters["antiVoid"](d.antiVoid) end end
+                    if d.ragdollCountdown ~= nil then State.ragdollCountdownEnabled=d.ragdollCountdown; if State.ragdollCountdownEnabled then hookRagdollCountdown(LP.Character) else stopRagdollCountdown() end; if toggleSetters["ragdollCountdown"] then toggleSetters["ragdollCountdown"](d.ragdollCountdown) end end
                     if d.antiDie ~= nil then State.antiDieEnabled=d.antiDie; if toggleSetters["antiDie"] then toggleSetters["antiDie"](d.antiDie) end end
                     if d.antiFling ~= nil then State.antiFlingEnabled=d.antiFling; if toggleSetters["antiFling"] then toggleSetters["antiFling"](d.antiFling) end end
                 end)
@@ -6468,9 +6472,21 @@ end
     end
     loadConfig()
 
-    -- Anti Ragdoll + Anti Die + Anti Fling persistence + save fix
+    -- Anti Ragdoll + Anti Void + Ragdoll Countdown + Anti Die + Anti Fling persistence + save fix
     task.spawn(function()
         task.wait(1)
+        if State.antiVoidEnabled then
+            _G.AmbitiousAntiVoidEnabled = true
+            _G.DuelsAntiVoidEnabled = true
+            if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.setEnabled then
+                pcall(function() _G.AmbitiousAntiVoid.setEnabled(true) end)
+            end
+            if toggleSetters["antiVoid"] then pcall(toggleSetters["antiVoid"], true) end
+        end
+        if State.ragdollCountdownEnabled then
+            pcall(function() hookRagdollCountdown(LP.Character) end)
+            if toggleSetters["ragdollCountdown"] then pcall(toggleSetters["ragdollCountdown"], true) end
+        end
         if State.antiDropEnabled then
             pcall(function() stopAntiDrop() end)
             task.wait(0.2)
