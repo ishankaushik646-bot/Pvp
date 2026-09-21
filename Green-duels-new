@@ -3930,14 +3930,11 @@ local function Main()
             makeGap(8); makeSectionHeader("Defense"); makeGap(2)
             setAntiRag = makeToggleRow("Anti Ragdoll", State.antiRagdollEnabled, function(on) State.antiRagdollEnabled=on; if on then startAntiRagdoll() else stopAntiRagdoll() end; if requestSave then requestSave() end end)
 
-            -- ANTI VOID TOGGLE
             local setAntiVoid = makeToggleRow("Anti Void", State.antiVoidEnabled, function(on) 
                 State.antiVoidEnabled=on
                 _G.AmbitiousAntiVoidEnabled = on
                 _G.DuelsAntiVoidEnabled = on
-                if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.setEnabled then
-                    _G.AmbitiousAntiVoid.setEnabled(on)
-                end
+                if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.setEnabled then _G.AmbitiousAntiVoid.setEnabled(on) end
                 if requestSave then requestSave() end 
             end)
 setAntiDie = makeToggleRow("Anti Die", State.antiDieEnabled, function(on) State.antiDieEnabled=on; if on then startAntiDie() else stopAntiDie() end; if requestSave then requestSave() end end)
@@ -3947,7 +3944,6 @@ toggleSetters["antiFling"] = setAntiFling
             -- Anti E01 REMOVED
 toggleSetters["antiRagdoll"] = setAntiRag
             toggleSetters["antiVoid"] = setAntiVoid
-            toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
             makeKeybindRow("Auto Left", Keys.autoLeft, function(k) Keys.autoLeft=k end, "autoLeft")
             makeKeybindRow("Auto Right", Keys.autoRight, function(k) Keys.autoRight=k end, "autoRight")
@@ -6225,12 +6221,8 @@ end
         end
 
         -- RESTORE AIMBOT MODE
-        if decErr.aimbotMode and (decErr.aimbotMode == "original" or decErr.aimbotMode == "sakura" or decErr.aimbotMode == "V1" or decErr.aimbotMode == "V2") then
-            -- backward compat: original -> V1, sakura -> V2
-            local m = decErr.aimbotMode
-            if m=="original" then m="V1" elseif m=="sakura" then m="V2" end
-            State.aimbotMode = m
-            _G.DuelsSelectedAimbotMode = m
+        if decErr.aimbotMode and (decErr.aimbotMode == "original" or decErr.aimbotMode == "sakura") then
+            State.aimbotMode = decErr.aimbotMode
             print("[Duels] Restored Aimbot Mode:", State.aimbotMode)
         end
 
@@ -6395,6 +6387,7 @@ end
         if decErr.batCounterMode ~= nil then
             State.batCounterMode = decErr.batCounterMode
             _G.DuelsBatCounterMode = decErr.batCounterMode
+            if _G._DuelsBatCounterSetVersionVisual then pcall(function() _G._DuelsBatCounterSetVersionVisual(decErr.batCounterMode) end) end
             if _G._DuelsBCSetMode then pcall(function() _G._DuelsBCSetMode(decErr.batCounterMode) end) end
         end
         if decErr.selectedAimbotMode ~= nil then
@@ -6404,10 +6397,25 @@ end
             if _G.DuelsRefreshAimbotSpeedBoxes then pcall(function() _G.DuelsRefreshAimbotSpeedBoxes() end) end
             if _G._DuelsChaseModeVisual then pcall(function() _G._DuelsChaseModeVisual() end) end
         end
-        if decErr.aimbotV1Speed ~= nil then _G.DuelsAimbotV1Speed = tonumber(decErr.aimbotV1Speed) or 58; AIMBOT_SPEED = _G.DuelsAimbotV1Speed end
-        if decErr.aimbotV1LaggerSpeed ~= nil then _G.DuelsAimbotV1LaggerSpeed = tonumber(decErr.aimbotV1LaggerSpeed) or 40; LAGGER_AIMBOT_SPEED = _G.DuelsAimbotV1LaggerSpeed end
-        if decErr.aimbotV2Speed ~= nil then _G.DuelsAimbotV2Speed = tonumber(decErr.aimbotV2Speed) or 58 end
-        if decErr.aimbotV2LaggerSpeed ~= nil then _G.DuelsAimbotV2LaggerSpeed = tonumber(decErr.aimbotV2LaggerSpeed) or 40 end
+        -- AIMBOT SPEEDS RESTORE + UPDATE INPUT BOXES
+        if decErr.aimbotV1Speed ~= nil then 
+            _G.DuelsAimbotV1Speed = tonumber(decErr.aimbotV1Speed) or 58
+            AIMBOT_SPEED = _G.DuelsAimbotV1Speed
+            if _G.DuelsV1SpeedBox then _G.DuelsV1SpeedBox.Text = tostring(_G.DuelsAimbotV1Speed) end
+        end
+        if decErr.aimbotV1LaggerSpeed ~= nil then 
+            _G.DuelsAimbotV1LaggerSpeed = tonumber(decErr.aimbotV1LaggerSpeed) or 40
+            LAGGER_AIMBOT_SPEED = _G.DuelsAimbotV1LaggerSpeed
+            if _G.DuelsV1LaggerBox then _G.DuelsV1LaggerBox.Text = tostring(_G.DuelsAimbotV1LaggerSpeed) end
+        end
+        if decErr.aimbotV2Speed ~= nil then 
+            _G.DuelsAimbotV2Speed = tonumber(decErr.aimbotV2Speed) or 58
+            if _G.DuelsV2SpeedBox then _G.DuelsV2SpeedBox.Text = tostring(_G.DuelsAimbotV2Speed) end
+        end
+        if decErr.aimbotV2LaggerSpeed ~= nil then 
+            _G.DuelsAimbotV2LaggerSpeed = tonumber(decErr.aimbotV2LaggerSpeed) or 40
+            if _G.DuelsV2LaggerBox then _G.DuelsV2LaggerBox.Text = tostring(_G.DuelsAimbotV2LaggerSpeed) end
+        end
         if decErr.aimbotChaseV1 or decErr.aimbotChaseV2 then
             _G._DuelsAimbotChase = _G._DuelsAimbotChase or {V1="NORMAL", V2="NORMAL"}
             if decErr.aimbotChaseV1 then _G._DuelsAimbotChase.V1 = decErr.aimbotChaseV1 end
@@ -6494,12 +6502,11 @@ end
                     if d.antiVoid ~= nil then State.antiVoidEnabled=d.antiVoid; _G.AmbitiousAntiVoidEnabled=d.antiVoid; _G.DuelsAntiVoidEnabled=d.antiVoid; if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.setEnabled then _G.AmbitiousAntiVoid.setEnabled(d.antiVoid) end; if toggleSetters["antiVoid"] then toggleSetters["antiVoid"](d.antiVoid) end end
                     if d.ragdollCountdown ~= nil then State.ragdollCountdownEnabled=d.ragdollCountdown; if State.ragdollCountdownEnabled then hookRagdollCountdown(LP.Character) else stopRagdollCountdown() end; if toggleSetters["ragdollCountdown"] then toggleSetters["ragdollCountdown"](d.ragdollCountdown) end end
                     if d.selectedAimbotMode ~= nil then _G.DuelsSelectedAimbotMode=d.selectedAimbotMode; State.aimbotMode=d.selectedAimbotMode; if _G._DuelsAimbotV1V2Visual then pcall(_G._DuelsAimbotV1V2Visual) end; if _G.DuelsRefreshAimbotSpeedBoxes then pcall(_G.DuelsRefreshAimbotSpeedBoxes) end end
-                    if d.batCounterMode ~= nil then State.batCounterMode=d.batCounterMode; _G.DuelsBatCounterMode=d.batCounterMode; if _G._DuelsBCSetMode then pcall(_G._DuelsBCSetMode, d.batCounterMode) end end
-                    if d.aimbotV1Speed ~= nil then _G.DuelsAimbotV1Speed=tonumber(d.aimbotV1Speed) or 58 end
-                    if d.aimbotV1LaggerSpeed ~= nil then _G.DuelsAimbotV1LaggerSpeed=tonumber(d.aimbotV1LaggerSpeed) or 40 end
-                    if d.aimbotV2Speed ~= nil then _G.DuelsAimbotV2Speed=tonumber(d.aimbotV2Speed) or 58 end
-                    if d.aimbotV2LaggerSpeed ~= nil then _G.DuelsAimbotV2LaggerSpeed=tonumber(d.aimbotV2LaggerSpeed) or 40 end
-                    if d.aimbotChaseV1 ~= nil or d.aimbotChaseV2 ~= nil then _G._DuelsAimbotChase=_G._DuelsAimbotChase or {V1="NORMAL", V2="NORMAL"}; if d.aimbotChaseV1 then _G._DuelsAimbotChase.V1=d.aimbotChaseV1 end; if d.aimbotChaseV2 then _G._DuelsAimbotChase.V2=d.aimbotChaseV2 end; if _G._DuelsChaseModeVisual then pcall(_G._DuelsChaseModeVisual) end end
+                    if d.batCounterMode ~= nil then State.batCounterMode=d.batCounterMode; _G.DuelsBatCounterMode=d.batCounterMode; if _G._DuelsBatCounterSetVersionVisual then pcall(_G._DuelsBatCounterSetVersionVisual, d.batCounterMode) end end
+                    if d.aimbotV1Speed ~= nil then _G.DuelsAimbotV1Speed=tonumber(d.aimbotV1Speed) or 58; if _G.DuelsV1SpeedBox then _G.DuelsV1SpeedBox.Text=tostring(_G.DuelsAimbotV1Speed) end end
+                    if d.aimbotV1LaggerSpeed ~= nil then _G.DuelsAimbotV1LaggerSpeed=tonumber(d.aimbotV1LaggerSpeed) or 40; if _G.DuelsV1LaggerBox then _G.DuelsV1LaggerBox.Text=tostring(_G.DuelsAimbotV1LaggerSpeed) end end
+                    if d.aimbotV2Speed ~= nil then _G.DuelsAimbotV2Speed=tonumber(d.aimbotV2Speed) or 58; if _G.DuelsV2SpeedBox then _G.DuelsV2SpeedBox.Text=tostring(_G.DuelsAimbotV2Speed) end end
+                    if d.aimbotV2LaggerSpeed ~= nil then _G.DuelsAimbotV2LaggerSpeed=tonumber(d.aimbotV2LaggerSpeed) or 40; if _G.DuelsV2LaggerBox then _G.DuelsV2LaggerBox.Text=tostring(_G.DuelsAimbotV2LaggerSpeed) end end
                     if d.antiDie ~= nil then State.antiDieEnabled=d.antiDie; if toggleSetters["antiDie"] then toggleSetters["antiDie"](d.antiDie) end end
                     if d.antiFling ~= nil then State.antiFlingEnabled=d.antiFling; if toggleSetters["antiFling"] then toggleSetters["antiFling"](d.antiFling) end end
                 end)
