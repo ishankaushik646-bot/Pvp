@@ -1263,9 +1263,8 @@ end
 -- ============================================================
 -- MIRROR TP DOWN (FROM ACE DUELS - ADDED)
 -- ============================================================
-local 
 -- ============================================================
--- MIRROR TP DOWN + AUTO SWING - REPLACED FROM AMBITIOUS (FULL LOGIC)
+-- MIRROR TP DOWN + AUTO SWING FROM AMBITIOUS (FULL LOGIC)
 -- ============================================================
 do
   local MIRROR_TP_DROP_THRESHOLD = 3
@@ -1316,41 +1315,9 @@ do
   function _G.GreenToggleMirrorTPDown()
     _G.GreenSetMirrorTPDown(not mirrorTPDownEnabled)
   end
-  function _G.AmbitiousSetMirrorTPDown(enabled)
-    mirrorTPDownEnabled = enabled == true
-    if not mirrorTPDownEnabled then table.clear(mirrorTPPreviousY) end
-  end
   _G.DuelsMirrorTPDownPreviousY = mirrorTPPreviousY
 end
 _G._AmbitiousV2SwingGate = _G._AmbitiousV2SwingGate or 0
-local tpBatSwingCooldown = 0
-local TP_BAT_SWING_COOLDOWN = 0.18
-function _G.DuelsTrySwingBat()
-    if _G.DuelsBatAimbotV2On == true then
-        if not autoSwingEnabled then return end
-        if tick() < (_G._AmbitiousV2SwingGate or 0) then return end
-    elseif not autoSwingEnabled then
-        return
-    end
-    local now = tick()
-    if now - tpBatSwingCooldown < TP_BAT_SWING_COOLDOWN then return end
-    local char = LP.Character
-    if not char then return end
-    local bat = char:FindFirstChild("Bat") or LP.Backpack:FindFirstChild("Bat")
-    if not bat then bat = _G.DuelsFindAimbotBat and _G.DuelsFindAimbotBat() end
-    if bat then
-        if bat.Parent == LP.Backpack then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum:EquipTool(bat) end
-        end
-        pcall(function()
-            bat:Activate()
-            tpBatSwingCooldown = now
-        end)
-    end
-end
-_G.DuelsAutoSwingTry = _G.DuelsTrySwingBat
-
 
 -- CONFIG VERSION & EARLY LOAD
 -- ============================================================
@@ -2928,7 +2895,6 @@ local function Main()
                 mkCorner(holder,8)
                 mkStroke(holder, Color3.fromRGB(34,76,46),1).Transparency=0.6
                 local slide = Instance.new("Frame", holder)
-                slide.Name="AimbotV1V2Slide"
                 slide.Size=UDim2.new(0.5,-2,1,-4)
                 slide.Position = (_G.DuelsSelectedAimbotMode=="V2") and UDim2.new(0.5,1,0,2) or UDim2.new(0,2,0,2)
                 slide.BackgroundColor3=Color3.fromRGB(30,132,73)
@@ -2990,7 +2956,6 @@ local function Main()
                 mkCorner(holder,8)
                 mkStroke(holder, Color3.fromRGB(34,76,46),1).Transparency=0.6
                 local slide = Instance.new("Frame", holder)
-                slide.Name="ChaseModeSlide"
                 slide.Size=UDim2.new(0.5,-2,1,-4)
                 local curChase = (_G._DuelsAimbotChase and _G._DuelsAimbotChase[_G.DuelsSelectedAimbotMode or "V2"]) or "NORMAL"
                 slide.Position = (curChase=="BYPASS") and UDim2.new(0.5,1,0,2) or UDim2.new(0,2,0,2)
@@ -4568,9 +4533,8 @@ end
     end
 
 
-    -- ============================================================
-    -- BAT AIMBOT CORE - FULL AMBITIOUS V1/V2 (NORMAL/BYPASS + PATHFINDING + V2 TP)
-    -- ============================================================
+    -- BAT AIMBOT CORE REPLACED WITH AMBITIOUS V1/V2
+    do
     _G.DuelsSelectedAimbotMode = _G.DuelsSelectedAimbotMode or "V2"
     selectedAimbotMode = _G.DuelsSelectedAimbotMode
     _G.DuelsAimbotV1Speed = _G.DuelsAimbotV1Speed or 58
@@ -4580,11 +4544,9 @@ end
     AIMBOT_SPEED = _G.DuelsAimbotV1Speed
     LAGGER_AIMBOT_SPEED = _G.DuelsAimbotV1LaggerSpeed
     _G._DuelsAimbotChase = _G._DuelsAimbotChase or {V1="NORMAL", V2="NORMAL"}
-    _G._AmbitiousAimbotChase = _G._DuelsAimbotChase
     autoSwingEnabled = State.autoSwingEnabled or false
     _G._AmbitiousV2SwingGate = _G._AmbitiousV2SwingGate or 0
-
-    _G.DuelsPathfind = _G.DuelsPathfind or {paths={}, cfg={PROBE=14, ANGLES={18,36,54,72,90}, WALL_Y=0.6, WP_REACH=4, RECOMPUTE=1.25, GOAL_DRIFT=6}}
+    _G.DuelsPathfind = _G.DuelsPathfind or {paths={}, cfg={PROBE=14, ANGLES={18,36,54,72,90}, WALL_Y=0.6, WP_REACH=4}}
     function _G.DuelsPathfind.rayParams()
         local params = RaycastParams.new()
         local ignore = {}
@@ -4598,56 +4560,47 @@ end
         params.IgnoreWater=true
         return params
     end
-    function _G.DuelsPathfind.blocked(origin, dir, dist, params)
-        local res = workspace:Raycast(origin, dir*dist, params)
-        if not res then return false end
-        if math.abs(res.Normal.Y) > _G.DuelsPathfind.cfg.WALL_Y then return false end
+    function _G.DuelsPathfind.blocked(o,d,dist,p)
+        local r=workspace:Raycast(o,d*dist,p)
+        if not r then return false end
+        if math.abs(r.Normal.Y)>0.6 then return false end
         return true
     end
-    function _G.DuelsPathfind.avoid(origin, dir, dist)
-        local params = _G.DuelsPathfind.rayParams()
-        if not _G.DuelsPathfind.blocked(origin, dir, dist, params) then return dir end
-        for _, ang in ipairs(_G.DuelsPathfind.cfg.ANGLES) do
-            for _, sign in ipairs({1,-1}) do
-                local rad = math.rad(ang*sign)
-                local rotated = Vector3.new(dir.X*math.cos(rad)-dir.Z*math.sin(rad), 0, dir.X*math.sin(rad)+dir.Z*math.cos(rad))
-                if rotated.Magnitude>0 then rotated=rotated.Unit end
-                if not _G.DuelsPathfind.blocked(origin, rotated, dist, params) then return rotated end
+    function _G.DuelsPathfind.avoid(o,d,dist)
+        local p=_G.DuelsPathfind.rayParams()
+        if not _G.DuelsPathfind.blocked(o,d,dist,p) then return d end
+        for _,a in ipairs(_G.DuelsPathfind.cfg.ANGLES) do
+            for _,s in ipairs({1,-1}) do
+                local rad=math.rad(a*s)
+                local rot=Vector3.new(d.X*math.cos(rad)-d.Z*math.sin(rad),0,d.X*math.sin(rad)+d.Z*math.cos(rad))
+                if rot.Magnitude>0 then rot=rot.Unit end
+                if not _G.DuelsPathfind.blocked(o,rot,dist,p) then return rot end
             end
         end
-        return dir
+        return d
     end
-
-    _G.DuelsNormalAimbot = _G.DuelsNormalAimbot or {conn=nil, target=nil, swingCooldown=false}
+    _G.DuelsNormalAimbot=_G.DuelsNormalAimbot or {conn=nil,target=nil,swingCooldown=false}
     function _G.DuelsFindAimbotBat()
-        local char = LP.Character
-        if not char then return nil end
-        for _, tool in ipairs(char:GetChildren()) do
-            if tool:IsA("Tool") and (tool.Name:lower():find("bat") or tool.Name:lower():find("slap")) then return tool end
-        end
-        local bp = LP:FindFirstChild("Backpack")
-        if bp then
-            for _, tool in ipairs(bp:GetChildren()) do
-                if tool:IsA("Tool") and (tool.Name:lower():find("bat") or tool.Name:lower():find("slap")) then return tool end
-            end
-        end
+        local c=LP.Character if not c then return nil end
+        for _,t in ipairs(c:GetChildren()) do if t:IsA("Tool") and (t.Name:lower():find("bat") or t.Name:lower():find("slap")) then return t end end
+        local bp=LP:FindFirstChild("Backpack")
+        if bp then for _,t in ipairs(bp:GetChildren()) do if t:IsA("Tool") and (t.Name:lower():find("bat") or t.Name:lower():find("slap")) then return t end end end
         return nil
     end
     function _G.DuelsGetClosestAimbotTarget()
-        local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-        if not root then return nil end
-        local closest, minDist=nil, math.huge
-        for _, plr in ipairs(Players:GetPlayers()) do
+        local r=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") if not r then return nil end
+        local cl,md=nil,math.huge
+        for _,plr in ipairs(Players:GetPlayers()) do
             if plr~=LP and plr.Character then
-                local tRoot = plr.Character:FindFirstChild("HumanoidRootPart")
-                local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-                if tRoot and hum and hum.Health>0 then
-                    local dist=(tRoot.Position-root.Position).Magnitude
-                    if dist<minDist then minDist=dist closest=tRoot end
+                local tr=plr.Character:FindFirstChild("HumanoidRootPart")
+                local h=plr.Character:FindFirstChildOfClass("Humanoid")
+                if tr and h and h.Health>0 then
+                    local d=(tr.Position-r.Position).Magnitude
+                    if d<md then md=d cl=tr end
                 end
             end
         end
-        return closest
+        return cl
     end
     function _G.DuelsGetNormalAimbotSpeed()
         if State.laggerMode==1 or State.laggerMode==2 then return tonumber(_G.DuelsAimbotV1LaggerSpeed) or 40 end
@@ -4657,132 +4610,69 @@ end
         if State.laggerMode==1 or State.laggerMode==2 then return tonumber(_G.DuelsAimbotV2LaggerSpeed) or 40 end
         return tonumber(_G.DuelsAimbotV2Speed) or 58
     end
-    function _G.DuelsStartNormalAimbot(keepV2)
-        if not keepV2 then
-            if _G.DuelsStopBatAimbotV2 then _G.DuelsStopBatAimbotV2(false) end
-            _G.DuelsBatAimbotV2On=false
-        end
-        _G.DuelsNormalAimbotOn=true
-        State.batAimbotToggled=true
+    function _G.DuelsStartNormalAimbot(k)
+        if not k then if _G.DuelsStopBatAimbotV2 then _G.DuelsStopBatAimbotV2(false) end _G.DuelsBatAimbotV2On=false end
+        _G.DuelsNormalAimbotOn=true State.batAimbotToggled=true
         if _G.DuelsNormalAimbot.conn then _G.DuelsNormalAimbot.conn:Disconnect() _G.DuelsNormalAimbot.conn=nil end
-        local hum0 = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-        if hum0 then hum0.AutoRotate=false end
-        _G.DuelsNormalAimbot.conn = RunService.RenderStepped:Connect(function()
+        local h0=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") if h0 then h0.AutoRotate=false end
+        _G.DuelsNormalAimbot.conn=RunService.RenderStepped:Connect(function()
             if not _G.DuelsNormalAimbotOn then return end
-            local char=LP.Character if not char then return end
-            local root=char:FindFirstChild("HumanoidRootPart") if not root then return end
-            local hum=char:FindFirstChildOfClass("Humanoid") if not hum then return end
-            local bat=char:FindFirstChildOfClass("Tool") or _G.DuelsFindAimbotBat()
-            if bat and bat.Parent~=char then pcall(function() hum:EquipTool(bat) end) end
-            local target=_G.DuelsGetClosestAimbotTarget() if not target then return end
-            _G.DuelsNormalAimbot.target=target
-            local chaseKey = (_G.DuelsBatAimbotV2On==true) and "V2" or "V1"
-            local chaseMode = (_G._DuelsAimbotChase and _G._DuelsAimbotChase[chaseKey]) or "NORMAL"
-            local myPos=root.Position
-            local targetPos=target.Position
-            local direction=targetPos-myPos
-            local flatDir=Vector3.new(direction.X,0,direction.Z)
-            if flatDir.Magnitude>0 then flatDir=flatDir.Unit else flatDir=Vector3.zero end
-            if chaseMode=="BYPASS" and flatDir.Magnitude>0 then flatDir=_G.DuelsPathfind.avoid(myPos, flatDir, 14) end
-            local chaseSpeed = (_G.DuelsBatAimbotV2On==true) and _G.DuelsGetBatAimbotV2Speed() or _G.DuelsGetNormalAimbotSpeed()
-            local isV2 = (_G.DuelsBatAimbotV2On==true)
-            local desiredHeight=targetPos.Y + (isV2 and 0 or 3.7)
-            local yVel=(desiredHeight-myPos.Y)*19.5
-            if not isV2 and hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
-            yVel=math.clamp(yVel,-70,110)
-            local desiredVel=Vector3.new(flatDir.X*chaseSpeed, yVel, flatDir.Z*chaseSpeed)
-            root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
-            local toTarget=targetPos-myPos
-            if toTarget.Magnitude>0.1 then
-                local goalCF=CFrame.lookAt(myPos, targetPos)
-                local diffCF=root.CFrame:Inverse()*goalCF
-                local rx,ry,rz=diffCF:ToEulerAnglesXYZ()
-                rx=math.clamp(rx,-2.5,2.5); ry=math.clamp(ry,-2.5,2.5); rz=math.clamp(rz,-2.5,2.5)
-                root.AssemblyAngularVelocity=root.CFrame:VectorToWorldSpace(Vector3.new(rx*42, ry*42, rz*42))
-            end
-            if autoSwingEnabled and bat and _G.DuelsBatAimbotV2On~=true and not _G.DuelsNormalAimbot.swingCooldown then
-                _G.DuelsNormalAimbot.swingCooldown=true
-                pcall(function() bat:Activate() end)
-                task.delay(0.18, function() _G.DuelsNormalAimbot.swingCooldown=false end)
-            end
+            local ch=LP.Character if not ch then return end
+            local rt=ch:FindFirstChild("HumanoidRootPart") if not rt then return end
+            local hu=ch:FindFirstChildOfClass("Humanoid") if not hu then return end
+            local bat=ch:FindFirstChildOfClass("Tool") or _G.DuelsFindAimbotBat()
+            if bat and bat.Parent~=ch then pcall(function() hu:EquipTool(bat) end) end
+            local tgt=_G.DuelsGetClosestAimbotTarget() if not tgt then return end
+            local ck=(_G.DuelsBatAimbotV2On==true) and "V2" or "V1"
+            local cm=(_G._DuelsAimbotChase and _G._DuelsAimbotChase[ck]) or "NORMAL"
+            local my=rt.Position local tp=tgt.Position
+            local dir=tp-my local fd=Vector3.new(dir.X,0,dir.Z) if fd.Magnitude>0 then fd=fd.Unit else fd=Vector3.zero end
+            if cm=="BYPASS" and fd.Magnitude>0 then fd=_G.DuelsPathfind.avoid(my,fd,14) end
+            local cs=(_G.DuelsBatAimbotV2On==true) and _G.DuelsGetBatAimbotV2Speed() or _G.DuelsGetNormalAimbotSpeed()
+            local isV2=(_G.DuelsBatAimbotV2On==true)
+            local dh=tp.Y+(isV2 and 0 or 3.7) local yv=(dh-my.Y)*19.5 if not isV2 and hu.FloorMaterial~=Enum.Material.Air then yv=math.max(yv,13) end yv=math.clamp(yv,-70,110)
+            local dv=Vector3.new(fd.X*cs,yv,fd.Z*cs) rt.AssemblyLinearVelocity=rt.AssemblyLinearVelocity:Lerp(dv,0.8)
+            local toT=tp-my if toT.Magnitude>0.1 then local gcf=CFrame.lookAt(my,tp) local dcf=rt.CFrame:Inverse()*gcf local rx,ry,rz=dcf:ToEulerAnglesXYZ() rx=math.clamp(rx,-2.5,2.5) ry=math.clamp(ry,-2.5,2.5) rz=math.clamp(rz,-2.5,2.5) rt.AssemblyAngularVelocity=rt.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42)) end
+            if autoSwingEnabled and bat and _G.DuelsBatAimbotV2On~=true and not _G.DuelsNormalAimbot.swingCooldown then _G.DuelsNormalAimbot.swingCooldown=true pcall(function() bat:Activate() end) task.delay(0.18,function() _G.DuelsNormalAimbot.swingCooldown=false end) end
         end)
     end
     function _G.DuelsStopNormalAimbot()
-        _G.DuelsNormalAimbotOn=false
-        if not _G.DuelsBatAimbotV2On then State.batAimbotToggled=false end
+        _G.DuelsNormalAimbotOn=false if not _G.DuelsBatAimbotV2On then State.batAimbotToggled=false end
         if _G.DuelsNormalAimbot.conn then _G.DuelsNormalAimbot.conn:Disconnect() _G.DuelsNormalAimbot.conn=nil end
-        _G.DuelsNormalAimbot.target=nil
-        _G.DuelsNormalAimbot.swingCooldown=false
-        local c=LP.Character
-        local root=c and c:FindFirstChild("HumanoidRootPart")
-        if root then root.AssemblyLinearVelocity=Vector3.zero root.AssemblyAngularVelocity=Vector3.zero end
-        local hum2=c and c:FindFirstChildOfClass("Humanoid")
-        if hum2 then hum2.AutoRotate=true end
+        _G.DuelsNormalAimbot.target=nil _G.DuelsNormalAimbot.swingCooldown=false
+        local c=LP.Character local r=c and c:FindFirstChild("HumanoidRootPart") if r then r.AssemblyLinearVelocity=Vector3.zero r.AssemblyAngularVelocity=Vector3.zero end
+        local h=c and c:FindFirstChildOfClass("Humanoid") if h then h.AutoRotate=true end
     end
-    _G.DuelsBatAimbotV2State = _G.DuelsBatAimbotV2State or {conn=nil, lastChase=0}
-    _G.DuelsBatAimbotV2TPDistance = 4
+    _G.DuelsBatAimbotV2State=_G.DuelsBatAimbotV2State or {conn=nil,lastChase=0}
+    _G.DuelsBatAimbotV2TPDistance=4
     function _G.DuelsBatAimbotV2GetClosest()
-        local root=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-        if not root then return nil, math.huge end
-        local closest,minDist=nil, math.huge
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr~=LP and plr.Character then
-                local tRoot=plr.Character:FindFirstChild("HumanoidRootPart")
-                local hum=plr.Character:FindFirstChildOfClass("Humanoid")
-                if tRoot and hum and hum.Health>0 then
-                    local dist=(tRoot.Position-root.Position).Magnitude
-                    if dist<minDist then minDist=dist closest=tRoot end
-                end
-            end
-        end
-        return closest, minDist
+        local r=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") if not r then return nil,math.huge end
+        local cl,md=nil,math.huge
+        for _,plr in ipairs(Players:GetPlayers()) do if plr~=LP and plr.Character then local tr=plr.Character:FindFirstChild("HumanoidRootPart") local h=plr.Character:FindFirstChildOfClass("Humanoid") if tr and h and h.Health>0 then local d=(tr.Position-r.Position).Magnitude if d<md then md=d cl=tr end end end end
+        return cl,md
     end
-    function _G.DuelsBatAimbotV2StartChase()
-        if _G.DuelsStartNormalAimbot then _G.DuelsStartNormalAimbot(true) end
-    end
+    function _G.DuelsBatAimbotV2StartChase() if _G.DuelsStartNormalAimbot then _G.DuelsStartNormalAimbot(true) end end
     function _G.DuelsStartBatAimbotV2()
-        _G.DuelsBatAimbotV2On=true
-        _G.DuelsSelectedAimbotMode="V2"
-        selectedAimbotMode="V2"
-        _G.DuelsBatAimbotV2StartChase()
+        _G.DuelsBatAimbotV2On=true _G.DuelsSelectedAimbotMode="V2" selectedAimbotMode="V2" _G.DuelsBatAimbotV2StartChase()
         if _G.DuelsBatAimbotV2State.conn then _G.DuelsBatAimbotV2State.conn:Disconnect() _G.DuelsBatAimbotV2State.conn=nil end
-        _G.DuelsBatAimbotV2State.conn = RunService.Heartbeat:Connect(function()
+        _G.DuelsBatAimbotV2State.conn=RunService.Heartbeat:Connect(function()
             if not _G.DuelsBatAimbotV2On then return end
             if _G.DuelsTPBatOn then return end
-            local target, dist=_G.DuelsBatAimbotV2GetClosest()
-            local trigger=tonumber(_G.DuelsBatAimbotV2TPDistance) or 4
-            if target and dist<=trigger then
-                _G._AmbitiousV2SwingGate=tick()+0.05
-                if _G._DuelsTPBatStart then _G._DuelsTPBatStart() end
-            elseif not _G.DuelsNormalAimbotOn then
-                local now=tick()
-                if now-(_G.DuelsBatAimbotV2State.lastChase or 0)>=0.15 then
-                    _G.DuelsBatAimbotV2State.lastChase=now
-                    _G.DuelsBatAimbotV2StartChase()
-                end
-            end
+            local t,d=_G.DuelsBatAimbotV2GetClosest() local trg=tonumber(_G.DuelsBatAimbotV2TPDistance) or 4
+            if t and d<=trg then _G._AmbitiousV2SwingGate=tick()+0.05 if _G._DuelsTPBatStart then _G._DuelsTPBatStart() end
+            elseif not _G.DuelsNormalAimbotOn then local n=tick() if n-(_G.DuelsBatAimbotV2State.lastChase or 0)>=0.15 then _G.DuelsBatAimbotV2State.lastChase=n _G.DuelsBatAimbotV2StartChase() end end
         end)
     end
-    function _G.DuelsStopBatAimbotV2(keepVisual)
+    function _G.DuelsStopBatAimbotV2()
         _G.DuelsBatAimbotV2On=false
-        if _G.DuelsBatAimbotV2State and _G.DuelsBatAimbotV2State.conn then
-            _G.DuelsBatAimbotV2State.conn:Disconnect()
-            _G.DuelsBatAimbotV2State.conn=nil
-        end
+        if _G.DuelsBatAimbotV2State and _G.DuelsBatAimbotV2State.conn then _G.DuelsBatAimbotV2State.conn:Disconnect() _G.DuelsBatAimbotV2State.conn=nil end
         if _G.DuelsNormalAimbotOn then _G.DuelsStopNormalAimbot() end
         if _G.DuelsTPBatOn and _G._DuelsTPBatStop then _G._DuelsTPBatStop() end
-        local c=LP.Character
-        local root=c and c:FindFirstChild("HumanoidRootPart")
-        if root then root.AssemblyLinearVelocity=Vector3.zero root.AssemblyAngularVelocity=Vector3.zero end
-        local hum=c and c:FindFirstChildOfClass("Humanoid")
-        if hum then hum.AutoRotate=true hum.PlatformStand=false pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end) end
+        local c=LP.Character local r=c and c:FindFirstChild("HumanoidRootPart") if r then r.AssemblyLinearVelocity=Vector3.zero r.AssemblyAngularVelocity=Vector3.zero end
+        local h=c and c:FindFirstChildOfClass("Humanoid") if h then h.AutoRotate=true h.PlatformStand=false pcall(function() h:ChangeState(Enum.HumanoidStateType.GettingUp) end) end
     end
-    function startBatAimbot()
-        if _G.DuelsSelectedAimbotMode=="V2" then return _G.DuelsStartBatAimbotV2() else return _G.DuelsStartNormalAimbot() end
-    end
-    function stopBatAimbot()
-        _G.DuelsStopNormalAimbot()
-        _G.DuelsStopBatAimbotV2(false)
+    function startBatAimbot() if _G.DuelsSelectedAimbotMode=="V2" then return _G.DuelsStartBatAimbotV2() else return _G.DuelsStartNormalAimbot() end end
+    function stopBatAimbot() _G.DuelsStopNormalAimbot() _G.DuelsStopBatAimbotV2() end
     end
 
 
@@ -5616,14 +5506,6 @@ end
                 aimbotMode = State.aimbotMode,
                 bodyLock = State.bodyLockEnabled,
                 bodyLockKey = Keys.bodyLock and Keys.bodyLock.Name or "B",
-                aimbotSelectedMode = _G.DuelsSelectedAimbotMode or "V2",
-                aimbotV1Speed = _G.DuelsAimbotV1Speed or 58,
-                aimbotV1LaggerSpeed = _G.DuelsAimbotV1LaggerSpeed or 40,
-                aimbotV2Speed = _G.DuelsAimbotV2Speed or 58,
-                aimbotV2LaggerSpeed = _G.DuelsAimbotV2LaggerSpeed or 40,
-                aimbotChaseV1 = _G._DuelsAimbotChase and _G._DuelsAimbotChase.V1 or "NORMAL",
-                aimbotChaseV2 = _G._DuelsAimbotChase and _G._DuelsAimbotChase.V2 or "NORMAL",
-                autoSwing = State.autoSwingEnabled,
                 tpBatVersion = _G.DuelsTPBatVersion or 1,
                 antiTPBatEnabled = _G.DuelsAntiTPBatEnabled == true,
                 antiTPBatVersion = _G.DuelsAntiTPBatVersion or 1,
