@@ -4012,6 +4012,48 @@ local function Main()
                     if _G.AmbitiousSemiV2SetSemiRadius then _G.AmbitiousSemiV2SetSemiRadius(n) end
                 end
             end)
+
+            -- === AMBITIOUS EXTRA SETTINGS PORTED ===
+            local delayRadBox
+            delayRadBox = makeInputRow("Delay Radius [V1/V3]", tostring(_G.AmbitiousSemiSteal and _G.AmbitiousSemiSteal.autoGrabSetDelayRadius or 8), function(n)
+                if n and n>=1 and n<=500 then
+                    if _G.AmbitiousSemiSteal then _G.AmbitiousSemiSteal.autoGrabSetDelayRadius = n end
+                    if _G.AmbitiousStealEnsureScan then _G.AmbitiousStealRadii = _G.AmbitiousStealRadii or {}; _G.AmbitiousStealRadii.SemiDelay = n end
+                end
+            end)
+
+            local stopTimeBox
+            stopTimeBox = makeInputRow("Stop Time (s) [V1]", tostring(_G.AmbitiousSemiSteal and _G.AmbitiousSemiSteal.autoGrabStopTime or 1.29), function(n)
+                if n and n>=0.01 and n<=1.29 then
+                    if _G.AmbitiousSemiSteal then _G.AmbitiousSemiSteal.autoGrabStopTime = n end
+                end
+            end)
+
+            local stopPctBox
+            stopPctBox = makeInputRow("Stop Time (%) [V3]", tostring(_G.AmbitiousSemiSteal and _G.AmbitiousSemiSteal.autoGrabStopPercent or 75), function(n)
+                if n and n>=1 and n<=100 then
+                    if _G.AmbitiousSemiSteal then _G.AmbitiousSemiSteal.autoGrabStopPercent = n end
+                end
+            end)
+
+            -- Make these only visible for V1/V3
+            local function refreshAmbitiousExtra()
+                local isV1 = (getSelMode() == "Semi" and getSemiMode() == "V1")
+                local isV3 = (getSelMode() == "Semi" and getSemiMode() == "V3")
+                local isV1orV3 = isV1 or isV3
+                if delayRadBox and delayRadBox.Parent then delayRadBox.Parent.Visible = isV1orV3 end
+                if stopTimeBox and stopTimeBox.Parent then stopTimeBox.Parent.Visible = isV1 end
+                if stopPctBox and stopPctBox.Parent then stopPctBox.Parent.Visible = isV3 end
+            end
+
+            -- Extend RefreshSemiSub to also handle these
+            local oldRefresh2 = _G.RefreshSemiSub
+            _G.RefreshSemiSub = function()
+                oldRefresh2()
+                refreshSecondBox()
+                refreshAmbitiousExtra()
+            end
+            refreshAmbitiousExtra()
             local function refreshSecondBox()
                 local show = (getSelMode() == "Semi" and getSemiMode() == "V2")
                 if semiV2SecondBox and semiV2SecondBox.Parent then
