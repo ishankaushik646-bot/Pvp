@@ -817,7 +817,209 @@ _G._DuelsTPBatToggle = toggleTPBat
 _G._DuelsTPBatStart = startTPBat
 _G._DuelsTPBatStop = stopTPBat
 
--- ANTI TP BAT - V1/V2/V3/V4 + SPAM + FLOAT (from Ambitious)
+-- 
+-- ============================================================
+-- KICK WARNING + ULTIMATE ANTI KICK (from Ambitious)
+-- Replaces Anti E01
+-- ============================================================
+_G.DuelsKickWarn = _G.DuelsKickWarn or {enabled=true, wasLow=false, active=false, gen=0}
+_G.DuelsUAKEnabled = _G.DuelsUAKEnabled == true
+_G.DuelsUltimateAntiKick = _G.DuelsUltimateAntiKick or {}
+_G.DuelsUltimateAntiKick.cfg = {
+  RADIUS = 30,
+  LEAD = 0.1,
+  HEIGHT = 40,
+  THICK = 2,
+  RISE = 8,
+}
+_G.DuelsUltimateAntiKick.zones = {
+  { at = {x = -488, z = 24}, wall = {x1 = -478, z1 = 88, x2 = -422, z2 = 88} },
+  { at = {x = -488, z = 95}, wall = {x1 = -478, z1 = 32, x2 = -422, z2 = 32} },
+}
+
+function _G.DuelsUltimateAntiKick.clear()
+  local w = workspace:FindFirstChild("DuelsAntiKickWall")
+  while w do pcall(function() w:Destroy() end) w = workspace:FindFirstChild("DuelsAntiKickWall") end
+end
+
+function _G.DuelsUltimateAntiKick.zoneFor(pos)
+  local U = _G.DuelsUltimateAntiKick
+  for _, z in ipairs(U.zones) do
+    local dx = pos.X - z.at.x
+    local dz = pos.Z - z.at.z
+    if math.sqrt(dx*dx+dz*dz) <= U.cfg.RADIUS then return z end
+  end
+  return nil
+end
+
+function _G.DuelsUltimateAntiKick.onWarning(duration)
+  if _G.DuelsUAKEnabled ~= true then return end
+  if not (_G.DuelsKickWarn and _G.DuelsKickWarn.enabled == true) then return end
+  local U = _G.DuelsUltimateAntiKick
+  local char = LP.Character
+  local hrp = char and char:FindFirstChild("HumanoidRootPart")
+  if not hrp then return end
+  local zone = U.zoneFor(hrp.Position)
+  if not zone then return end
+  U.clear()
+  local w = zone.wall
+  local mx = (w.x1 + w.x2)/2
+  local mz = (w.z1 + w.z2)/2
+  local dx = w.x2 - w.x1
+  local dz = w.z2 - w.z1
+  local length = math.sqrt(dx*dx+dz*dz)
+  if length < 0.1 then return end
+  local part = Instance.new("Part")
+  part.Name = "DuelsAntiKickWall"
+  part.Anchored = true
+  part.CanCollide = true
+  part.CanQuery = false
+  part.CanTouch = false
+  part.CastShadow = false
+  part.Transparency = 1
+  part.Size = Vector3.new(length, U.cfg.HEIGHT, U.cfg.THICK)
+  local mid = Vector3.new(mx, hrp.Position.Y + U.cfg.RISE, mz)
+  local b = Vector3.new(w.x2, hrp.Position.Y + U.cfg.RISE, w.z2)
+  part.CFrame = CFrame.lookAt(mid, b) * CFrame.Angles(0, math.rad(90), 0)
+  part.Parent = workspace
+  U.token = (U.token or 0) + 1
+  local myToken = U.token
+  local wait_s = math.max((tonumber(duration) or 2.35) - U.cfg.LEAD, 0.05)
+  task.delay(wait_s, function()
+    if U.token ~= myToken then return end
+    U.clear()
+  end)
+end
+
+function _G.DuelsDestroyKickWarning()
+  local KW = _G.DuelsKickWarn
+  KW.gen = (KW.gen or 0) + 1
+  KW.active = false
+  local pg = LP:FindFirstChild("PlayerGui")
+  local g = pg and pg:FindFirstChild("DuelsKickWarning")
+  if not g then g = game:GetService("CoreGui"):FindFirstChild("DuelsKickWarning") end
+  if g then pcall(function() g:Destroy() end) end
+  if _G.DuelsUltimateAntiKick then pcall(_G.DuelsUltimateAntiKick.clear) end
+end
+
+function _G.DuelsShowKickWarning()
+  local KW = _G.DuelsKickWarn
+  if KW.active then return end
+  local PlayerGui = LP:FindFirstChild("PlayerGui")
+  if not PlayerGui then return end
+  if PlayerGui:FindFirstChild("DuelsKickWarning") then return end
+  if game:GetService("CoreGui"):FindFirstChild("DuelsKickWarning") then return end
+  
+  KW.active = true
+  KW.gen = (KW.gen or 0) + 1
+  local myGen = KW.gen
+  local FRAME_W, FRAME_H = 420, 52
+  local DURATION = 2.35
+  if _G.DuelsUltimateAntiKick then pcall(_G.DuelsUltimateAntiKick.onWarning, DURATION) end
+  local COL_RED = Color3.fromRGB(180,30,30)
+  local COL_GREEN = Color3.fromRGB(28,165,78)
+
+  local gui = Instance.new("ScreenGui")
+  gui.Name = "DuelsKickWarning"
+  gui.ResetOnSpawn = false
+  gui.IgnoreGuiInset = true
+  gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+  gui.DisplayOrder = 99999
+  gui.Parent = PlayerGui
+
+  local frame = Instance.new("Frame")
+  frame.Name = "WarningFrame"
+  frame.Size = UDim2.new(0, FRAME_W, 0, FRAME_H)
+  frame.Position = UDim2.new(0.5, -FRAME_W/2, 0, -60)
+  frame.BackgroundColor3 = COL_RED
+  frame.BorderSizePixel = 0
+  frame.ClipsDescendants = true
+  frame.ZIndex = 1
+  frame.Parent = gui
+  Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+  local fillFrame = Instance.new("Frame")
+  fillFrame.Name = "FillFrame"
+  fillFrame.Size = UDim2.new(0,0,1,0)
+  fillFrame.BackgroundColor3 = COL_GREEN
+  fillFrame.BorderSizePixel = 0
+  fillFrame.ZIndex = 2
+  fillFrame.Parent = frame
+  Instance.new("UICorner", fillFrame).CornerRadius = UDim.new(0, 12)
+
+  local warnText = Instance.new("TextLabel")
+  warnText.Name = "WarningText"
+  warnText.Size = UDim2.new(1,-24,1,0)
+  warnText.Position = UDim2.new(0,12,0,0)
+  warnText.BackgroundTransparency = 1
+  warnText.Text = "⚠️ DONT COLLECT ⚠️"
+  warnText.TextColor3 = Color3.fromRGB(255,255,255)
+  warnText.Font = Enum.Font.GothamBlack
+  warnText.TextSize = 16
+  warnText.TextXAlignment = Enum.TextXAlignment.Center
+  warnText.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+  warnText.TextStrokeTransparency = 0.25
+  warnText.ZIndex = 3
+  warnText.Parent = frame
+
+  local function slideIn()
+    if KW.gen ~= myGen or not gui.Parent then return end
+    TweenService:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, -FRAME_W/2, 0, 18)}):Play()
+  end
+  slideIn()
+
+  local function stillLow()
+    local c = LP.Character
+    local hh = c and c:FindFirstChildOfClass("Humanoid")
+    if not hh then return false end
+    return hh.WalkSpeed < 25
+  end
+
+  local function closeKW()
+    TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(0.5, -FRAME_W/2, 0, -60)}):Play()
+    task.wait(0.35)
+    pcall(function() gui:Destroy() end)
+    KW.active = false
+    if _G.DuelsUltimateAntiKick then pcall(_G.DuelsUltimateAntiKick.clear) end
+  end
+
+  task.spawn(function()
+    local t0 = tick()
+    while true do
+      if KW.gen ~= myGen or not gui.Parent then KW.active=false return end
+      if not stillLow() then closeKW() return end
+      local elapsed = tick() - t0
+      local p = math.clamp(elapsed / DURATION, 0, 1)
+      fillFrame.Size = UDim2.new(0, math.floor(p*FRAME_W), 1, 0)
+      if p >= 1 then break end
+      RunService.Heartbeat:Wait()
+    end
+    if KW.gen ~= myGen or not gui.Parent then KW.active=false return end
+    warnText.Text = "✔️ COLLECT NOW ✔️"
+    while true do
+      if KW.gen ~= myGen or not gui.Parent then KW.active=false return end
+      if not stillLow() then break end
+      task.wait(0.05)
+    end
+    if KW.gen ~= myGen or not gui.Parent then KW.active=false return end
+    closeKW()
+  end)
+end
+
+function _G.DuelsUpdateKickWarning()
+  local KW = _G.DuelsKickWarn
+  local char = LP.Character
+  local h = char and char:FindFirstChildOfClass("Humanoid")
+  if not h then return end
+  local isLow = h.WalkSpeed < 25
+  if not KW.enabled then KW.wasLow=isLow return end
+  if isLow == KW.wasLow then return end
+  KW.wasLow=isLow
+  if isLow then _G.DuelsShowKickWarning() end
+end
+
+
+ANTI TP BAT - V1/V2/V3/V4 + SPAM + FLOAT (from Ambitious)
 -- Only this module added - no other UI changed
 -- ============================================================
 do
@@ -1316,7 +1518,7 @@ local State = {
     normalSpeed=59.5, carrySpeed=28.8, laggerSpeed=29, laggerCarrySpeed=15,
     speedToggled=false,
     laggerMode=0,
-    infJumpEnabled=true, antiDropEnabled=false, e01Enabled=true, antiRagdollEnabled=false,
+    infJumpEnabled=true, antiDropEnabled=false, e01Enabled=false, antiRagdollEnabled=false,
 antiDieEnabled=false,
 antiFlingEnabled=false,
     guiVisible=true, uiLocked=false,
@@ -3135,6 +3337,175 @@ local function Main()
 
 
 
+            
+            -- ============================================================
+            -- KICK WARNING + ULTIMATE ANTI KICK (Replaces Anti E01)
+            -- Minimizable selector style
+            -- ============================================================
+            do
+                local kwExpanded = false
+                local KW_HOLDER_H = 84
+
+                local kwRow = Instance.new("Frame", currentPage)
+                kwRow.Name = "KickWarningRow"
+                kwRow.Size = UDim2.new(1,-16,0,42)
+                kwRow.BackgroundColor3 = Color3.fromRGB(28,14,14)
+                kwRow.BorderSizePixel=0
+                kwRow.LayoutOrder=LO()
+                mkCorner(kwRow,12)
+                local kwStroke = mkStroke(kwRow, Color3.fromRGB(160,50,50),1)
+                kwStroke.Transparency=0.5
+
+                local kwLbl = Instance.new("TextLabel", kwRow)
+                kwLbl.Size = UDim2.new(1,-70,1,0)
+                kwLbl.Position = UDim2.new(0,14,0,0)
+                kwLbl.BackgroundTransparency=1
+                kwLbl.Text="Kick Warning"
+                kwLbl.TextColor3=C.rowLabel
+                kwLbl.Font=Enum.Font.GothamBold
+                kwLbl.TextSize=13
+                kwLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+                local kwArrow = Instance.new("TextButton", kwRow)
+                kwArrow.Name="KickWarningArrow"
+                kwArrow.BackgroundColor3=Color3.fromRGB(20,8,8)
+                kwArrow.BackgroundTransparency=0.18
+                kwArrow.BorderSizePixel=0
+                kwArrow.Size=UDim2.new(0,28,0,24)
+                kwArrow.Position=UDim2.new(1,-40,0.5,-12)
+                kwArrow.Text="▼"
+                kwArrow.TextColor3=Color3.fromRGB(255,180,180)
+                kwArrow.TextSize=14
+                kwArrow.Font=Enum.Font.GothamBold
+                kwArrow.AutoButtonColor=false
+                kwArrow.ZIndex=8
+                mkCorner(kwArrow,7)
+                mkStroke(kwArrow, Color3.fromRGB(160,50,50),1).Transparency=0.45
+
+                local kwHolder = Instance.new("Frame", currentPage)
+                kwHolder.Name="Kick Warning Options"
+                kwHolder.BackgroundTransparency=1
+                kwHolder.Size=UDim2.new(1,-16,0,0)
+                kwHolder.BorderSizePixel=0
+                kwHolder.LayoutOrder=LO()
+                kwHolder.ClipsDescendants=true
+                kwHolder.Visible=false
+
+                -- Kick Warning Toggle
+                local kwToggleRow = Instance.new("Frame", kwHolder)
+                kwToggleRow.Name="KickWarnToggleRow"
+                kwToggleRow.Size=UDim2.new(1,0,0,42)
+                kwToggleRow.Position=UDim2.new(0,0,0,2)
+                kwToggleRow.BackgroundColor3=Color3.fromRGB(28,14,14)
+                kwToggleRow.BorderSizePixel=0
+                mkCorner(kwToggleRow,12)
+                mkStroke(kwToggleRow, Color3.fromRGB(160,50,50),1).Transparency=0.32
+
+                local kwToggleLbl = Instance.new("TextLabel", kwToggleRow)
+                kwToggleLbl.Size=UDim2.new(0.6,0,1,0)
+                kwToggleLbl.Position=UDim2.new(0,14,0,0)
+                kwToggleLbl.BackgroundTransparency=1
+                kwToggleLbl.Text="Enable Kick Warning"
+                kwToggleLbl.TextColor3=Color3.fromRGB(255,200,200)
+                kwToggleLbl.Font=Enum.Font.GothamSemibold
+                kwToggleLbl.TextSize=12
+                kwToggleLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+                local kwToggleBtn = Instance.new("TextButton", kwToggleRow)
+                kwToggleBtn.Size=UDim2.new(0,52,0,26)
+                kwToggleBtn.Position=UDim2.new(1,-62,0.5,-13)
+                kwToggleBtn.BackgroundColor3= _G.DuelsKickWarn and _G.DuelsKickWarn.enabled and Color3.fromRGB(40,180,80) or Color3.fromRGB(60,20,20)
+                kwToggleBtn.Text=""
+                kwToggleBtn.BorderSizePixel=0
+                mkCorner(kwToggleBtn,13)
+                local kwDot = Instance.new("Frame", kwToggleBtn)
+                kwDot.Size=UDim2.new(0,20,0,20)
+                kwDot.Position= _G.DuelsKickWarn and _G.DuelsKickWarn.enabled and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10)
+                kwDot.BackgroundColor3=Color3.fromRGB(255,255,255)
+                kwDot.BorderSizePixel=0
+                mkCorner(kwDot,10)
+
+                local function setKWToggleVisual(on)
+                    TweenService:Create(kwToggleBtn, TweenInfo.new(0.2), {BackgroundColor3= on and Color3.fromRGB(40,180,80) or Color3.fromRGB(60,20,20)}):Play()
+                    TweenService:Create(kwDot, TweenInfo.new(0.2), {Position= on and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10)}):Play()
+                end
+
+                kwToggleBtn.MouseButton1Click:Connect(function()
+                    _G.DuelsKickWarn.enabled = not _G.DuelsKickWarn.enabled
+                    setKWToggleVisual(_G.DuelsKickWarn.enabled)
+                    if not _G.DuelsKickWarn.enabled then _G.DuelsDestroyKickWarning() end
+                    if requestSave then requestSave() end
+                end)
+
+                -- Ultimate Anti Kick Toggle
+                local uakRow = Instance.new("Frame", kwHolder)
+                uakRow.Name="UAKToggleRow"
+                uakRow.Size=UDim2.new(1,0,0,42)
+                uakRow.Position=UDim2.new(0,0,0,48)
+                uakRow.BackgroundColor3=Color3.fromRGB(22,18,32)
+                uakRow.BorderSizePixel=0
+                mkCorner(uakRow,12)
+                mkStroke(uakRow, Color3.fromRGB(90,50,160),1).Transparency=0.32
+
+                local uakLbl = Instance.new("TextLabel", uakRow)
+                uakLbl.Size=UDim2.new(0.6,0,1,0)
+                uakLbl.Position=UDim2.new(0,14,0,0)
+                uakLbl.BackgroundTransparency=1
+                uakLbl.Text="Ultimate Anti Kick"
+                uakLbl.TextColor3=Color3.fromRGB(200,180,255)
+                uakLbl.Font=Enum.Font.GothamSemibold
+                uakLbl.TextSize=12
+                uakLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+                local uakBtn = Instance.new("TextButton", uakRow)
+                uakBtn.Size=UDim2.new(0,52,0,26)
+                uakBtn.Position=UDim2.new(1,-62,0.5,-13)
+                uakBtn.BackgroundColor3= _G.DuelsUAKEnabled and Color3.fromRGB(120,70,200) or Color3.fromRGB(40,30,60)
+                uakBtn.Text=""
+                uakBtn.BorderSizePixel=0
+                mkCorner(uakBtn,13)
+                local uakDot = Instance.new("Frame", uakBtn)
+                uakDot.Size=UDim2.new(0,20,0,20)
+                uakDot.Position= _G.DuelsUAKEnabled and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10)
+                uakDot.BackgroundColor3=Color3.fromRGB(255,255,255)
+                uakDot.BorderSizePixel=0
+                mkCorner(uakDot,10)
+
+                local function setUAKVisual(on)
+                    TweenService:Create(uakBtn, TweenInfo.new(0.2), {BackgroundColor3= on and Color3.fromRGB(120,70,200) or Color3.fromRGB(40,30,60)}):Play()
+                    TweenService:Create(uakDot, TweenInfo.new(0.2), {Position= on and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10)}):Play()
+                end
+
+                uakBtn.MouseButton1Click:Connect(function()
+                    _G.DuelsUAKEnabled = not _G.DuelsUAKEnabled
+                    setUAKVisual(_G.DuelsUAKEnabled)
+                    if not _G.DuelsUAKEnabled then _G.DuelsUltimateAntiKick.clear() end
+                    if requestSave then requestSave() end
+                end)
+
+                local function setKWExpanded(on)
+                    kwExpanded=on and true or false
+                    kwHolder.Visible=kwExpanded
+                    kwArrow.Text=kwExpanded and "▲" or "▼"
+                    if kwExpanded then
+                        TweenService:Create(kwHolder, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size=UDim2.new(1,-16,0,KW_HOLDER_H)}):Play()
+                    else
+                        TweenService:Create(kwHolder, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size=UDim2.new(1,-16,0,0)}):Play()
+                    end
+                end
+
+                kwArrow.MouseButton1Click:Connect(function() setKWExpanded(not kwExpanded) end)
+                kwRow.InputBegan:Connect(function(inp)
+                    if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+                        setKWExpanded(not kwExpanded)
+                    end
+                end)
+
+                _G._DuelsKickWarnSetVisual = setKWToggleVisual
+                _G._DuelsUAKSetVisual = setUAKVisual
+            end
+
+
             -- ANTI TP BAT - AMBITIOUS STYLE MINIMIZABLE SELECTOR
             -- Row only label + arrow, expands to Spam toggle + V1-V4 slider
             -- No other UI changed
@@ -3479,8 +3850,7 @@ setAntiDie = makeToggleRow("Anti Die", State.antiDieEnabled, function(on) State.
 setAntiFling = makeToggleRow("Anti Fling", State.antiFlingEnabled, function(on) State.antiFlingEnabled=on; if on then startAntiFling() else stopAntiFling() end; if requestSave then requestSave() end end)
 toggleSetters["antiDie"] = setAntiDie
 toggleSetters["antiFling"] = setAntiFling
-            local setE01 = makeToggleRow("Anti E01", State.e01Enabled, function(on) State.e01Enabled=on; _G.E01FixerState.e01Enabled=on; if _G.E01_SetEnabled then _G.E01_SetEnabled(on) end; if requestSave then requestSave() end end)
-            toggleSetters["e01"] = setE01
+            -- Anti E01 REMOVED, replaced by Kick Warning + Ultimate Anti Kick below
 toggleSetters["antiRagdoll"] = setAntiRag
             toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
@@ -5659,173 +6029,18 @@ end
     startAutoSteal()
     print("[Duels] Ready! Jump Drop only (safe). BAT MODE (TOGGLE - stays ON until clicked again) & Blossom Reset added.")
 end
-    -- E01 FIXER - VIDEO STYLE BUT THEMED (Duels green/black)
-    do
-        local E01_wasCarrying=false
-        local E01_active=false
-        if _G.E01FixerState==nil then _G.E01FixerState={} end
-        if _G.E01FixerState.e01Enabled==nil then _G.E01FixerState.e01Enabled=true end
-        if State.e01Enabled==nil then State.e01Enabled=true end
-        local function E01_isCarrying()
-            if not State.e01Enabled then return false end
-            local char=LP.Character
-            if not char then return false end
-            for _,child in pairs(char:GetChildren()) do
-                local n=child.Name:lower()
-                if n:find("brainrot") or n:find("brain") or n:find("animal") or n:find("carry") or n:find("stolen") or n:find("held") or n:find("steal") then return true end
-            end
-            for attrName,attrValue in pairs(char:GetAttributes()) do
-                local n=attrName:lower()
-                if (n:find("carrying") or n:find("carry") or n:find("stealing") or n:find("isstealing") or n:find("hasbrainrot")) and attrValue==true then return true end
-            end
-            local hum=char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.WalkSpeed>0 and hum.WalkSpeed<=25 and hum.WalkSpeed~=16 then return true end
-            return false
-        end
-        local function E01_start()
-            if E01_active then return end
-            if not State.e01Enabled then return end
-            E01_active=true
-            local pg=LP:FindFirstChild("PlayerGui")
-            if not pg then E01_active=false; return end
-            local old=pg:FindFirstChild("E01FixerUI")
-            if old then old:Destroy() end
-            local sg=Instance.new("ScreenGui")
-            sg.Name="E01FixerUI"
-            sg.IgnoreGuiInset=true
-            sg.ResetOnSpawn=false
-            sg.DisplayOrder=300
-            sg.Parent=pg
+    
+-- E01 FIXER REMOVED - REPLACED BY KICK WARNING + ULTIMATE ANTI KICK (from Ambitious)
 
-            -- THEMED COLORS - Duels green/black (same as your main menu)
-            local container=Instance.new("Frame")
-            container.Size=UDim2.new(0, 420, 0, 78)
-            container.Position=UDim2.new(0.5, -210, 0, 8)
-            container.BackgroundColor3=Color3.fromRGB(14, 22, 16) -- Duels dark
-            container.BackgroundTransparency=0.08
-            container.BorderSizePixel=0
-            container.Parent=sg
-            Instance.new("UICorner", container).CornerRadius=UDim.new(0, 10)
-            local outline=Instance.new("UIStroke", container)
-            outline.Color=Color3.fromRGB(30, 132, 73) -- Duels green
-            outline.Thickness=2.2
-            outline.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
 
-            -- Top: KICK WARNING - 2.0s (themed green)
-            local kickLabel=Instance.new("TextLabel")
-            kickLabel.Name="KickWarning"
-            kickLabel.Size=UDim2.new(1, 0, 0, 18)
-            kickLabel.Position=UDim2.new(0, 0, 0, 4)
-            kickLabel.BackgroundTransparency=1
-            kickLabel.Text="KICK WARNING - 2.0s"
-            kickLabel.TextColor3=Color3.fromRGB(120, 255, 140) -- Duels light green
-            kickLabel.Font=Enum.Font.GothamBold
-            kickLabel.TextSize=12
-            kickLabel.Parent=container
-
-            -- Middle: DON'T STEAL (white, same as video)
-            local mainLabel=Instance.new("TextLabel")
-            mainLabel.Name="DontSteal"
-            mainLabel.Size=UDim2.new(1, 0, 0, 28)
-            mainLabel.Position=UDim2.new(0, 0, 0, 20)
-            mainLabel.BackgroundTransparency=1
-            mainLabel.Text="DON'T STEAL"
-            mainLabel.TextColor3=Color3.fromRGB(255, 255, 255)
-            mainLabel.Font=Enum.Font.GothamBlack
-            mainLabel.TextSize=20
-            mainLabel.TextStrokeTransparency=0.2
-            mainLabel.TextStrokeColor3=Color3.new(0,0,0)
-            mainLabel.Parent=container
-
-            -- Bottom: progress bar (themed green, like video red bar but green)
-            local progressBg=Instance.new("Frame")
-            progressBg.Name="ProgressBg"
-            progressBg.Size=UDim2.new(1, -20, 0, 6)
-            progressBg.Position=UDim2.new(0, 10, 1, -12)
-            progressBg.BackgroundColor3=Color3.fromRGB(25, 35, 28) -- dark green bg
-            progressBg.BorderSizePixel=0
-            progressBg.Parent=container
-            Instance.new("UICorner", progressBg).CornerRadius=UDim.new(0, 3)
-
-            local progressFill=Instance.new("Frame")
-            progressFill.Name="ProgressFill"
-            progressFill.Size=UDim2.new(1, 0, 1, 0)
-            progressFill.BackgroundColor3=Color3.fromRGB(38, 240, 125) -- Duels bright green (same as speed)
-            progressFill.BorderSizePixel=0
-            progressFill.Parent=progressBg
-            Instance.new("UICorner", progressFill).CornerRadius=UDim.new(0, 3)
-
-            local duration=2
-            local startTime=tick()
-            local conn; conn=RunService.Heartbeat:Connect(function()
-                local elapsed=tick()-startTime
-                local remaining=math.max(0, duration - elapsed)
-                local progress=remaining / duration
-                if container and container.Parent then
-                    if remaining > 0 then
-                        kickLabel.Text=string.format("KICK WARNING • %.1fs", remaining)
-                        progressFill.Size=UDim2.new(progress, 0, 1, 0)
-                        if remaining <= 5 then
-                            -- pulse green when low
-                            local pulse = math.sin(tick()*8) * 0.3 + 0.7
-                            progressFill.BackgroundTransparency = 1 - pulse
-                        end
-                    else
-                        conn:Disconnect()
-                        kickLabel.Text="SAFE TO STEAL"
-                        kickLabel.TextColor3=Color3.fromRGB(80, 255, 120)
-                        mainLabel.Text="STEAL NOW!"
-                        mainLabel.TextColor3=Color3.fromRGB(80, 255, 120)
-                        outline.Color=Color3.fromRGB(38, 240, 125)
-                        progressFill.BackgroundColor3=Color3.fromRGB(38, 240, 125)
-                        progressFill.BackgroundTransparency=0
-                        progressFill.Size=UDim2.new(1, 0, 1, 0)
-                        task.wait(1.5)
-                        if sg.Parent then
-                            local tween=TweenService:Create(container, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency=1})
-                            tween:Play()
-                            task.wait(0.4)
-                            sg:Destroy()
-                        end
-                        E01_active=false
-                    end
-                else
-                    if conn then conn:Disconnect() end
-                    E01_active=false
-                end
-            end)
-        end
-        -- FIXED: Only trigger ONCE per pickup, not repeatedly
-        local lastDropTime = 0
-        task.spawn(function()
-            while task.wait(0.2) do
-                local cur=E01_isCarrying()
-                if cur and not E01_wasCarrying and not E01_active then
-                    -- Picked up brainrot (rising edge)
-                    if tick() - lastDropTime > 1.0 then
-                        E01_start()
-                        E01_wasCarrying=true
-                    end
-                elseif not cur and E01_wasCarrying then
-                    -- Dropped brainrot (falling edge)
-                    E01_wasCarrying=false
-                    lastDropTime=tick()
-                end
-            end
-        end)
-        _G.E01_SetEnabled=function(on)
-            State.e01Enabled=on
-            _G.E01FixerState.e01Enabled=on
-            if requestSave then requestSave() end
-            if not on then
-                local pg=LP:FindFirstChild("PlayerGui")
-                if pg and pg:FindFirstChild("E01FixerUI") then pg.E01FixerUI:Destroy() end
-                E01_active=false
-            end
-        end
+-- Kick Warning loop (from Ambitious)
+task.spawn(function()
+    while task.wait(0.1) do
+        if _G.DuelsUpdateKickWarning then pcall(_G.DuelsUpdateKickWarning) end
     end
+end)
 
--- ============================================================
+
 -- SAFE MAIN EXECUTION - FIXED
 -- ============================================================
 if not _G.DuelsV2_MainExecuted then
