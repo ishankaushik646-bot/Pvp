@@ -1649,19 +1649,13 @@ local stackDefs = {
     {key="antiTPBat",   label="ANTI\nTP BAT"},
     {key="autoLeft",    label="AUTO\nLEFT"},
     {key="autoRight",   label="AUTO\nRIGHT"},
-    {key="aimbot",      label="BAT AIMBOT\nV2", dyn="aimbot"},
+    {key="aimbot",      label="AIMBOT"},
     {key="tpDown",      label="TP\nDOWN"},
     {key="carrySpeed",  label="CARRY\nSPD"},
     {key="reset",       label="RESET"},
     {key="lagger",      label="LAGGER"},
     {key="laggerCarry", label="LAGGER\nCARRY"},
 }
-
-local function getAimbotStackLabel()
-    local mode = _G.DuelsSelectedAimbotMode or "V2"
-    return "BAT AIMBOT\n" .. mode
-end
-
 
 local function getDefaultStackPos(i)
     local col = (i-1) % COLS
@@ -1671,42 +1665,6 @@ local function getDefaultStackPos(i)
         1, -(COLS * (BTN_W + BTN_GAP) - BTN_GAP + 14) + col * (BTN_W + BTN_GAP),
         0.5, -(totalRows * (BTN_H + BTN_GAP) - BTN_GAP) / 2 + row * (BTN_H + BTN_GAP)
     )
-
--- Update aimbot mobile button label when mode changes (like video)
-_G.DuelsUpdateAimbotButtonLabel = function()
-    local mode = _G.DuelsSelectedAimbotMode or "V2"
-    local label = "BAT AIMBOT\n" .. mode
-    -- Find aimbot stack button and update its label
-    if stackBtnRefs and stackBtnRefs["aimbot"] then
-        local btn = stackBtnRefs["aimbot"]
-        -- Button may have a TextLabel inside
-        pcall(function()
-            for _, child in ipairs(btn:GetChildren()) do
-                if child:IsA("TextLabel") then
-                    child.Text = label
-                end
-            end
-            -- Also try to find label via wrapper
-            if btn:FindFirstChild("Label") then
-                btn.Label.Text = label
-            end
-        end)
-    end
-    -- Also update via wrappers
-    if stackWrappers and stackWrappers["aimbot"] then
-        pcall(function()
-            local wrap = stackWrappers["aimbot"]
-            for _, child in ipairs(wrap:GetDescendants()) do
-                if child:IsA("TextLabel") and child.Text:find("AIMBOT") then
-                    child.Text = label
-                end
-            end
-        end)
-    end
-end
-
-
-
 end
 
 local Steal = { 
@@ -2953,8 +2911,6 @@ local function Main()
                     end
                     if _G.DuelsRefreshAimbotSpeedBoxes then pcall(_G.DuelsRefreshAimbotSpeedBoxes) end
                     if _G._DuelsChaseModeVisual then pcall(_G._DuelsChaseModeVisual) end
-                    -- Update mobile AIMBOT button label like Ambitious video
-                    if _G.DuelsUpdateAimbotButtonLabel then pcall(_G.DuelsUpdateAimbotButtonLabel) end
                 end
                 _G._DuelsAimbotV1V2Visual = updateV1V2Visual
                 for i, txt in ipairs({"BAT AIMBOT V1","BAT AIMBOT V2"}) do
@@ -3057,79 +3013,40 @@ local function Main()
             end)
             toggleSetters["mirrorTPDown"] = setMirrorTPDown
             do
-                
-            do
-                -- Single set of speed inputs that change label/value when V1/V2 mode switches (like video)
-                local speedRow = makeInputRow("Bat Aimbot V2 Speed", _G.DuelsAimbotV2Speed or 58, function(n)
-                    if n and n>0 and n<=200 then
-                        if (_G.DuelsSelectedAimbotMode=="V2") then
-                            _G.DuelsAimbotV2Speed = n
-                        else
-                            _G.DuelsAimbotV1Speed = n
-                            AIMBOT_SPEED = n
-                        end
-                        if requestSave then requestSave() end
-                    end
+                local v1SpeedRow = makeInputRow("Bat Aimbot V1 Speed", _G.DuelsAimbotV1Speed or 58, function(n)
+                    if n and n>0 and n<=200 then _G.DuelsAimbotV1Speed = n; AIMBOT_SPEED = n end
+                    if requestSave then requestSave() end
                 end)
-                speedRow.Name = "AimbotSpeedRow"
-                _G.DuelsSpeedBox = speedRow
-                
-                local laggerRow = makeInputRow("Bat Aimbot V2 Lagger Speed", _G.DuelsAimbotV2LaggerSpeed or 40, function(n)
-                    if n and n>0 and n<=200 then
-                        if (_G.DuelsSelectedAimbotMode=="V2") then
-                            _G.DuelsAimbotV2LaggerSpeed = n
-                        else
-                            _G.DuelsAimbotV1LaggerSpeed = n
-                            LAGGER_AIMBOT_SPEED = n
-                        end
-                        if requestSave then requestSave() end
-                    end
+                v1SpeedRow.Name = "V1SpeedRow"
+                _G.DuelsV1SpeedBox = v1SpeedRow
+                local v1LaggerRow = makeInputRow("Bat Aimbot V1 Lagger Speed", _G.DuelsAimbotV1LaggerSpeed or 40, function(n)
+                    if n and n>0 and n<=200 then _G.DuelsAimbotV1LaggerSpeed = n; LAGGER_AIMBOT_SPEED = n end
+                    if requestSave then requestSave() end
                 end)
-                laggerRow.Name = "AimbotLaggerRow"
-                _G.DuelsLaggerBox = laggerRow
-                
-                -- Store references to label and input for dynamic update
-                local function getRowLabel(row)
-                    for _, child in ipairs(row:GetChildren()) do
-                        if child:IsA("TextLabel") then return child end
-                    end
-                    return nil
-                end
-                local function getRowInput(row)
-                    for _, child in ipairs(row:GetChildren()) do
-                        if child:IsA("TextBox") then return child end
-                    end
-                    -- Try find inside
-                    for _, child in ipairs(row:GetDescendants()) do
-                        if child:IsA("TextBox") then return child end
-                    end
-                    return nil
-                end
-                
+                v1LaggerRow.Name = "V1LaggerRow"
+                _G.DuelsV1LaggerBox = v1LaggerRow
+                local v2SpeedRow = makeInputRow("Bat Aimbot V2 Speed", _G.DuelsAimbotV2Speed or 58, function(n)
+                    if n and n>0 and n<=200 then _G.DuelsAimbotV2Speed = n end
+                    if requestSave then requestSave() end
+                end)
+                v2SpeedRow.Name = "V2SpeedRow"
+                _G.DuelsV2SpeedBox = v2SpeedRow
+                local v2LaggerRow = makeInputRow("Bat Aimbot V2 Lagger Speed", _G.DuelsAimbotV2LaggerSpeed or 40, function(n)
+                    if n and n>0 and n<=200 then _G.DuelsAimbotV2LaggerSpeed = n end
+                    if requestSave then requestSave() end
+                end)
+                v2LaggerRow.Name = "V2LaggerRow"
+                _G.DuelsV2LaggerBox = v2LaggerRow
                 function _G.DuelsRefreshAimbotSpeedBoxes()
                     local isV2 = (_G.DuelsSelectedAimbotMode=="V2")
-                    local speedLabel = isV2 and "Bat Aimbot V2 Speed" or "Bat Aimbot V1 Speed"
-                    local laggerLabel = isV2 and "Bat Aimbot V2 Lagger Speed" or "Bat Aimbot V1 Lagger Speed"
-                    local speedValue = isV2 and (_G.DuelsAimbotV2Speed or 58) or (_G.DuelsAimbotV1Speed or 58)
-                    local laggerValue = isV2 and (_G.DuelsAimbotV2LaggerSpeed or 40) or (_G.DuelsAimbotV1LaggerSpeed or 40)
-                    
-                    if _G.DuelsSpeedBox then
-                        local lbl = getRowLabel(_G.DuelsSpeedBox)
-                        if lbl then lbl.Text = speedLabel end
-                        local inp = getRowInput(_G.DuelsSpeedBox)
-                        if inp then inp.Text = tostring(speedValue) end
-                    end
-                    if _G.DuelsLaggerBox then
-                        local lbl = getRowLabel(_G.DuelsLaggerBox)
-                        if lbl then lbl.Text = laggerLabel end
-                        local inp = getRowInput(_G.DuelsLaggerBox)
-                        if inp then inp.Text = tostring(laggerValue) end
-                    end
+                    if _G.DuelsV1SpeedBox then _G.DuelsV1SpeedBox.Visible = not isV2 end
+                    if _G.DuelsV1LaggerBox then _G.DuelsV1LaggerBox.Visible = not isV2 end
+                    if _G.DuelsV2SpeedBox then _G.DuelsV2SpeedBox.Visible = isV2 end
+                    if _G.DuelsV2LaggerBox then _G.DuelsV2LaggerBox.Visible = isV2 end
                 end
                 _G.DuelsRefreshAimbotSpeedBoxes()
             end
             makeGap(8); makeSectionHeader("TP Bat"); makeGap(2)
-makeGap(8); makeSectionHeader("TP Bat"); makeGap(2)
 
             setMedusaCounter = makeToggleRow("Medusa Counter", false, function(on) State.medusaCounterEnabled=on; if on then setupMedusaCounter(LP.Character) else stopMedusaCounter() end end)
             toggleSetters["medusaCounter"] = setMedusaCounter
