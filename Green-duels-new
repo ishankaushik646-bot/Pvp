@@ -3440,11 +3440,6 @@ local function Main()
                 tpvArrow.MouseButton1Click:Connect(function()
                     setTPVExpanded(not tpvExpanded)
                 end)
-                tpvRow.InputBegan:Connect(function(inp)
-                    if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
-                        setTPVExpanded(not tpvExpanded)
-                    end
-                end)
             end
 
             -- ============================================================
@@ -3585,11 +3580,6 @@ local function Main()
                     end
                 end
                 kwArrow.MouseButton1Click:Connect(function() setKWExpanded(not kwExpanded) end)
-                kwRow.InputBegan:Connect(function(inp)
-                    if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
-                        setKWExpanded(not kwExpanded)
-                    end
-                end)
                 _G._DuelsKickWarnSetVisual = setKWToggleVisual
                 _G._DuelsUAKSetVisual = setUAKVisual
             end
@@ -6111,6 +6101,7 @@ end
                 antiTPBatSpam = _G.DuelsAntiTPBatSpam == true,
                 kickWarnEnabled = _G.DuelsKickWarn and _G.DuelsKickWarn.enabled == true,
                 uakEnabled = _G.DuelsUAKEnabled == true,
+                batCounterMode = State.batCounterMode or _G.DuelsBatCounterMode or "V1",
             }
             local encoded = HttpService:JSONEncode(cfg)
             _writefile(CONFIG_FILE, encoded)
@@ -6366,6 +6357,38 @@ end
         end
         if decErr.cloverPosition and cloverBtn then
             cloverBtn.Position = UDim2.new(0, decErr.cloverPosition.X, 0, decErr.cloverPosition.Y)
+        end
+
+        -- RESTORE TP BAT VERSION / ANTI TP BAT / KICK WARN / ULTIMATE ANTI KICK / BAT COUNTER MODE
+        if decErr.tpBatVersion ~= nil then
+            _G.DuelsTPBatVersion = math.clamp(tonumber(decErr.tpBatVersion) or 1,1,5)
+            if _G._DuelsTPBatSetVersionVisual then pcall(function() _G._DuelsTPBatSetVersionVisual(_G.DuelsTPBatVersion) end) end
+        end
+        if decErr.batCounterMode ~= nil then
+            State.batCounterMode = decErr.batCounterMode
+            _G.DuelsBatCounterMode = decErr.batCounterMode
+            if _G._DuelsBCSetMode then pcall(function() _G._DuelsBCSetMode(decErr.batCounterMode) end) end
+        end
+        if decErr.antiTPBatEnabled ~= nil then
+            _G.DuelsAntiTPBatEnabled = decErr.antiTPBatEnabled == true
+            if _G._DuelsAntiTPBatSetRowVisual then pcall(function() _G._DuelsAntiTPBatSetRowVisual(_G.DuelsAntiTPBatEnabled) end) end
+        end
+        if decErr.antiTPBatVersion ~= nil then
+            _G.DuelsAntiTPBatVersion = math.clamp(tonumber(decErr.antiTPBatVersion) or 1,1,4)
+            if _G._DuelsAntiTPBatSetVersionVisual then pcall(function() _G._DuelsAntiTPBatSetVersionVisual(_G.DuelsAntiTPBatVersion) end) end
+        end
+        if decErr.antiTPBatSpam ~= nil then
+            _G.DuelsAntiTPBatSpam = decErr.antiTPBatSpam == true
+            if _G._DuelsAntiTPBatSetSpamVisual then pcall(function() _G._DuelsAntiTPBatSetSpamVisual(_G.DuelsAntiTPBatSpam) end) end
+        end
+        if decErr.kickWarnEnabled ~= nil then
+            _G.DuelsKickWarn = _G.DuelsKickWarn or {enabled=false}
+            _G.DuelsKickWarn.enabled = decErr.kickWarnEnabled == true
+            if _G._DuelsKickWarnSetVisual then pcall(function() _G._DuelsKickWarnSetVisual(_G.DuelsKickWarn.enabled) end) end
+        end
+        if decErr.uakEnabled ~= nil then
+            _G.DuelsUAKEnabled = decErr.uakEnabled == true
+            if _G._DuelsUAKSetVisual then pcall(function() _G._DuelsUAKSetVisual(_G.DuelsUAKEnabled) end) end
         end
 
         print("[Duels] Config loaded successfully")
