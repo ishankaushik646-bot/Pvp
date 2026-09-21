@@ -2982,6 +2982,159 @@ local function Main()
             toggleSetters["safeMode"] = safeModeToggle
 
             -- ============================================================
+            
+            -- ============================================================
+            -- TP BAT VERSIONS - AMBITIOUS STYLE MINIMIZABLE SELECTOR (V1-V5)
+            -- Same style as Anti TP Bat, purple accent
+            -- ============================================================
+            do
+                local tpvExpanded = false
+                local TPV_HOLDER_H = 52
+
+                local tpvRow = Instance.new("Frame", currentPage)
+                tpvRow.Name = "TP Bat Versions"
+                tpvRow.Size = UDim2.new(1,-16,0,42)
+                tpvRow.BackgroundColor3 = Color3.fromRGB(18,14,28)
+                tpvRow.BorderSizePixel=0
+                tpvRow.LayoutOrder=LO()
+                mkCorner(tpvRow,12)
+                local tpvRowStroke = mkStroke(tpvRow, Color3.fromRGB(90,50,160),1)
+                tpvRowStroke.Transparency=0.5
+                tpvRow.ClipsDescendants=true
+
+                local tpvLbl = Instance.new("TextLabel", tpvRow)
+                tpvLbl.Size = UDim2.new(1,-70,1,0)
+                tpvLbl.Position = UDim2.new(0,14,0,0)
+                tpvLbl.BackgroundTransparency=1
+                tpvLbl.Text="TP Bat Versions"
+                tpvLbl.TextColor3=C.rowLabel
+                tpvLbl.Font=Enum.Font.GothamBold
+                tpvLbl.TextSize=13
+                tpvLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+                local tpvArrow = Instance.new("TextButton", tpvRow)
+                tpvArrow.Name="TPBatVersionsArrow"
+                tpvArrow.BackgroundColor3=Color3.fromRGB(12,8,20)
+                tpvArrow.BackgroundTransparency=0.18
+                tpvArrow.BorderSizePixel=0
+                tpvArrow.Size=UDim2.new(0,28,0,24)
+                tpvArrow.Position=UDim2.new(1,-40,0.5,-12)
+                tpvArrow.Text="▼"
+                tpvArrow.TextColor3=Color3.fromRGB(200,180,255)
+                tpvArrow.TextSize=14
+                tpvArrow.Font=Enum.Font.GothamBold
+                tpvArrow.AutoButtonColor=false
+                tpvArrow.ZIndex=8
+                mkCorner(tpvArrow,7)
+                mkStroke(tpvArrow, Color3.fromRGB(90,50,160),1).Transparency=0.45
+
+                local tpvHolder = Instance.new("Frame", currentPage)
+                tpvHolder.Name="TP Bat Versions Options"
+                tpvHolder.BackgroundTransparency=1
+                tpvHolder.Size=UDim2.new(1,-16,0,0)
+                tpvHolder.BorderSizePixel=0
+                tpvHolder.LayoutOrder=LO()
+                tpvHolder.ClipsDescendants=true
+                tpvHolder.Visible=false
+
+                local TPV_LABELS={"V1","V2","V3","V4","V5"}
+                local TPV_N=#TPV_LABELS
+                local tpvVerHolder = Instance.new("Frame", tpvHolder)
+                tpvVerHolder.Name="TPBatVersionSelector"
+                tpvVerHolder.BackgroundColor3=Color3.fromRGB(18,14,28)
+                tpvVerHolder.Size=UDim2.new(1,0,0,42)
+                tpvVerHolder.Position=UDim2.new(0,0,0,2)
+                tpvVerHolder.BorderSizePixel=0
+                mkCorner(tpvVerHolder,12)
+                mkStroke(tpvVerHolder, Color3.fromRGB(90,50,160),1).Transparency=0.32
+
+                local tpvVerSlide = Instance.new("Frame", tpvVerHolder)
+                tpvVerSlide.Name="TPBatVersionSlide"
+                tpvVerSlide.BackgroundColor3=Color3.fromRGB(120,70,200)
+                tpvVerSlide.BackgroundTransparency=0.1
+                tpvVerSlide.AnchorPoint=Vector2.new(0.5,0.5)
+                tpvVerSlide.Size=UDim2.new(1/TPV_N,-4,1,-8)
+                tpvVerSlide.Position=UDim2.new(0.5/TPV_N,0,0.5,0)
+                tpvVerSlide.BorderSizePixel=0
+                tpvVerSlide.ZIndex=5
+                mkCorner(tpvVerSlide,10)
+                local tpvSlideStroke=Instance.new("UIStroke", tpvVerSlide)
+                tpvSlideStroke.Color=Color3.fromRGB(155,89,255)
+                tpvSlideStroke.Thickness=1.5
+                tpvSlideStroke.Transparency=0.2
+                tpvSlideStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+
+                local tpvLabels={}
+                local tpvSegW=1/TPV_N
+                for i,lblText in ipairs(TPV_LABELS) do
+                    local lbl=Instance.new("TextLabel", tpvVerHolder)
+                    lbl.Name="TPBatVersionLabel_"..tostring(i)
+                    lbl.BackgroundTransparency=1
+                    lbl.Text=lblText
+                    lbl.TextColor3=Color3.fromRGB(200,180,255)
+                    lbl.TextSize=11
+                    lbl.Font=Enum.Font.GothamBlack
+                    lbl.TextXAlignment=Enum.TextXAlignment.Center
+                    lbl.AnchorPoint=Vector2.new(0.5,0.5)
+                    lbl.Size=UDim2.new(tpvSegW,0,1,0)
+                    lbl.Position=UDim2.new(tpvSegW*(i-0.5),0,0.5,0)
+                    lbl.ZIndex=8
+                    tpvLabels[i]=lbl
+                    local click=Instance.new("TextButton", tpvVerHolder)
+                    click.Name="TPBatVersionClick_"..tostring(i)
+                    click.BackgroundTransparency=1
+                    click.Text=""
+                    click.AutoButtonColor=false
+                    click.AnchorPoint=Vector2.new(0.5,0.5)
+                    click.Size=UDim2.new(tpvSegW,0,1,0)
+                    click.Position=UDim2.new(tpvSegW*(i-0.5),0,0.5,0)
+                    click.ZIndex=10
+                    local idx=i
+                    click.MouseButton1Click:Connect(function()
+                        _G.DuelsSetTPBatVersion(idx)
+                    end)
+                end
+
+                local function setTPVVersionVisual(index)
+                    index=math.clamp(tonumber(index) or 1,1,TPV_N)
+                    TweenService:Create(tpvVerSlide, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Position=UDim2.new(tpvSegW*(index-0.5),0,0.5,0),
+                        Size=UDim2.new(tpvSegW,-4,1,-8)
+                    }):Play()
+                    for i,lbl in ipairs(tpvLabels) do
+                        local sel=(i==index)
+                        TweenService:Create(lbl, TweenInfo.new(0.14), {
+                            TextTransparency=sel and 0 or 0.4,
+                            TextColor3=sel and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,160,210)
+                        }):Play()
+                    end
+                end
+                _G._DuelsTPBatSetVersionVisual=setTPVVersionVisual
+                setTPVVersionVisual(_G.DuelsTPBatVersion or 1)
+
+                local function setTPVExpanded(on)
+                    tpvExpanded=on and true or false
+                    tpvHolder.Visible=tpvExpanded
+                    tpvArrow.Text=tpvExpanded and "▲" or "▼"
+                    if tpvExpanded then
+                        TweenService:Create(tpvHolder, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size=UDim2.new(1,-16,0,TPV_HOLDER_H)}):Play()
+                    else
+                        TweenService:Create(tpvHolder, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size=UDim2.new(1,-16,0,0)}):Play()
+                    end
+                end
+
+                tpvArrow.MouseButton1Click:Connect(function()
+                    setTPVExpanded(not tpvExpanded)
+                end)
+                tpvRow.InputBegan:Connect(function(inp)
+                    if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+                        setTPVExpanded(not tpvExpanded)
+                    end
+                end)
+            end
+
+
+
             -- ANTI TP BAT - AMBITIOUS STYLE MINIMIZABLE SELECTOR
             -- Row only label + arrow, expands to Spam toggle + V1-V4 slider
             -- No other UI changed
