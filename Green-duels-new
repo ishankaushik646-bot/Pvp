@@ -84,172 +84,117 @@ end
 
 repeat task.wait() until game:IsLoaded()
 
--- ============================================================
--- DUELS V2 - ANTI VOID FROM AMBITIOUS (WITH TOGGLE)
--- Drop-in replacement for >>> ANTI VOID BEGIN ... END
--- ============================================================
-
--- >>> ANTI VOID BEGIN
+-- >>> ANTI VOID BEGIN (FROM AMBITIOUS - WITH TOGGLE)
 do
-  -- Safe Zone bounds (same as Ambitious)
-  local MAP_BOUNDS = {
-    MinX = -535.7,
-    MaxX = -422.0,
-    MinY = -7.9,
-    MaxY = 115.0,
-    MinZ = -72.0,
-    MaxZ = 193.3,
-  }
-
-  local TP_TOTAL   = 150  -- total distance in 0.07s = TP
-  local TP_DELTA_Y = 100  -- Y-only distance in 0.07s = TP
-  local WINDOW     = 0.07
-  local WALK_CLEAR = 15   -- horizontal walk inside zone to clear ghost
-  local STEP_MAX   = 50   -- max step considered walking
-
-  -- Globals / TOGGLE
+  local MAP_BOUNDS = {MinX=-535.7,MaxX=-422.0,MinY=-7.9,MaxY=115.0,MinZ=-72.0,MaxZ=193.3}
+  local TP_TOTAL=150
+  local TP_DELTA_Y=100
+  local WINDOW=0.07
+  local WALK_CLEAR=15
+  local STEP_MAX=50
   _G.AmbitiousAntiVoidEnabled = _G.AmbitiousAntiVoidEnabled or false
   _G.AmbitiousAntiVoid = _G.AmbitiousAntiVoid or {}
-
-  local Players = game:GetService("Players")
-  local RunService = game:GetService("RunService")
-  local LP = Players.LocalPlayer
-
-  local ghost   = setmetatable({}, { __mode = "k" })  -- [player] = Vector3 origin
-  local ghostCF = setmetatable({}, { __mode = "k" })  -- [player] = CFrame origin
-  local isOutOf = setmetatable({}, { __mode = "k" })
-  local tracked = setmetatable({}, { __mode = "k" })
-  local history = setmetatable({}, { __mode = "k" })  -- [player] = {{t, cf}, ...}
-  local walkAcc = setmetatable({}, { __mode = "k" })  -- [player] = accumulated horizontal walk inside zone
-  local lastPos = setmetatable({}, { __mode = "k" })  -- [player] = last Vector3 for walk calc
-
+  local Players=game:GetService("Players")
+  local RunService=game:GetService("RunService")
+  local LP=Players.LocalPlayer
+  local ghost=setmetatable({},{__mode="k"})
+  local ghostCF=setmetatable({},{__mode="k"})
+  local isOutOf=setmetatable({},{__mode="k"})
+  local tracked=setmetatable({},{__mode="k"})
+  local history=setmetatable({},{__mode="k"})
+  local walkAcc=setmetatable({},{__mode="k"})
+  local lastPos=setmetatable({},{__mode="k"})
   local function isWithinBounds(pos)
-    if typeof(pos) ~= "Vector3" then return false end
-    return pos.X >= MAP_BOUNDS.MinX and pos.X <= MAP_BOUNDS.MaxX
-       and pos.Y >= MAP_BOUNDS.MinY and pos.Y <= MAP_BOUNDS.MaxY
-       and pos.Z >= MAP_BOUNDS.MinZ and pos.Z <= MAP_BOUNDS.MaxZ
+    if typeof(pos)~="Vector3" then return false end
+    return pos.X>=MAP_BOUNDS.MinX and pos.X<=MAP_BOUNDS.MaxX and pos.Y>=MAP_BOUNDS.MinY and pos.Y<=MAP_BOUNDS.MaxY and pos.Z>=MAP_BOUNDS.MinZ and pos.Z<=MAP_BOUNDS.MaxZ
   end
-
   local function getHRP(player)
-    local char = player and player.Character
+    local char=player and player.Character
     if not char then return nil end
     return char:FindFirstChild("HumanoidRootPart")
   end
-
-  local function onTeleportDetected(player, originCFrame)
-    isOutOf[player] = true
-    ghostCF[player] = originCFrame
-    ghost[player]   = originCFrame.Position
-    walkAcc[player] = 0
-    -- hook for other systems: they should check ghost instead of HRP
-    -- print("[AntiVoid] TP detected", player.Name, "origin", originCFrame.Position)
-  end
-
   local function clearGhost(player)
-    isOutOf[player] = nil
-    ghost[player] = nil
-    ghostCF[player] = nil
-    walkAcc[player] = 0
+    isOutOf[player]=nil
+    ghost[player]=nil
+    ghostCF[player]=nil
+    walkAcc[player]=0
   end
-
-  -- Core tracking per player
+  local function onTeleportDetected(player,originCFrame)
+    isOutOf[player]=true
+    ghostCF[player]=originCFrame
+    ghost[player]=originCFrame.Position
+    walkAcc[player]=0
+  end
   local function startTracking(player)
     if tracked[player] then return end
-    tracked[player] = true
-    history[player] = {}
-    walkAcc[player] = 0
-    lastPos[player] = nil
-
+    tracked[player]=true
+    history[player]={}
+    walkAcc[player]=0
+    lastPos[player]=nil
     task.spawn(function()
       while tracked[player] and player.Parent do
         if _G.AmbitiousAntiVoidEnabled then
-          local hrp = getHRP(player)
+          local hrp=getHRP(player)
           if hrp then
-            local now = os.clock()
-            local cf = hrp.CFrame
-            local pos = cf.Position
-
-            -- maintain 0.07s history
-            local hist = history[player]
-            table.insert(hist, {t = now, cf = cf})
-            -- prune older than WINDOW
-            while #hist > 1 and (now - hist[1].t) > WINDOW do
-              table.remove(hist, 1)
-            end
-
-            if #hist >= 2 then
-              local oldest = hist[1]
-              local newest = hist[#hist]
-              local delta = newest.cf.Position - oldest.cf.Position
-              local total = delta.Magnitude
-              local dy = math.abs(delta.Y)
-
-              if total >= TP_TOTAL or dy >= TP_DELTA_Y then
-                -- TP confirmed, origin = oldest if it was inside safe zone
-                if isWithinBounds(oldest.cf.Position) then
-                  -- avoid re-trigger if already ghosted and ghost same zone
-                  if not isOutOf[player] then
-                    onTeleportDetected(player, oldest.cf)
-                  end
+            local now=os.clock()
+            local cf=hrp.CFrame
+            local pos=cf.Position
+            local hist=history[player]
+            table.insert(hist,{t=now,cf=cf})
+            while #hist>1 and (now-hist[1].t)>WINDOW do table.remove(hist,1) end
+            if #hist>=2 then
+              local oldest=hist[1]
+              local newest=hist[#hist]
+              local delta=newest.cf.Position-oldest.cf.Position
+              local total=delta.Magnitude
+              local dy=math.abs(delta.Y)
+              if total>=TP_TOTAL or dy>=TP_DELTA_Y then
+                if isWithinBounds(oldest.cf.Position) and not isOutOf[player] then
+                  onTeleportDetected(player,oldest.cf)
                 end
-                -- reset history to avoid multi-trigger
-                history[player] = {{t = now, cf = cf}}
+                history[player]={{t=now,cf=cf}}
               end
             end
-
-            -- Ghost clearing logic: walk WALK_CLEAR horizontal inside zone
             if isOutOf[player] and isWithinBounds(pos) then
-              local lp = lastPos[player]
+              local lp=lastPos[player]
               if lp and isWithinBounds(lp) then
-                local horiz = Vector3.new(pos.X - lp.X, 0, pos.Z - lp.Z).Magnitude
-                if horiz <= STEP_MAX then
-                  walkAcc[player] = (walkAcc[player] or 0) + horiz
-                  if walkAcc[player] >= WALK_CLEAR then
-                    clearGhost(player)
-                  end
+                local horiz=Vector3.new(pos.X-lp.X,0,pos.Z-lp.Z).Magnitude
+                if horiz<=STEP_MAX then
+                  walkAcc[player]=(walkAcc[player] or 0)+horiz
+                  if walkAcc[player]>=WALK_CLEAR then clearGhost(player) end
                 end
               end
             end
-            lastPos[player] = pos
+            lastPos[player]=pos
           end
         end
         task.wait(0.03)
       end
-      tracked[player] = nil
+      tracked[player]=nil
     end)
   end
-
-  -- RESCUE for LocalPlayer (safety net if void part missing)
-  local _rescueLastSafePos = nil
-  local _rescueSpawnOrigin = nil
-  local _rescueLastGroundY = nil
-
+  local _rescueLastSafePos=nil
+  local _rescueSpawnOrigin=nil
   task.spawn(function()
     while true do
       if _G.AmbitiousAntiVoidEnabled and LP then
-        local hrp = getHRP(LP)
+        local hrp=getHRP(LP)
         if hrp then
-          local pos = hrp.Position
-          local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-          local onGround = hum and hum.FloorMaterial ~= Enum.Material.Air
+          local pos=hrp.Position
+          local hum=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+          local onGround=hum and hum.FloorMaterial~=Enum.Material.Air
           if isWithinBounds(pos) and onGround then
-            _rescueLastSafePos = hrp.CFrame
-            _rescueLastGroundY = pos.Y
-            if not _rescueSpawnOrigin then
-              _rescueSpawnOrigin = hrp.CFrame
-            end
+            _rescueLastSafePos=hrp.CFrame
+            if not _rescueSpawnOrigin then _rescueSpawnOrigin=hrp.CFrame end
           end
-          -- if LP is out of bounds, rescue to last safe
           if not isWithinBounds(pos) then
             if _rescueLastSafePos then
               pcall(function()
-                hrp.CFrame = _rescueLastSafePos + Vector3.new(0, 3, 0)
-                hrp.Velocity = Vector3.new(0,0,0)
+                hrp.CFrame=_rescueLastSafePos+Vector3.new(0,3,0)
+                hrp.Velocity=Vector3.new(0,0,0)
               end)
             elseif _rescueSpawnOrigin then
-              pcall(function()
-                hrp.CFrame = _rescueSpawnOrigin + Vector3.new(0, 3, 0)
-              end)
+              pcall(function() hrp.CFrame=_rescueSpawnOrigin+Vector3.new(0,3,0) end)
             end
           end
         end
@@ -257,146 +202,56 @@ do
       RunService.Heartbeat:Wait()
     end
   end)
-
-  -- Public API (used by TP Bat, Aimbot, ESP, etc.)
-  function _G.AmbitiousAntiVoid.GetGhostPos(player)
-    return ghost[player]
-  end
-  function _G.AmbitiousAntiVoid.GetGhostCF(player)
-    return ghostCF[player]
-  end
-  function _G.AmbitiousAntiVoid.IsOut(player)
-    return isOutOf[player] == true
-  end
-  function _G.AmbitiousAntiVoid.IsInBounds(pos)
-    return isWithinBounds(pos)
-  end
-  function _G.AmbitiousAntiVoid.GetBounds()
-    return MAP_BOUNDS
-  end
-  function _G.AmbitiousAntiVoid.IsEnabled()
-    return _G.AmbitiousAntiVoidEnabled == true
-  end
+  function _G.AmbitiousAntiVoid.GetGhostPos(player) return ghost[player] end
+  function _G.AmbitiousAntiVoid.GetGhostCF(player) return ghostCF[player] end
+  function _G.AmbitiousAntiVoid.IsOut(player) return isOutOf[player]==true end
+  function _G.AmbitiousAntiVoid.IsInBounds(pos) return isWithinBounds(pos) end
+  function _G.AmbitiousAntiVoid.GetBounds() return MAP_BOUNDS end
+  function _G.AmbitiousAntiVoid.IsEnabled() return _G.AmbitiousAntiVoidEnabled==true end
   function _G.AmbitiousAntiVoid.GetTargetPosition(player)
-    -- Use this for TP Bat / Aimbot: returns ghost pos if out, else real HRP pos
-    if isOutOf[player] and ghost[player] then
-      return ghost[player]
-    end
-    local hrp = getHRP(player)
+    if isOutOf[player] and ghost[player] then return ghost[player] end
+    local hrp=getHRP(player)
     return hrp and hrp.Position or nil
   end
   function _G.AmbitiousAntiVoid.GetTargetCFrame(player)
-    if isOutOf[player] and ghostCF[player] then
-      return ghostCF[player]
-    end
-    local hrp = getHRP(player)
+    if isOutOf[player] and ghostCF[player] then return ghostCF[player] end
+    local hrp=getHRP(player)
     return hrp and hrp.CFrame or nil
   end
-
-  -- TOGGLE API
-  _G.AmbitiousAntiVoidEnabled = _G.AmbitiousAntiVoidEnabled or false
-
   function _G.AmbitiousToggleAntiVoid(state)
-    if state == nil then
-      _G.AmbitiousAntiVoidEnabled = not _G.AmbitiousAntiVoidEnabled
-    else
-      _G.AmbitiousAntiVoidEnabled = state == true
-    end
-    if not _G.AmbitiousAntiVoidEnabled then
-      -- clear all ghosts when disabled
-      for p,_ in pairs(isOutOf) do
-        clearGhost(p)
-      end
-    end
-    -- visual callback if you have one
-    if _G._AmbitiousAntiVoidSetVisual then
-      pcall(_G._AmbitiousAntiVoidSetVisual, _G.AmbitiousAntiVoidEnabled)
+    if state==nil then _G.AmbitiousAntiVoidEnabled=not _G.AmbitiousAntiVoidEnabled else _G.AmbitiousAntiVoidEnabled=state==true end
+    if not _G.AmbitiousAntiVoidEnabled then for p,_ in pairs(isOutOf) do clearGhost(p) end end
+    if _G._AmbitiousAntiVoidSetVisual then pcall(_G._AmbitiousAntiVoidSetVisual,_G.AmbitiousAntiVoidEnabled) end
+    if _G.DuelsV2_StateRef then
+      _G.DuelsV2_StateRef.antiVoidEnabled=_G.AmbitiousAntiVoidEnabled
+      if _G.DuelsV2_SaveConfig then pcall(_G.DuelsV2_SaveConfig) end
     end
     return _G.AmbitiousAntiVoidEnabled
   end
-
-  -- alias for Duels V2 naming
-  _G.ToggleAntiVoid = _G.AmbitiousToggleAntiVoid
-  _G.DuelsAntiVoidToggle = _G.AmbitiousToggleAntiVoid
-
-  -- Auto-track existing and new players
-  for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= LP then startTracking(p) end
-  end
-  Players.PlayerAdded:Connect(function(p)
-    task.wait(1)
-    startTracking(p)
-  end)
-  Players.PlayerRemoving:Connect(function(p)
-    tracked[p] = nil
-    history[p] = nil
-    clearGhost(p)
-  end)
-
-  -- If LP respawns, keep rescue vars
-  if LP then
-    LP.CharacterAdded:Connect(function()
-      task.wait(0.5)
-      _rescueLastSafePos = nil
-    end)
-  end
-
-  print("[Ambitious AntiVoid -> DuelsV2] Loaded. Toggle with _G.AmbitiousToggleAntiVoid() | Enabled:", _G.AmbitiousAntiVoidEnabled)
+  _G.ToggleAntiVoid=_G.AmbitiousToggleAntiVoid
+  _G.DuelsAntiVoidToggle=_G.AmbitiousToggleAntiVoid
+  for _,p in ipairs(Players:GetPlayers()) do if p~=LP then startTracking(p) end end
+  Players.PlayerAdded:Connect(function(p) task.wait(1) startTracking(p) end)
+  Players.PlayerRemoving:Connect(function(p) tracked[p]=nil history[p]=nil clearGhost(p) end)
+  if LP then LP.CharacterAdded:Connect(function() task.wait(0.5) _rescueLastSafePos=nil end) end
+  print("[AntiVoid Ambitious -> DuelsV2] Loaded | Toggle: _G.AmbitiousToggleAntiVoid() | Enabled:",_G.AmbitiousAntiVoidEnabled)
 end
 -- >>> ANTI VOID END
 
--- ============================================================
--- HOW TO ADD TOGGLE TO YOUR DUELS V2 UI / WEB PANEL
--- ============================================================
--- Example for web panel (add to your State toggles):
--- State.antiVoidEnabled = _G.AmbitiousAntiVoidEnabled
--- 
--- In your UI creation (3-column layout), add:
---[[
-local function createAntiVoidToggle(parent)
-  local btn = Instance.new("TextButton")
-  btn.Name = "AntiVoidToggle"
-  btn.Text = "ANTI VOID: "..(_G.AmbitiousAntiVoidEnabled and "ON" or "OFF")
-  btn.Size = UDim2.new(0, 120, 0, 35)
-  -- style like your other toggles...
-  btn.MouseButton1Click:Connect(function()
-    local newState = _G.AmbitiousToggleAntiVoid()
-    btn.Text = "ANTI VOID: "..(newState and "ON" or "OFF")
-    -- optional: save to config
-    if State then State.antiVoidEnabled = newState end
-    if saveConfig then saveConfig() end
-  end)
-  -- register visual updater for external toggles
-  _G._AmbitiousAntiVoidSetVisual = function(enabled)
-    btn.Text = "ANTI VOID: "..(enabled and "ON" or "OFF")
-    -- update color here
-  end
-  return btn
-end
---]]
-
--- Example for web panel JSON command handling:
---[[
-if d.antiVoid ~= nil then
-  _G.AmbitiousToggleAntiVoid(d.antiVoid == true)
-  if toggleSetters["antiVoid"] then toggleSetters["antiVoid"](d.antiVoid) end
-end
---]]
+-- Duels wrapper for Anti Void API
+_G.DuelsAntiVoid = _G.AmbitiousAntiVoid
+_G.DuelsAntiVoidEnabled = _G.AmbitiousAntiVoidEnabled
 
 
-
--- >>> ANTI VOID BEGIN
--- ============================================================
--- ANTI VOID
--- Sempre attivo dall'esecuzione. Un thread per giocatore tiene 0.07s
--- di storico dei CFrame: se in quella finestra copre 150 stud totali
--- oppure 100 stud di sola Y, e' un teletrasporto. La posizione buona e'
--- quella del campione piu' vecchio dello storico, e il TP viene contato
--- solo se partiva dalla Safe Zone. Da li' in poi TP Bat, aimbot V1/V2,
--- Bat Counter, Look At Enemy, ESP e tracker puntano al punto d'origine.
--- ============================================================
-do
-  -- Limiti di coordinate della Safe Zone
+-- FORCE KILL TOP AIMBOT SELECTOR AT START
+pcall(function()
+    local cg = game:GetService("CoreGui")
+    local old = cg:FindFirstChild("SakuraModeSelectorGUI")
+    if old then old:Destroy() end
+    cg.ChildAdded:Connect(function(c)
+        if c.Name == "SakuraModeSelectorGUI" then
+            task.wait(0.1)
+            pcall(function() c:Destroy() end)
         end
     end)
 end)
@@ -1362,6 +1217,10 @@ local State = {
     speedToggled=false,
     laggerMode=0,
     infJumpEnabled=true, antiDropEnabled=false, e01Enabled=true, antiRagdollEnabled=false,
+    antiVoidEnabled=false,
+    ragdollCountdown=3,
+    ragdollCountdownEnabled=true,
+    ragdollCountdownSeconds=3,
 antiDieEnabled=false,
 antiFlingEnabled=false,
     guiVisible=true, uiLocked=false,
@@ -3833,21 +3692,6 @@ toggleSetters["antiDie"] = setAntiDie
 toggleSetters["antiFling"] = setAntiFling
             -- Anti E01 REMOVED
 toggleSetters["antiRagdoll"] = setAntiRag
-
-            setAntiVoid = makeToggleRow("Anti Void (Ambitious)", State.antiVoidEnabled, function(on) State.antiVoidEnabled=on; _G.AmbitiousAntiVoidEnabled=on; if _G.AmbitiousToggleAntiVoid then _G.AmbitiousToggleAntiVoid(on) end; if requestSave then requestSave() end end)
-            toggleSetters["antiVoid"] = setAntiVoid
-            -- Ragdoll Countdown seconds box
-            local setRagdollSec
-            local function setRagdollSecFunc(val)
-                local n = tonumber(val)
-                if n then
-                    n = math.clamp(n, 0, 10)
-                    State.ragdollCountdown = n
-                    State.ragdollCountdownSeconds = n
-                    if requestSave then requestSave() end
-                end
-            end
-
             toggleSetters["antiRagdoll"] = setAntiRag
             makeGap(8); makeSectionHeader("Auto Movement"); makeGap(2)
             makeKeybindRow("Auto Left", Keys.autoLeft, function(k) Keys.autoLeft=k end, "autoLeft")
@@ -5981,9 +5825,7 @@ end
                 e01Enabled = State.e01Enabled,
                 antiRagdoll = State.antiRagdollEnabled,
             antiVoid = State.antiVoidEnabled,
-            ragdollCountdown = State.ragdollCountdown or State.ragdollCountdownSeconds or 3,
-            ragdollCountdownSeconds = State.ragdollCountdownSeconds or State.ragdollCountdown or 3,
-            ragdollCountdownEnabled = State.ragdollCountdownEnabled,
+            ragdollCountdown = State.ragdollCountdown or 3,
                 antiDie = State.antiDieEnabled,
                 antiFling = State.antiFlingEnabled,
                 medusaCounter = State.medusaCounterEnabled,
@@ -6369,7 +6211,7 @@ end
                     if d.antiDie ~= nil then State.antiDieEnabled=d.antiDie; if toggleSetters["antiDie"] then toggleSetters["antiDie"](d.antiDie) end end
                     if d.antiFling ~= nil then State.antiFlingEnabled=d.antiFling; if toggleSetters["antiFling"] then toggleSetters["antiFling"](d.antiFling) end end
                     if d.antiVoid ~= nil then State.antiVoidEnabled=d.antiVoid; _G.AmbitiousAntiVoidEnabled=d.antiVoid; if _G.AmbitiousToggleAntiVoid then _G.AmbitiousToggleAntiVoid(d.antiVoid) end; if toggleSetters["antiVoid"] then toggleSetters["antiVoid"](d.antiVoid) end end
-                    if d.ragdollCountdown ~= nil then State.ragdollCountdown=tonumber(d.ragdollCountdown) or State.ragdollCountdown; if State.ragdollCountdownBox and not State.ragdollCountdownBox:IsFocused() then State.ragdollCountdownBox.Text=tostring(State.ragdollCountdown) end end
+                    if d.ragdollCountdown ~= nil then State.ragdollCountdown=tonumber(d.ragdollCountdown) or State.ragdollCountdown end
                 end)
                 break
             end
@@ -6409,23 +6251,20 @@ end
 
     startAutoSteal()
     
-    -- PATCH: Anti Void + Ragdoll Countdown Config
+    -- PATCH: Anti Void + Ragdoll Countdown Config (no extra locals)
     State.antiVoidEnabled = State.antiVoidEnabled or _G.AmbitiousAntiVoidEnabled or false
     State.ragdollCountdown = State.ragdollCountdown or 3
-    State.antiRagdollCountdown = State.antiRagdollCountdown or State.ragdollCountdown or 3
-    State.ragdollCountdownBox = nil
     _G.AmbitiousAntiVoidEnabled = State.antiVoidEnabled
     _G.DuelsV2_StateRef = State
     _G.DuelsV2_SaveConfig = saveConfig
     if State.antiVoidEnabled then _G.AmbitiousToggleAntiVoid(true) end
     if toggleSetters["antiVoid"] then pcall(toggleSetters["antiVoid"], State.antiVoidEnabled) end
-    local _origSaveConfig = saveConfig
+    _G._DuelsOrigSaveConfig = saveConfig
     saveConfig = function()
         pcall(function()
             State.ragdollCountdown = tonumber(State.ragdollCountdown) or 3
-            State.antiRagdollCountdown = State.ragdollCountdown
         end)
-        return _origSaveConfig()
+        return _G._DuelsOrigSaveConfig()
     end
     _G.DuelsV2_SaveConfig = saveConfig
 
@@ -6505,3 +6344,23 @@ end)()
 
 
 -- TOP SELECTOR PERMANENTLY REMOVED - END OF FILE CLEANED
+
+
+-- APPENDIX: Add Anti Void toggle to UI after Main loads (outside Main to avoid local limit)
+task.spawn(function()
+    task.wait(2)
+    pcall(function()
+        if toggleSetters and makeToggleRow and State then
+            if not toggleSetters["antiVoid"] then
+                toggleSetters["antiVoid"] = makeToggleRow("Anti Void (Ambitious)", State.antiVoidEnabled, function(on)
+                    State.antiVoidEnabled=on
+                    _G.AmbitiousAntiVoidEnabled=on
+                    if _G.AmbitiousToggleAntiVoid then _G.AmbitiousToggleAntiVoid(on) end
+                    if requestSave then requestSave() end
+                    if saveConfig then saveConfig() end
+                end)
+            end
+        end
+    end)
+end)
+
