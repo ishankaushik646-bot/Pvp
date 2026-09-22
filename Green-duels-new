@@ -1818,9 +1818,21 @@ local function mkCorner(p,r) local c=Instance.new("UICorner",p); c.CornerRadius=
 local function mkStroke(p,col,th) local s=Instance.new("UIStroke",p); s.Color=col; s.Thickness=th or 1; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; return s end
 
 -- ============================================================
--- AUTO TP
+-- AUTO TP - MODIFIED: Auto TP disabled when Aimbot is active
 -- ============================================================
+local function isAimbotActiveForAutoTP()
+    return (_G.DuelsNormalAimbotOn == true)
+        or (_G.DuelsBatAimbotV2On == true)
+        or (_G.DuelsTPBatOn == true)
+        or (tpBatToggled == true)
+        or (State and State.batAimbotToggled == true)
+end
+
 local function doAutoTPDown(force)
+    -- If aimbot is active, block AUTO TP (force = false). Manual TP (force = true) still works
+    if not force and isAimbotActiveForAutoTP() then
+        return
+    end
     local char = LP.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -1840,7 +1852,9 @@ local function startAutoTP()
     State.autoTPConn = task.spawn(function()
         while State.autoTPEnabled do
             task.wait(0.1)
-            pcall(function() doAutoTPDown(false) end)
+            if not isAimbotActiveForAutoTP() then
+                pcall(function() doAutoTPDown(false) end)
+            end
         end
     end)
 end
