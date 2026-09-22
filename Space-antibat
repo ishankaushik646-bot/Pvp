@@ -183,70 +183,25 @@ local function toggleAntiBat()
 end
 local infJumpStatus, infJumpSwitchBall, infJumpRow, infJumpRowStroke
 local infJumpKeyBtn, infJumpKeyBtnStroke
-local jumpHeld = false
-local lastJumpBoostTime = 0
-local JUMP_BOOST_INTERVAL = 0.05
-task.spawn(function()
-    local pg = LocalPlayer:WaitForChild("PlayerGui", 10)
-    if pg then
-        local function hookJumpButton(btn)
-            if btn:IsA("GuiButton") and btn.Name == "JumpButton" and not btn:GetAttribute("InfJumpHooked") then
-                btn:SetAttribute("InfJumpHooked", true)
-                btn.MouseButton1Down:Connect(function()
-                    if State.infJumpActive then jumpHeld = true end
-                end)
-                btn.MouseButton1Up:Connect(function() jumpHeld = false end)
-                btn.MouseLeave:Connect(function() jumpHeld = false end)
-            end
-        end
-        for _, d in ipairs(pg:GetDescendants()) do hookJumpButton(d) end
-        pg.DescendantAdded:Connect(hookJumpButton)
-    end
-end)
-UserInputService.JumpRequest:Connect(function()
-    if State.infJumpActive then
-        jumpHeld = true
-        task.wait(0.05)
-        jumpHeld = false
-    end
-end)
-UserInputService.InputBegan:Connect(function(inp, gpe)
-    if gpe then return end
-    if State.infJumpActive and inp.UserInputType == Enum.UserInputType.Keyboard and inp.KeyCode == Enum.KeyCode.Space then
-        jumpHeld = true
-    end
-end)
-UserInputService.InputEnded:Connect(function(inp, gpe)
-    if inp.UserInputType == Enum.UserInputType.Keyboard and inp.KeyCode == Enum.KeyCode.Space then
-        jumpHeld = false
-    end
-end)
 local function startInfJumpLoop()
     if State.infJumpThread then State.infJumpThread:Disconnect() end
-    State.infJumpThread = RunService.Stepped:Connect(function()
+    State.infJumpThread = RunService.Heartbeat:Connect(function()
         if not State.infJumpActive then return end
-        if not jumpHeld then return end
-        local now = tick()
-        if now - lastJumpBoostTime < JUMP_BOOST_INTERVAL then return end
-        lastJumpBoostTime = now
         local char = LocalPlayer.Character
         if not char then return end
         local hum = char:FindFirstChildOfClass("Humanoid")
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hum or not hrp or hum.Health <= 0 then return end
-        local vel = hrp.AssemblyLinearVelocity
-        if vel.Y < 55 then
-            hrp.AssemblyLinearVelocity = Vector3.new(vel.X, 65, vel.Z)
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root and hum and hum.Jump then
+            root.Velocity = Vector3.new(root.Velocity.X, 55, root.Velocity.Z)
         end
     end)
 end
+
 local function stopInfJumpLoop()
     if State.infJumpThread then
         State.infJumpThread:Disconnect()
         State.infJumpThread = nil
     end
-    jumpHeld = false
-    lastJumpBoostTime = 0
 end
 local function toggleInfJump()
     State.infJumpActive = not State.infJumpActive
