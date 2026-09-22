@@ -6345,7 +6345,12 @@ end
             local stateValue = nil
             if key=="autoSteal" then stateValue=Steal.AutoStealEnabled
             elseif key=="infJump" then stateValue=State.infJumpEnabled
+            elseif key=="antiDrop" then stateValue=State.antiDropEnabled
             elseif key=="antiRagdoll" then stateValue=State.antiRagdollEnabled
+            elseif key=="antiVoid" then stateValue=State.antiVoidEnabled
+            elseif key=="ragdollCountdown" then stateValue=State.ragdollCountdownEnabled
+            elseif key=="antiDie" then stateValue=State.antiDieEnabled
+            elseif key=="antiFling" then stateValue=State.antiFlingEnabled
             elseif key=="medusaCounter" then stateValue=State.medusaCounterEnabled
             elseif key=="batCounter" then stateValue=State.batCounterEnabled
             elseif key=="autoSwing" then stateValue=State.autoSwingEnabled
@@ -6364,6 +6369,20 @@ end
             end
             if stateValue ~= nil then pcall(setter, stateValue) end
         end
+
+        -- FIX: Force apply Anti Void & Ragdoll Countdown (global API + actual start)
+        pcall(function()
+            if State.antiVoidEnabled then
+                _G.AmbitiousAntiVoidEnabled = true
+                _G.DuelsAntiVoidEnabled = true
+                if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.setEnabled then
+                    _G.AmbitiousAntiVoid.setEnabled(true)
+                end
+            end
+            if State.ragdollCountdownEnabled then
+                hookRagdollCountdown(LP.Character)
+            end
+        end)
 
         refreshAllKeybindButtons()
 
@@ -6516,7 +6535,7 @@ end
     end
     loadConfig()
 
-    -- Anti Ragdoll + Anti Die + Anti Fling persistence + save fix
+    -- Anti Ragdoll + Anti Die + Anti Fling + Anti Void + Ragdoll Countdown persistence FIX
     task.spawn(function()
         task.wait(1)
         if State.antiDropEnabled then
@@ -6543,6 +6562,24 @@ end
             task.wait(0.2)
             pcall(function() startAntiFling() end)
             if toggleSetters["antiFling"] then pcall(toggleSetters["antiFling"], true) end
+        end
+        -- FIX: Anti Void persistence
+        if State.antiVoidEnabled then
+            pcall(function()
+                _G.AmbitiousAntiVoidEnabled = true
+                _G.DuelsAntiVoidEnabled = true
+                if _G.AmbitiousAntiVoid and _G.AmbitiousAntiVoid.setEnabled then
+                    _G.AmbitiousAntiVoid.setEnabled(true)
+                end
+                if toggleSetters["antiVoid"] then toggleSetters["antiVoid"](true) end
+            end)
+        end
+        -- FIX: Ragdoll Countdown persistence
+        if State.ragdollCountdownEnabled then
+            pcall(function()
+                hookRagdollCountdown(LP.Character)
+                if toggleSetters["ragdollCountdown"] then toggleSetters["ragdollCountdown"](true) end
+            end)
         end
     end)
 
