@@ -1818,7 +1818,7 @@ local function mkCorner(p,r) local c=Instance.new("UICorner",p); c.CornerRadius=
 local function mkStroke(p,col,th) local s=Instance.new("UIStroke",p); s.Color=col; s.Thickness=th or 1; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; return s end
 
 -- ============================================================
--- AUTO TP - MODIFIED: Auto TP disabled when Aimbot is active (V1 only fix requested)
+-- AUTO TP - MODIFIED: Auto TP disabled when Aimbot is active
 -- ============================================================
 local function isAimbotActiveForAutoTP()
     return (_G.DuelsNormalAimbotOn == true)
@@ -1829,7 +1829,10 @@ local function isAimbotActiveForAutoTP()
 end
 
 local function doAutoTPDown(force)
-    if not force and isAimbotActiveForAutoTP() then return end
+    -- If aimbot is active, block AUTO TP (force = false). Manual TP (force = true) still works
+    if not force and isAimbotActiveForAutoTP() then
+        return
+    end
     local char = LP.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -4879,8 +4882,6 @@ end
         if State.laggerMode==1 or State.laggerMode==2 then return tonumber(_G.DuelsAimbotV2LaggerSpeed) or 40 end
         return tonumber(_G.DuelsAimbotV2Speed) or 58
     end
-    -- TRACKER FOR TP DOWN SPAM - V1 ONLY
-    _G.DuelsEnemyYTracker = _G.DuelsEnemyYTracker or {}
     function _G.DuelsStartNormalAimbot(k)
         if not k then if _G.DuelsStopBatAimbotV2 then _G.DuelsStopBatAimbotV2(false) end _G.DuelsBatAimbotV2On=false end
         _G.DuelsNormalAimbotOn=true State.batAimbotToggled=true
@@ -4894,104 +4895,17 @@ end
             local bat=ch:FindFirstChildOfClass("Tool") or _G.DuelsFindAimbotBat()
             if bat and bat.Parent~=ch then pcall(function() hu:EquipTool(bat) end) end
             local tgt=_G.DuelsGetClosestAimbotTarget() if not tgt then return end
-            
-            local isV2Mode = (_G.DuelsBatAimbotV2On==true)
-            
-            -- IF V2 MODE - USE ORIGINAL LOGIC (NO CHANGES)
-            if isV2Mode then
-                local ck="V2"
-                local cm=(_G._DuelsAimbotChase and _G._DuelsAimbotChase[ck]) or "NORMAL"
-                local my=rt.Position local tp=tgt.Position
-                local dir=tp-my local fd=Vector3.new(dir.X,0,dir.Z) if fd.Magnitude>0 then fd=fd.Unit else fd=Vector3.zero end
-                if cm=="BYPASS" and fd.Magnitude>0 then fd=_G.DuelsPathfind.avoid(my,fd,14) end
-                local cs=_G.DuelsGetBatAimbotV2Speed()
-                local dh=tp.Y local yv=(dh-my.Y)*19.5 yv=math.clamp(yv,-70,110)
-                local dv=Vector3.new(fd.X*cs,yv,fd.Z*cs) rt.AssemblyLinearVelocity=rt.AssemblyLinearVelocity:Lerp(dv,0.8)
-                local toT=tp-my if toT.Magnitude>0.1 then local gcf=CFrame.lookAt(my,tp) local dcf=rt.CFrame:Inverse()*gcf local rx,ry,rz=dcf:ToEulerAnglesXYZ() rx=math.clamp(rx,-2.5,2.5) ry=math.clamp(ry,-2.5,2.5) rz=math.clamp(rz,-2.5,2.5) rt.AssemblyAngularVelocity=rt.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42)) end
-                return
-            end
-            
-            -- V1 ONLY: IMPROVED TP DOWN + INF JUMP LOGIC
-            local plr = Players:GetPlayerFromCharacter(tgt.Parent)
-            local now = tick()
-            local tVel = tgt.Velocity
-            local tPos = tgt.Position
-            
-            if plr then
-                local hist = _G.DuelsEnemyYTracker[plr] or {lastY = tPos.Y, lastTime = now, spamCount = 0, lastSpam = 0}
-                local yDiff = math.abs(tPos.Y - hist.lastY)
-                local timeDiff = now - hist.lastTime
-                if yDiff > 12 and timeDiff < 0.3 then
-                    hist.spamCount = math.min(hist.spamCount + 1, 5)
-                    hist.lastSpam = now
-                elseif timeDiff > 0.5 then
-                    hist.spamCount = math.max(hist.spamCount - 1, 0)
-                end
-                hist.lastY = tPos.Y
-                hist.lastTime = now
-                _G.DuelsEnemyYTracker[plr] = hist
-            end
-            
-            local isSpam = plr and _G.DuelsEnemyYTracker[plr] and (now - _G.DuelsEnemyYTracker[plr].lastSpam) < 1.5 and _G.DuelsEnemyYTracker[plr].spamCount >= 2
-            local isDown = tPos.Y < 5
-            
-            local predictedPos
-            if isSpam then
-                predictedPos = tPos + Vector3.new(tVel.X * 0.22, tVel.Y * 0.28, tVel.Z * 0.22)
-                if tVel.Y > 20 then predictedPos = predictedPos + Vector3.new(0, 2.5, 0)
-                elseif tVel.Y < -20 then predictedPos = predictedPos + Vector3.new(0, -1.5, 0) end
-            elseif isDown then
-                predictedPos = Vector3.new(tPos.X, -7, tPos.Z) + Vector3.new(tVel.X * 0.18, 0, tVel.Z * 0.18)
-            else
-                predictedPos = tPos + tVel * 0.18
-            end
-            
-            local ck="V1"
+            local ck=(_G.DuelsBatAimbotV2On==true) and "V2" or "V1"
             local cm=(_G._DuelsAimbotChase and _G._DuelsAimbotChase[ck]) or "NORMAL"
-            local my=rt.Position
-            local tp=predictedPos
-            local dir=tp-my
-            local fd=Vector3.new(dir.X,0,dir.Z) if fd.Magnitude>0 then fd=fd.Unit else fd=Vector3.zero end
-            if cm=="BYPASS" and fd.Magnitude>0 and not isDown and not isSpam then fd=_G.DuelsPathfind.avoid(my,fd,14) end
-            
-            local cs=_G.DuelsGetNormalAimbotSpeed()
-            if isSpam then cs = cs * 1.35 end
-            if isDown then cs = cs * 1.25 end
-            
-            local targetY = tp.Y + 1.5
-            if isSpam or isDown then targetY = tp.Y + 1.2 end
-            local yDiff = targetY - my.Y
-            local yv
-            if isSpam then yv = yDiff * 32
-            elseif isDown then yv = yDiff * 28
-            else yv = yDiff * 19.5 end
-            if not isSpam and not isDown and hu.FloorMaterial~=Enum.Material.Air then yv=math.max(yv,13) end
-            yv=math.clamp(yv,-110,110)
-            
-            local lerpAlpha = (isSpam or isDown) and 1 or 0.85
-            local dv=Vector3.new(fd.X*cs,yv,fd.Z*cs)
-            rt.AssemblyLinearVelocity=rt.AssemblyLinearVelocity:Lerp(dv, lerpAlpha)
-            
-            local toT=tp-my if toT.Magnitude>0.1 then local gcf=CFrame.lookAt(my,tp) local dcf=rt.CFrame:Inverse()*gcf local rx,ry,rz=dcf:ToEulerAnglesXYZ() rx=math.clamp(rx,-2.5,2.5) ry=math.clamp(ry,-2.5,2.5) rz=math.clamp(rz,-2.5,2.5) rt.AssemblyAngularVelocity=rt.CFrame:VectorToWorldSpace(Vector3.new(rx*62,ry*62,rz*62)) end
-            
-            if bat then
-                local swingDelay = (isSpam or isDown) and 0.06 or 0.18
-                if autoSwingEnabled and not _G.DuelsNormalAimbot.swingCooldown then
-                    _G.DuelsNormalAimbot.swingCooldown=true
-                    pcall(function() 
-                        bat:Activate() 
-                        local rem = bat:FindFirstChildOfClass("RemoteEvent")
-                        if rem then rem:FireServer() end
-                    end)
-                    task.delay(swingDelay,function() _G.DuelsNormalAimbot.swingCooldown=false end)
-                elseif (isSpam or isDown) and not autoSwingEnabled then
-                    if not _G.DuelsNormalAimbot.swingCooldown then
-                        _G.DuelsNormalAimbot.swingCooldown=true
-                        pcall(function() bat:Activate() end)
-                        task.delay(0.07,function() _G.DuelsNormalAimbot.swingCooldown=false end)
-                    end
-                end
-            end
+            local my=rt.Position local tp=tgt.Position
+            local dir=tp-my local fd=Vector3.new(dir.X,0,dir.Z) if fd.Magnitude>0 then fd=fd.Unit else fd=Vector3.zero end
+            if cm=="BYPASS" and fd.Magnitude>0 then fd=_G.DuelsPathfind.avoid(my,fd,14) end
+            local cs=(_G.DuelsBatAimbotV2On==true) and _G.DuelsGetBatAimbotV2Speed() or _G.DuelsGetNormalAimbotSpeed()
+            local isV2=(_G.DuelsBatAimbotV2On==true)
+            local dh=tp.Y+(isV2 and 0 or 3.7) local yv=(dh-my.Y)*19.5 if not isV2 and hu.FloorMaterial~=Enum.Material.Air then yv=math.max(yv,13) end yv=math.clamp(yv,-70,110)
+            local dv=Vector3.new(fd.X*cs,yv,fd.Z*cs) rt.AssemblyLinearVelocity=rt.AssemblyLinearVelocity:Lerp(dv,0.8)
+            local toT=tp-my if toT.Magnitude>0.1 then local gcf=CFrame.lookAt(my,tp) local dcf=rt.CFrame:Inverse()*gcf local rx,ry,rz=dcf:ToEulerAnglesXYZ() rx=math.clamp(rx,-2.5,2.5) ry=math.clamp(ry,-2.5,2.5) rz=math.clamp(rz,-2.5,2.5) rt.AssemblyAngularVelocity=rt.CFrame:VectorToWorldSpace(Vector3.new(rx*42,ry*42,rz*42)) end
+            if autoSwingEnabled and bat and _G.DuelsBatAimbotV2On~=true and not _G.DuelsNormalAimbot.swingCooldown then _G.DuelsNormalAimbot.swingCooldown=true pcall(function() bat:Activate() end) task.delay(0.18,function() _G.DuelsNormalAimbot.swingCooldown=false end) end
         end)
     end
     function _G.DuelsStopNormalAimbot()
