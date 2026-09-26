@@ -4687,8 +4687,35 @@ end
             if State.laggerMode==1 or State.laggerMode==2 then
                 speed = tonumber(_G.DuelsAimbotV1LaggerSpeed) or tonumber(LAGGER_AIMBOT_SPEED) or 40
             end
+            -- AGGRESSIVE BUT SAFE FIX for V1
+            -- Keep full speed X/Z, only rescue when actually near void
+            local isNearVoid = root.Position.Y < 3
+            if isNearVoid then
+                if root.Position.Y < 0 then
+                    yVel = 80
+                    flatDir = Vector3.new(flatDir.X*0.2, 0, flatDir.Z*0.2) -- slow horizontal when in void
+                else
+                    yVel = math.max(yVel, 35) -- push up if low
+                end
+            end
+            -- Normal Y clamp is Yout original -70 to 110, but only restrict when not near void
+            if not isNearVoid then
+                yVel = math.clamp(yVel, -70, 110) -- original Yout aggressive
+            else
+                yVel = math.clamp(yVel, -20, 80) -- safe when low
+            end
             local desiredVel=Vector3.new(flatDir.X * speed, yVel, flatDir.Z * speed)
-            root.AssemblyLinearVelocity=root.AssemblyLinearVelocity:Lerp(desiredVel,0.8)
+            -- Aggressive: 0.8 for X/Z (hit rate), 0.6 for Y (no slam)
+            local curVel = root.AssemblyLinearVelocity
+            local flatDesired = Vector3.new(desiredVel.X, 0, desiredVel.Z)
+            local flatCurrent = Vector3.new(curVel.X, 0, curVel.Z)
+            local newFlat = flatCurrent:Lerp(flatDesired, 0.8)
+            local newY = curVel.Y + (desiredVel.Y - curVel.Y) * 0.6
+            root.AssemblyLinearVelocity = Vector3.new(newFlat.X, newY, newFlat.Z)
+            -- Anti freefall stuck
+            if hum:GetState() == Enum.HumanoidStateType.Freefall and root.Position.Y < 8 then
+                pcall(function() hum:ChangeState(Enum.HumanoidStateType.Running) end)
+            end
             local speed3=targetVel.Magnitude
             local predictTime=math.clamp(speed3/150,0.05,0.2)
             local predictedPos=targetPos + targetVel * predictTime
@@ -4726,8 +4753,15 @@ end
         _G.DuelsNormalAimbotOn=false if not _G.DuelsBatAimbotV2On then State.batAimbotToggled=false end
         if _G.DuelsNormalAimbot.conn then _G.DuelsNormalAimbot.conn:Disconnect() _G.DuelsNormalAimbot.conn=nil end
         _G.DuelsNormalAimbot.target=nil _G.DuelsNormalAimbot.swingCooldown=false
-        local c=LP.Character local r=c and c:FindFirstChild("HumanoidRootPart") if r then r.AssemblyLinearVelocity=Vector3.zero r.AssemblyAngularVelocity=Vector3.zero end
-        local h=c and c:FindFirstChildOfClass("Humanoid") if h then h.AutoRotate=true end
+        local c=LP.Character local r=c and c:FindFirstChild("HumanoidRootPart") if r then 
+            r.AssemblyLinearVelocity=Vector3.new(r.AssemblyLinearVelocity.X*0.3, -0.1, r.AssemblyLinearVelocity.Z*0.3)
+            r.AssemblyAngularVelocity=Vector3.zero 
+        end
+        local h=c and c:FindFirstChildOfClass("Humanoid") if h then 
+            h.AutoRotate=true 
+            h.PlatformStand=false
+            pcall(function() h:ChangeState(Enum.HumanoidStateType.Running) end)
+        end
     end
     _G.DuelsBatAimbotV2State=_G.DuelsBatAimbotV2State or {conn=nil,lastChase=0}
     _G.DuelsBatAimbotV2TPDistance=4
