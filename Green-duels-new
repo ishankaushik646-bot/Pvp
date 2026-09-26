@@ -4637,8 +4637,20 @@ end
             local char=LP.Character if not char then return end
             local root=char:FindFirstChild("HumanoidRootPart") if not root then return end
             local hum=char:FindFirstChildOfClass("Humanoid") if not hum then return end
-            -- Yout bat equip
-            if not char:FindFirstChildOfClass("Tool") then
+            -- Yout bat equip - FIXED to allow Medusa
+            local curTool = char:FindFirstChildOfClass("Tool")
+            if curTool then
+                local curName = curTool.Name:lower()
+                if curName:find("medusa") or curName:find("head") or curName:find("stone") then
+                    -- Medusa equipped, don't force bat, let user use medusa
+                else
+                    -- not medusa, ensure bat if no bat equipped
+                    if not (curName:find("bat") or curName:find("slap")) then
+                        local bat = _G.DuelsFindAimbotBat and _G.DuelsFindAimbotBat() or nil
+                        if bat then pcall(function() hum:EquipTool(bat) end) end
+                    end
+                end
+            else
                 local bat = _G.DuelsFindAimbotBat and _G.DuelsFindAimbotBat() or nil
                 if bat then pcall(function() hum:EquipTool(bat) end) end
             end
@@ -4693,8 +4705,18 @@ end
             if distToTarget<=8 then
                 pcall(function()
                     local curTool=char:FindFirstChildOfClass("Tool")
+                    if curTool then
+                        local cn=curTool.Name:lower()
+                        if cn:find("medusa") or cn:find("head") or cn:find("stone") then
+                            return -- don't swing bat if medusa equipped
+                        end
+                    end
                     local bat = curTool or (_G.DuelsFindAimbotBat and _G.DuelsFindAimbotBat())
-                    if bat then bat:Activate() end
+                    if bat then
+                        local bn=bat.Name:lower()
+                        if bn:find("medusa") or bn:find("head") or bn:find("stone") then return end
+                        bat:Activate()
+                    end
                 end)
             end
         end)
