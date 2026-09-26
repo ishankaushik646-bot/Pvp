@@ -966,299 +966,230 @@ task.spawn(function()
 end)
 
 
--- ANTI TP BAT - V1/V2/V3/V4 + SPAM + FLOAT (from Ambitious)
--- Only this module added - no other UI changed
+
+-- ============================================================
+-- ANTI TP BAT - SINGLE VERSION (BOOTSWARE LOGIC)
+-- Replaces all V1/V2/V3/V4/SPAM/FLOAT versions
+-- Logic: Fake Root at Y=1e8 + PhysicsRepRootPart desync
 -- ============================================================
 do
-  local ATP_active = false
-  local voidPart = nil
-  local jitterThread = nil
-  local jitterRunning = false
-  local spamThread = nil
-  local lockConn = nil
-  local frozenCFrame = nil
-  local savedWalkSpeed = nil
-  local savedJumpPower = nil
-  local savedAutoRotate = nil
+    local FAKE_ROOT_Y = 1e8
+    local FAKE_ROOT_VEL = Vector3.zero
 
-  _G.DuelsAntiTPBatEnabled = _G.DuelsAntiTPBatEnabled == true
-  _G.DuelsAntiTPBatSpam = _G.DuelsAntiTPBatSpam == true
-  _G.DuelsAntiTPBatVersion = math.clamp(tonumber(_G.DuelsAntiTPBatVersion) or 1, 1, 4)
+    local _sethidden = sethiddenproperty or (syn and syn.sethiddenproperty) or function() end
+    local _gethidden = gethiddenproperty or (syn and syn.gethiddenproperty) or function() return nil end
 
-  local function getHRP()
-    local c = LP.Character
-    if not c then return nil, nil end
-    return c:FindFirstChild("HumanoidRootPart"), c:FindFirstChildOfClass("Humanoid")
-  end
-
-  local function repTo(target)
-    local hrp = getHRP()
-    if hrp and sethiddenproperty and target then
-      pcall(function() sethiddenproperty(hrp, "PhysicsRepRootPart", target) end)
+    local function isBasePart(inst)
+        if not inst then return false end
+        local ok,r = pcall(function() return inst:IsA("BasePart") end)
+        return ok and r
     end
-  end
 
-  local function destroyVoidPart()
-    if voidPart then
-      local hrp = getHRP()
-      if hrp then repTo(hrp) end
-      pcall(function() voidPart:Destroy() end)
-      voidPart = nil
+    local function getRoot(char)
+        char = char or (LP and LP.Character) or (Players.LocalPlayer and Players.LocalPlayer.Character)
+        if not char then return nil end
+        local ok, root = pcall(function() return char:FindFirstChild("HumanoidRootPart") end)
+        if ok and isBasePart(root) then return root end
+        return nil
     end
-  end
 
-  local function makePart(ver, pos)
-    local p = Instance.new("Part")
-    p.Name = "DesyncTrapPart"
-    p.Size = Vector3.new(1,1,1)
-    p.CanCollide = false
-    p.Anchored = true
-    p.Position = pos
-    p.Transparency = 1
-    p.Parent = workspace
-    return p
-  end
+    local runtime = {
+        alive = true,
+        enabled = false,
+        character = nil,
+        rootPart = nil,
+        fakeRoot = nil,
+        stepConn = nil,
+    }
+    _G.__BOOTSWARE_RUNTIME = runtime
+    _G.DuelsAntiTPBatEnabled = _G.DuelsAntiTPBatEnabled == true
 
-  local function createVoidPart()
-    if voidPart then pcall(function() voidPart:Destroy() end) voidPart=nil end
-    local ver = _G.DuelsAntiTPBatVersion or 1
-    local pos
-    if ver == 4 then pos = Vector3.new(400,0,400)
-    elseif ver == 3 then
-      local rx,rz = math.random(-300,300), math.random(-300,300)
-      if rx==0 and rz==0 then rx,rz=1,1 end
-      pos = Vector3.new(rx,0,rz)
-    elseif ver == 2 then pos = Vector3.new(0,-120,0)
-    else pos = Vector3.new(99999999999,99999999999,99999999999) end
-    voidPart = makePart(ver, pos)
-  end
-
-  local function stopVoidJitter()
-    jitterRunning=false
-    if jitterThread then pcall(task.cancel, jitterThread) jitterThread=nil end
-  end
-  local function startVoidJitter()
-    stopVoidJitter()
-    jitterRunning=true
-    jitterThread=task.spawn(function()
-      while jitterRunning and ATP_active and _G.DuelsAntiTPBatVersion==3 do
-        local rx,rz
-        repeat rx=math.random(-300,300) rz=math.random(-300,300) until not (rx==0 and rz==0)
-        if voidPart then pcall(function() voidPart:Destroy() end) voidPart=nil end
-        voidPart=makePart(3, Vector3.new(rx,0,rz))
-        repTo(voidPart)
-        task.wait(0)
-      end
-    end)
-  end
-
-  local FLOAT = {
-    RISE=17, RATE=55, CYCLE=2.5, PAUSE=0.5,
-    conn=nil, thread=nil, running=false, locked=false, targetY=nil
-  }
-  function FLOAT.startLoop()
-    if FLOAT.conn then return end
-    FLOAT.locked=false; FLOAT.targetY=nil
-    local _, hum0 = getHRP()
-    if hum0 then pcall(function() hum0:ChangeState(Enum.HumanoidStateType.Freefall) end) end
-    FLOAT.conn = RunService.Heartbeat:Connect(function(dt)
-      local root = getHRP()
-      if not root then return end
-      local pos=root.Position; local vel=root.Velocity
-      local rot=root.CFrame - root.CFrame.Position
-      if not FLOAT.targetY then FLOAT.targetY=pos.Y+FLOAT.RISE end
-      if not FLOAT.locked then
-        local nextY=math.min(pos.Y+FLOAT.RATE*dt, FLOAT.targetY)
-        root.CFrame=CFrame.new(pos.X,nextY,pos.Z)*rot
-        root.Velocity=Vector3.new(vel.X,0,vel.Z)
-        if nextY>=FLOAT.targetY then FLOAT.locked=true end
-        return
-      end
-      root.CFrame=CFrame.new(pos.X,FLOAT.targetY,pos.Z)*rot
-      root.Velocity=Vector3.new(vel.X,0,vel.Z)
-    end)
-  end
-  function FLOAT.stopLoop(tpDown)
-    if FLOAT.conn then pcall(function() FLOAT.conn:Disconnect() end) FLOAT.conn=nil end
-    if tpDown and runTPDown then pcall(runTPDown) end
-  end
-  function FLOAT.waitGrounded(timeout)
-    local deadline=os.clock()+(timeout or 3)
-    while os.clock()<deadline do
-      if not FLOAT.running then return end
-      local hrp,hum=getHRP()
-      if not hrp or not hum then return end
-      if hum.Health<=0 then return end
-      if hum.FloorMaterial~=Enum.Material.Air then task.wait(FLOAT.PAUSE) return end
-      RunService.Heartbeat:Wait()
+    local function destroyFake()
+        if runtime.fakeRoot then
+            pcall(function() runtime.fakeRoot:Destroy() end)
+            runtime.fakeRoot = nil
+        end
     end
-  end
-  function FLOAT.enable()
-    if FLOAT.running then return end
-    FLOAT.running=true; FLOAT.startLoop()
-    FLOAT.thread=task.spawn(function()
-      while FLOAT.running do
-        local t0=os.clock()
-        while FLOAT.running and (os.clock()-t0)<FLOAT.CYCLE do task.wait(0.1) end
-        if not FLOAT.running then break end
-        FLOAT.stopLoop(true)
-        FLOAT.waitGrounded(3)
-        if not FLOAT.running then break end
-        FLOAT.startLoop()
-      end
-    end)
-  end
-  function FLOAT.disable()
-    if not FLOAT.running then return end
-    FLOAT.running=false
-    if FLOAT.thread then pcall(task.cancel, FLOAT.thread) FLOAT.thread=nil end
-    FLOAT.stopLoop(true)
-  end
-  _G.DuelsFloatOn=false
-  function _G.DuelsFloatStart() if FLOAT.running then return end FLOAT.enable() _G.DuelsFloatOn=true end
-  function _G.DuelsFloatStop() if not FLOAT.running then return end FLOAT.disable() _G.DuelsFloatOn=false end
-  function _G.DuelsFloatToggle() if FLOAT.running then _G.DuelsFloatStop() else _G.DuelsFloatStart() end end
 
-  local function lockMovement()
-    local hrp,hum=getHRP()
-    if not hrp then return end
-    frozenCFrame=hrp.CFrame
-    if hum then
-      savedWalkSpeed=hum.WalkSpeed; savedJumpPower=hum.JumpPower; savedAutoRotate=hum.AutoRotate
-      pcall(function() hum.WalkSpeed=0; hum.JumpPower=0; hum.AutoRotate=false end)
+    local function restoreRep()
+        local root = runtime.rootPart
+        if isBasePart(root) then
+            pcall(function() _sethidden(root, "PhysicsRepRootPart", root) end)
+        end
     end
-    if lockConn then pcall(function() lockConn:Disconnect() end) end
-    lockConn=RunService.RenderStepped:Connect(function()
-      local r=getHRP()
-      if frozenCFrame and r and r.Parent then r.CFrame=frozenCFrame end
-    end)
-  end
-  local function unlockMovement()
-    local _,hum=getHRP()
-    if hum then pcall(function() hum.WalkSpeed=savedWalkSpeed or 16; hum.JumpPower=savedJumpPower or 50; hum.AutoRotate = savedAutoRotate==nil and true or savedAutoRotate end) end
-    savedWalkSpeed,savedJumpPower,savedAutoRotate=nil,nil,nil
-    if lockConn then pcall(function() lockConn:Disconnect() end) lockConn=nil end
-    frozenCFrame=nil
-  end
-  local function enableCore()
-    if ATP_active then return end
-    ATP_active=true
-    createVoidPart(); repTo(voidPart); lockMovement()
-    if _G.DuelsAntiTPBatVersion==3 then startVoidJitter() end
-  end
-  local function disableCore()
-    if not ATP_active then return end
-    ATP_active=false; stopVoidJitter(); unlockMovement(); destroyVoidPart()
-  end
-  local function applyDesync()
-    if not ATP_active then return end
-    if _G.DuelsAntiTPBatVersion==3 then return end
-    if not voidPart or not voidPart.Parent then createVoidPart() end
-    repTo(voidPart)
-  end
-  RunService.Heartbeat:Connect(applyDesync)
-  RunService.Stepped:Connect(applyDesync)
-  local function stopSpamLoop() if spamThread then pcall(task.cancel, spamThread) spamThread=nil end end
-  local function startSpamLoop()
-    stopSpamLoop()
-    spamThread=task.spawn(function()
-      enableCore()
-      while _G.DuelsAntiTPBatSpam and _G.DuelsAntiTPBatEnabled do
-        task.wait(0.5)
-        if not (_G.DuelsAntiTPBatSpam and _G.DuelsAntiTPBatEnabled) then break end
-        disableCore(); task.wait(0.5)
-        if not (_G.DuelsAntiTPBatSpam and _G.DuelsAntiTPBatEnabled) then break end
-        enableCore()
-      end
-      if _G.DuelsAntiTPBatEnabled then enableCore() else disableCore() end
-    end)
-  end
-  local function refreshUI()
-    pcall(function()
-      if _G._DuelsAntiTPBatSetRowVisual then _G._DuelsAntiTPBatSetRowVisual(_G.DuelsAntiTPBatEnabled==true) end
-      if _G._DuelsAntiTPBatSetSpamVisual then _G._DuelsAntiTPBatSetSpamVisual(_G.DuelsAntiTPBatSpam==true) end
-      if _G._DuelsAntiTPBatSetVersionVisual then _G._DuelsAntiTPBatSetVersionVisual(_G.DuelsAntiTPBatVersion or 1) end
-      if stackBtnRefs.antiTPBat then stackBtnRefs.antiTPBat.setOn(_G.DuelsAntiTPBatEnabled==true) end
-    end)
-  end
-  _G._DuelsAntiTPBatRefreshUI=refreshUI
-  local function setEnabled(on, skipSave)
-    on=on and true or false; _G.DuelsAntiTPBatEnabled=on
-    if on then if _G.DuelsAntiTPBatSpam then startSpamLoop() else stopSpamLoop() enableCore() end
-    else stopSpamLoop() disableCore() end
-    refreshUI(); if not skipSave and requestSave then requestSave() end
-  end
-  local function setSpam(on, skipSave)
-    on=on and true or false; _G.DuelsAntiTPBatSpam=on
-    if _G.DuelsAntiTPBatEnabled then if on then startSpamLoop() else stopSpamLoop() enableCore() end else stopSpamLoop() end
-    refreshUI(); if not skipSave and requestSave then requestSave() end
-  end
-  local function setVersion(v, skipSave)
-    v=math.clamp(tonumber(v) or 1,1,4)
-    local changed=(v~=_G.DuelsAntiTPBatVersion)
-    if changed then stopSpamLoop() disableCore() _G.DuelsAntiTPBatVersion=v if _G.DuelsAntiTPBatEnabled then if _G.DuelsAntiTPBatSpam then startSpamLoop() else enableCore() end end end
-    refreshUI(); if changed and not skipSave and requestSave then requestSave() end
-  end
-  local function hardStop()
-    if not (ATP_active or _G.DuelsAntiTPBatEnabled) then return end
-    _G.DuelsAntiTPBatEnabled=false; stopSpamLoop(); disableCore(); refreshUI(); if requestSave then requestSave() end
-  end
-  local function onDeadTrigger() if ATP_active or _G.DuelsAntiTPBatEnabled then hardStop() end end
-  -- enemy watcher
-  local enemyListeners={}
-  local function clearEnemyListeners(plr) local t=enemyListeners[plr] if t then for _,c in ipairs(t) do pcall(function() c:Disconnect() end) end enemyListeners[plr]=nil end end
-  local function watchEnemyCharacter(plr, character)
-    clearEnemyListeners(plr); if not character then return end
-    local conns={}; local hum=character:FindFirstChildOfClass("Humanoid")
-    if hum then table.insert(conns, hum.Died:Connect(onDeadTrigger)) table.insert(conns, hum.HealthChanged:Connect(function(hp) if hp<=0 then onDeadTrigger() end end)) end
-    table.insert(conns, character.AncestryChanged:Connect(function(_,parent) if not parent then onDeadTrigger() end end))
-    enemyListeners[plr]=conns
-  end
-  local function setupEnemyPlayer(plr) if plr==LP then return end if plr.Character then watchEnemyCharacter(plr, plr.Character) end plr.CharacterAdded:Connect(function(c) watchEnemyCharacter(plr,c) end) end
-  for _,p in ipairs(Players:GetPlayers()) do pcall(setupEnemyPlayer,p) end
-  Players.PlayerAdded:Connect(function(p) pcall(setupEnemyPlayer,p) end)
-  Players.PlayerRemoving:Connect(function(p) pcall(clearEnemyListeners,p) end)
-  -- self watcher
-  local selfConns={}; local wasRagdolled=false
-  local function clearSelfConns() for _,c in ipairs(selfConns) do pcall(function() c:Disconnect() end) end selfConns={} end
-  local function setupSelfWatchers(character)
-    clearSelfConns(); wasRagdolled=false; if not character then return end
-    local hum=character:FindFirstChildOfClass("Humanoid")
-    if hum then
-      table.insert(selfConns, hum.Died:Connect(onDeadTrigger))
-      table.insert(selfConns, hum.HealthChanged:Connect(function(hp) if hp<=0 then onDeadTrigger() end end))
-      table.insert(selfConns, hum.StateChanged:Connect(function(_,newState)
-        local isRag=(newState==Enum.HumanoidStateType.Physics)
-        pcall(function() if newState==Enum.HumanoidStateType.Ragdoll then isRag=true end end)
-        if isRag and not wasRagdolled then wasRagdolled=true onDeadTrigger() elseif not isRag then wasRagdolled=false end
-      end))
+
+    local function createFake(rootPart)
+        destroyFake()
+        if not isBasePart(rootPart) then return nil end
+        local fake = Instance.new("Part")
+        fake.Name = "BootswareFakeRepRoot"
+        fake.Size = Vector3.new(2,2,1)
+        fake.Transparency = 1
+        fake.Anchored = true
+        fake.CanCollide = false
+        fake.CanQuery = false
+        fake.CanTouch = false
+        fake.Massless = true
+        fake.CFrame = CFrame.new(rootPart.Position.X, FAKE_ROOT_Y, rootPart.Position.Z)
+        fake.Parent = workspace
+        runtime.fakeRoot = fake
+        return fake
     end
-    table.insert(selfConns, character.AncestryChanged:Connect(function(_,parent) if not parent then onDeadTrigger() end end))
-  end
-  if LP.Character then setupSelfWatchers(LP.Character) end
-  LP.CharacterAdded:Connect(function(c)
-    setupSelfWatchers(c)
-    _G.DuelsAntiTPBatEnabled=false; stopSpamLoop(); disableCore(); refreshUI()
-  end)
-  _G.DuelsAntiTPBat={
-    setEnabled=function(on,skipSave) setEnabled(on,skipSave) end,
-    isEnabled=function() return _G.DuelsAntiTPBatEnabled==true end,
-    toggle=function() setEnabled(not (_G.DuelsAntiTPBatEnabled==true)) end,
-    setSpam=function(on,skipSave) setSpam(on,skipSave) end,
-    getSpam=function() return _G.DuelsAntiTPBatSpam==true end,
-    setVersion=function(v,skipSave) setVersion(v,skipSave) end,
-    getVersion=function() return _G.DuelsAntiTPBatVersion or 1 end,
-    hardStop=hardStop,
-  }
-  _G.DuelsToggleAntiTPBat=function() setEnabled(not (_G.DuelsAntiTPBatEnabled==true)) end
-  task.spawn(function()
-    while true do task.wait(0.5)
-      if _G.DuelsAntiTPBatEnabled then if not _G.DuelsAntiTPBatSpam and not ATP_active then pcall(enableCore) end
-      elseif ATP_active then pcall(disableCore) end
+
+    local function assignFake(rootPart, fake)
+        if not isBasePart(rootPart) or not isBasePart(fake) then return end
+        pcall(function() _sethidden(rootPart, "PhysicsRepRootPart", fake) end)
     end
-  end)
+
+    local function stepDesync()
+        if not runtime.enabled or not runtime.alive then return end
+        local root = runtime.rootPart
+        if not isBasePart(root) or not root.Parent then
+            root = getRoot(runtime.character)
+            runtime.rootPart = root
+            if not root then return end
+        end
+        if not isBasePart(runtime.fakeRoot) or not runtime.fakeRoot.Parent then
+            local fake = createFake(root)
+            if fake then assignFake(root, fake) end
+            return
+        end
+        local fake = runtime.fakeRoot
+        local ok, rootPos, fakePos = pcall(function() return root.Position, fake.Position end)
+        if ok and (math.abs(rootPos.X - fakePos.X) > 0.01 or math.abs(rootPos.Z - fakePos.Z) > 0.01 or math.abs(fakePos.Y - FAKE_ROOT_Y) > 0.01) then
+            pcall(function() fake.CFrame = CFrame.new(rootPos.X, FAKE_ROOT_Y, rootPos.Z) end)
+        end
+        pcall(function()
+            fake.Anchored = true
+            fake.AssemblyLinearVelocity = FAKE_ROOT_VEL
+        end)
+        local got, current = pcall(function() return _gethidden(root, "PhysicsRepRootPart") end)
+        -- _gethidden returns value directly, not bool in some envs, handle both
+        if got then
+            -- if current is fake, ok, else reassign
+            local cur = current
+            -- if gethidden returns bool,value in some wrappers, we already pcalled
+            -- just check if not equal
+            if cur ~= fake then
+                -- second try for environments where gethidden returns (bool,value) - we need raw check
+                local ok2, val = pcall(function() return _gethidden(root, "PhysicsRepRootPart") end)
+                if ok2 then
+                    if val ~= fake then
+                        pcall(function() _sethidden(root, "PhysicsRepRootPart", fake) end)
+                    end
+                else
+                    pcall(function() _sethidden(root, "PhysicsRepRootPart", fake) end)
+                end
+            end
+        end
+    end
+
+    local function stopStep()
+        if runtime.stepConn then
+            pcall(function() runtime.stepConn:Disconnect() end)
+            runtime.stepConn = nil
+        end
+    end
+
+    local function startStep()
+        stopStep()
+        runtime.stepConn = RunService.Stepped:Connect(stepDesync)
+    end
+
+    local function setEnabled(on)
+        on = (on == true)
+        _G.DuelsAntiTPBatEnabled = on
+        runtime.enabled = on
+        if on then
+            local root = getRoot()
+            runtime.character = LP and LP.Character or nil
+            runtime.rootPart = root
+            if not root then
+                -- wait for character
+                task.spawn(function()
+                    task.wait(0.5)
+                    local r2 = getRoot()
+                    if r2 then
+                        runtime.rootPart = r2
+                        runtime.character = LP.Character
+                        local fake = createFake(r2)
+                        assignFake(r2, fake)
+                        startStep()
+                    end
+                end)
+            else
+                local fake = createFake(root)
+                assignFake(root, fake)
+                startStep()
+            end
+            print("[Duels] Anti TP Bat SINGLE (Bootsware) ENABLED")
+        else
+            stopStep()
+            restoreRep()
+            destroyFake()
+            print("[Duels] Anti TP Bat SINGLE DISABLED")
+        end
+        if _G._DuelsAntiTPBatSetRowVisual then pcall(_G._DuelsAntiTPBatSetRowVisual, on) end
+        if stackBtnRefs and stackBtnRefs.antiTPBat then pcall(function() stackBtnRefs.antiTPBat.setOn(on) end) end
+        return on
+    end
+
+    local function bindCharacter(char)
+        runtime.character = char
+        runtime.rootPart = getRoot(char)
+        if runtime.enabled then
+            destroyFake()
+            local root = runtime.rootPart
+            if not root and char then
+                local ok, waited = pcall(function() return char:WaitForChild("HumanoidRootPart", 8) end)
+                if ok and isBasePart(waited) then
+                    root = waited
+                    runtime.rootPart = root
+                end
+            end
+            if root then
+                local fake = createFake(root)
+                assignFake(root, fake)
+                startStep()
+            end
+        end
+    end
+
+    LP.CharacterAdded:Connect(function(char)
+        task.defer(bindCharacter, char)
+    end)
+    if LP.Character then
+        bindCharacter(LP.Character)
+    end
+
+    -- Compatibility API (so old UI calls don't break)
+    -- Version and Spam are now no-ops, kept for save/load compatibility
+    _G.DuelsAntiTPBatVersion = 1
+    _G.DuelsAntiTPBatSpam = false
+
+    _G.DuelsAntiTPBat = {
+        isEnabled = function() return _G.DuelsAntiTPBatEnabled == true end,
+        toggle = function() setEnabled(not (_G.DuelsAntiTPBatEnabled == true)) end,
+        setEnabled = setEnabled,
+        getEnabled = function() return _G.DuelsAntiTPBatEnabled == true end,
+        setSpam = function() return false end,
+        getSpam = function() return false end,
+        setVersion = function() return 1 end,
+        getVersion = function() return 1 end,
+        _runtime = runtime,
+    }
+    _G.DuelsToggleAntiTPBat = function() setEnabled(not (_G.DuelsAntiTPBatEnabled == true)) end
+
+    _G._DuelsAntiTPBatSetEnabled = setEnabled
+    -- dummy visuals for old version/spam selectors (so they don't error)
+    _G._DuelsAntiTPBatSetVersionVisual = _G._DuelsAntiTPBatSetVersionVisual or function() end
+    _G._DuelsAntiTPBatSetSpamVisual = _G._DuelsAntiTPBatSetSpamVisual or function() end
+    _G._DuelsAntiTPBatSetRowVisual = _G._DuelsAntiTPBatSetRowVisual or function() end
+
+    print("[Duels] Anti TP Bat SINGLE (Bootsware) loaded - all versions removed")
 end
--- END ANTI TP BAT CORE
+-- END SINGLE ANTI TP BAT (BOOTSWARE)
+
 
 
 -- ============================================================
@@ -3603,225 +3534,76 @@ local function Main()
 
 
 
-            -- ANTI TP BAT - AMBITIOUS STYLE MINIMIZABLE SELECTOR
-            -- Row only label + arrow, expands to Spam toggle + V1-V4 slider
-            -- No other UI changed
-            -- ============================================================
-            do
-                local atpExpanded = false
-                local ATP_HOLDER_H = 84
+            
+-- ANTI TP BAT - SINGLE (BOOTSWARE) - CLEAN UI (NO VERSIONS)
+do
+    local atpRow = Instance.new("Frame")
+    atpRow.Name = "Anti TP Bat Single"
+    atpRow.Size = UDim2.new(1, 0, 0, 42)
+    atpRow.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+    atpRow.BackgroundTransparency = 0.35
+    atpRow.BorderSizePixel = 0
+    atpRow.Parent = Content
+    Instance.new("UICorner", atpRow).CornerRadius = UDim.new(0, 12)
+    local atpStroke = Instance.new("UIStroke", atpRow)
+    atpStroke.Color = Color3.fromRGB(70, 70, 80)
+    atpStroke.Transparency = 0.55
 
-                local atpRow = Instance.new("Frame", currentPage)
-                atpRow.Name = "Anti TP Bat"
-                atpRow.Size = UDim2.new(1,-16,0,42)
-                atpRow.BackgroundColor3 = Color3.fromRGB(14,22,16)
-                atpRow.BorderSizePixel=0
-                atpRow.LayoutOrder=LO()
-                mkCorner(atpRow,12)
-                local atpRowStroke = mkStroke(atpRow, Color3.fromRGB(34,76,46),1)
-                atpRowStroke.Transparency=0.5
-                atpRow.ClipsDescendants=true
+    local atpLbl = Instance.new("TextLabel")
+    atpLbl.Size = UDim2.new(0, 160, 1, 0)
+    atpLbl.Position = UDim2.new(0, 12, 0, 0)
+    atpLbl.BackgroundTransparency = 1
+    atpLbl.Text = "ANTI TP BAT [BOOTSWARE]"
+    atpLbl.TextColor3 = Color3.fromRGB(235,235,245)
+    atpLbl.Font = Enum.Font.GothamBold
+    atpLbl.TextSize = 12
+    atpLbl.TextXAlignment = Enum.TextXAlignment.Left
+    atpLbl.Parent = atpRow
 
-                local atpLbl = Instance.new("TextLabel", atpRow)
-                atpLbl.Size = UDim2.new(1,-70,1,0)
-                atpLbl.Position = UDim2.new(0,14,0,0)
-                atpLbl.BackgroundTransparency=1
-                atpLbl.Text="Anti TP Bat"
-                atpLbl.TextColor3=C.rowLabel
-                atpLbl.Font=Enum.Font.GothamBold
-                atpLbl.TextSize=13
-                atpLbl.TextXAlignment=Enum.TextXAlignment.Left
+    local atpToggleBg = Instance.new("Frame")
+    atpToggleBg.Name = "AntiTPBatToggleBg"
+    atpToggleBg.Size = UDim2.new(0, 48, 0, 24)
+    atpToggleBg.Position = UDim2.new(1, -60, 0.5, -12)
+    atpToggleBg.BackgroundColor3 = _G.DuelsAntiTPBatEnabled and Color3.fromRGB(80,200,120) or Color3.fromRGB(55,55,65)
+    atpToggleBg.BorderSizePixel = 0
+    atpToggleBg.Parent = atpRow
+    Instance.new("UICorner", atpToggleBg).CornerRadius = UDim.new(1,0)
 
-                local atpArrow = Instance.new("TextButton", atpRow)
-                atpArrow.Name="AntiTPBatArrow"
-                atpArrow.BackgroundColor3=Color3.fromRGB(8,12,10)
-                atpArrow.BackgroundTransparency=0.18
-                atpArrow.BorderSizePixel=0
-                atpArrow.Size=UDim2.new(0,28,0,24)
-                atpArrow.Position=UDim2.new(1,-40,0.5,-12)
-                atpArrow.Text="▼"
-                atpArrow.TextColor3=Color3.fromRGB(200,255,200)
-                atpArrow.TextSize=14
-                atpArrow.Font=Enum.Font.GothamBold
-                atpArrow.AutoButtonColor=false
-                atpArrow.ZIndex=8
-                mkCorner(atpArrow,7)
-                mkStroke(atpArrow, Color3.fromRGB(34,76,46),1).Transparency=0.45
+    local atpKnob = Instance.new("Frame")
+    atpKnob.Size = UDim2.new(0,18,0,18)
+    atpKnob.Position = _G.DuelsAntiTPBatEnabled and UDim2.new(1,-21,0.5,-9) or UDim2.new(0,3,0.5,-9)
+    atpKnob.BackgroundColor3 = Color3.fromRGB(245,245,250)
+    atpKnob.BorderSizePixel = 0
+    atpKnob.Parent = atpToggleBg
+    Instance.new("UICorner", atpKnob).CornerRadius = UDim.new(1,0)
 
-                local atpHolder = Instance.new("Frame", currentPage)
-                atpHolder.Name="Anti TP Bat Options"
-                atpHolder.BackgroundTransparency=1
-                atpHolder.Size=UDim2.new(1,-16,0,0)
-                atpHolder.BorderSizePixel=0
-                atpHolder.LayoutOrder=LO()
-                atpHolder.ClipsDescendants=true
-                atpHolder.Visible=false
+    local atpBtn = Instance.new("TextButton")
+    atpBtn.Size = UDim2.new(1,0,1,0)
+    atpBtn.BackgroundTransparency = 1
+    atpBtn.Text = ""
+    atpBtn.Parent = atpRow
 
-                -- version slider
-                local ATP_LABELS={"V1","V2","V3","V4"}
-                local ATP_N=#ATP_LABELS
-                local verHolder = Instance.new("Frame", atpHolder)
-                verHolder.Name="AntiTPBatVersionSelector"
-                verHolder.BackgroundColor3=Color3.fromRGB(14,22,16)
-                verHolder.Size=UDim2.new(1,0,0,42)
-                verHolder.Position=UDim2.new(0,0,0,2)
-                verHolder.BorderSizePixel=0
-                mkCorner(verHolder,12)
-                mkStroke(verHolder, Color3.fromRGB(34,76,46),1).Transparency=0.32
+    local function setRowVisual(on)
+        TweenService:Create(atpToggleBg, TweenInfo.new(0.15), {BackgroundColor3 = on and Color3.fromRGB(80,200,120) or Color3.fromRGB(55,55,65)}):Play()
+        TweenService:Create(atpKnob, TweenInfo.new(0.15), {Position = on and UDim2.new(1,-21,0.5,-9) or UDim2.new(0,3,0.5,-9)}):Play()
+    end
+    _G._DuelsAntiTPBatSetRowVisual = setRowVisual
+    -- dummy for old calls
+    _G._DuelsAntiTPBatSetSpamVisual = function() end
+    _G._DuelsAntiTPBatSetVersionVisual = function() end
 
-                local verSlide = Instance.new("Frame", verHolder)
-                verSlide.Name="AntiTPBatSlide"
-                verSlide.BackgroundColor3=Color3.fromRGB(30,132,73)
-                verSlide.BackgroundTransparency=0.1
-                verSlide.AnchorPoint=Vector2.new(0.5,0.5)
-                verSlide.Size=UDim2.new(1/ATP_N,-4,1,-8)
-                verSlide.Position=UDim2.new(0.5/ATP_N,0,0.5,0)
-                verSlide.BorderSizePixel=0
-                verSlide.ZIndex=5
-                mkCorner(verSlide,10)
-                local verSlideStroke=Instance.new("UIStroke", verSlide)
-                verSlideStroke.Color=Color3.fromRGB(80,255,120)
-                verSlideStroke.Thickness=1.5
-                verSlideStroke.Transparency=0.2
-                verSlideStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+    atpBtn.MouseButton1Click:Connect(function()
+        if _G.DuelsAntiTPBat then _G.DuelsAntiTPBat.toggle() else _G.DuelsToggleAntiTPBat() end
+    end)
 
-                local verLabels={}
-                local atpSegW=1/ATP_N
-                for i,lblText in ipairs(ATP_LABELS) do
-                    local lbl=Instance.new("TextLabel", verHolder)
-                    lbl.Name="AntiTPBatLabel_"..tostring(i)
-                    lbl.BackgroundTransparency=1
-                    lbl.Text=lblText
-                    lbl.TextColor3=Color3.fromRGB(220,255,220)
-                    lbl.TextSize=11
-                    lbl.Font=Enum.Font.GothamBlack
-                    lbl.TextXAlignment=Enum.TextXAlignment.Center
-                    lbl.AnchorPoint=Vector2.new(0.5,0.5)
-                    lbl.Size=UDim2.new(atpSegW,0,1,0)
-                    lbl.Position=UDim2.new(atpSegW*(i-0.5),0,0.5,0)
-                    lbl.ZIndex=8
-                    verLabels[i]=lbl
-                    local click=Instance.new("TextButton", verHolder)
-                    click.Name="AntiTPBatClick_"..tostring(i)
-                    click.BackgroundTransparency=1
-                    click.Text=""
-                    click.AutoButtonColor=false
-                    click.AnchorPoint=Vector2.new(0.5,0.5)
-                    click.Size=UDim2.new(atpSegW,0,1,0)
-                    click.Position=UDim2.new(atpSegW*(i-0.5),0,0.5,0)
-                    click.ZIndex=10
-                    local idx=i
-                    click.MouseButton1Click:Connect(function()
-                        if _G.DuelsAntiTPBat then _G.DuelsAntiTPBat.setVersion(idx) else _G.DuelsAntiTPBatVersion=idx end
-                    end)
-                end
-
-                local function setVersionVisual(index)
-                    index=math.clamp(tonumber(index) or 1,1,ATP_N)
-                    TweenService:Create(verSlide, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                        Position=UDim2.new(atpSegW*(index-0.5),0,0.5,0),
-                        Size=UDim2.new(atpSegW,-4,1,-8)
-                    }):Play()
-                    for i,lbl in ipairs(verLabels) do
-                        local sel=(i==index)
-                        TweenService:Create(lbl, TweenInfo.new(0.14), {
-                            TextTransparency=sel and 0 or 0.4,
-                            TextColor3=sel and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,200,180)
-                        }):Play()
-                    end
-                end
-                _G._DuelsAntiTPBatSetVersionVisual=setVersionVisual
-
-                -- Spam toggle row
-                local spamRow=Instance.new("Frame", atpHolder)
-                spamRow.Name="SpamRow"
-                spamRow.BackgroundColor3=Color3.fromRGB(14,22,16)
-                spamRow.Size=UDim2.new(1,0,0,34)
-                spamRow.Position=UDim2.new(0,0,0,48)
-                spamRow.BorderSizePixel=0
-                mkCorner(spamRow,12)
-                local spamRowStroke=mkStroke(spamRow, Color3.fromRGB(34,76,46),1)
-                spamRowStroke.Transparency=0.38
-
-                local spamLbl=Instance.new("TextLabel", spamRow)
-                spamLbl.BackgroundTransparency=1
-                spamLbl.Text="Spam"
-                spamLbl.TextColor3=C.rowLabel
-                spamLbl.Font=Enum.Font.GothamBold
-                spamLbl.TextSize=12
-                spamLbl.TextXAlignment=Enum.TextXAlignment.Left
-                spamLbl.Position=UDim2.new(0,14,0,0)
-                spamLbl.Size=UDim2.new(1,-80,1,0)
-
-                local pillBg=Instance.new("Frame", spamRow)
-                pillBg.Size=UDim2.new(0,44,0,22)
-                pillBg.Position=UDim2.new(1,-58,0.5,-11)
-                pillBg.BackgroundColor3=Color3.fromRGB(30,36,32)
-                pillBg.BorderSizePixel=0
-                mkCorner(pillBg,11)
-
-                local dot=Instance.new("Frame", pillBg)
-                dot.Size=UDim2.new(0,16,0,16)
-                dot.Position=UDim2.new(0,3,0.5,-8)
-                dot.BackgroundColor3=Color3.fromRGB(255,255,255)
-                dot.BorderSizePixel=0
-                mkCorner(dot,8)
-
-                local function setSpamVisual(on)
-                    on=on and true or false
-                    TweenService:Create(pillBg, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {BackgroundColor3=on and Color3.fromRGB(30,132,73) or Color3.fromRGB(30,36,32)}):Play()
-                    TweenService:Create(dot, TweenInfo.new(0.18, Enum.EasingStyle.Back), {Position=on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)}):Play()
-                    if spamRowStroke then
-                        TweenService:Create(spamRowStroke, TweenInfo.new(0.18), {Color=on and Color3.fromRGB(30,132,73) or Color3.fromRGB(34,76,46), Transparency=on and 0.08 or 0.38}):Play()
-                    end
-                end
-                _G._DuelsAntiTPBatSetSpamVisual=setSpamVisual
-
-                local spamBtn=Instance.new("TextButton", spamRow)
-                spamBtn.BackgroundTransparency=1
-                spamBtn.Text=""
-                spamBtn.Size=UDim2.new(1,0,1,0)
-                spamBtn.AutoButtonColor=false
-                spamBtn.ZIndex=7
-                spamBtn.MouseButton1Click:Connect(function()
-                    local on=not (_G.DuelsAntiTPBatSpam==true)
-                    if _G.DuelsAntiTPBat then _G.DuelsAntiTPBat.setSpam(on) else _G.DuelsAntiTPBatSpam=on end
-                end)
-
-                local function setRowVisual(on)
-                    on=on and true or false
-                    TweenService:Create(atpRowStroke, TweenInfo.new(0.18), {Color=on and Color3.fromRGB(30,132,73) or Color3.fromRGB(34,76,46), Transparency=on and 0.08 or 0.5, Thickness=1.25}):Play()
-                    TweenService:Create(atpLbl, TweenInfo.new(0.18), {TextColor3=on and Color3.fromRGB(80,255,120) or C.rowLabel}):Play()
-                end
-                _G._DuelsAntiTPBatSetRowVisual=setRowVisual
-
-                local function expandHolder(open)
-                    atpExpanded=open
-                    atpArrow.Text=open and "▲" or "▼"
-                    local info=TweenInfo.new(0.22, Enum.EasingStyle.Quart, open and Enum.EasingDirection.Out or Enum.EasingDirection.In)
-                    if open then
-                        atpHolder.Visible=true
-                        TweenService:Create(atpHolder, info, {Size=UDim2.new(1,-16,0,ATP_HOLDER_H)}):Play()
-                    else
-                        local tw=TweenService:Create(atpHolder, info, {Size=UDim2.new(1,-16,0,0)})
-                        tw.Completed:Connect(function() if not atpExpanded then atpHolder.Visible=false end end)
-                        tw:Play()
-                    end
-                end
-
-                atpArrow.MouseButton1Click:Connect(function() expandHolder(not atpExpanded) end)
-                atpRow.InputBegan:Connect(function(input)
-                    if input.UserInputType==Enum.UserInputType.MouseButton1 then
-                        if input.Position.X < atpRow.AbsolutePosition.X + atpRow.AbsoluteSize.X - 50 then
-                            if _G.DuelsAntiTPBat then _G.DuelsAntiTPBat.toggle() end
-                        end
-                    end
-                end)
-
-                setSpamVisual(_G.DuelsAntiTPBatSpam==true)
-                setVersionVisual(_G.DuelsAntiTPBatVersion or 1)
-                setRowVisual(_G.DuelsAntiTPBatEnabled==true)
-            end
+    setRowVisual(_G.DuelsAntiTPBatEnabled==true)
+    if stackBtnRefs then
+        stackBtnRefs.antiTPBat = {
+            setOn = setRowVisual
+        }
+    end
+end
+-- END ANTI TP BAT SINGLE UI
 
         end)
         page.LayoutOrder = 2
