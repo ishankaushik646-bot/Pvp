@@ -4679,6 +4679,21 @@ end
             local direction=predictPos - myPos
             local flatDir=Vector3.new(direction.X,0,direction.Z)
             if flatDir.Magnitude>0 then flatDir=flatDir.Unit else flatDir=Vector3.new(0,0,0) end
+            -- BYPASS SUPPORT like V2
+            local chaseMode = "NORMAL"
+            pcall(function()
+                local ck = "V1"
+                if _G._DuelsAimbotChase and _G._DuelsAimbotChase[ck] then
+                    chaseMode = _G._DuelsAimbotChase[ck]
+                elseif _G.DuelsSelectedAimbotMode and _G._DuelsAimbotChase and _G._DuelsAimbotChase[_G.DuelsSelectedAimbotMode] then
+                    chaseMode = _G._DuelsAimbotChase[_G.DuelsSelectedAimbotMode]
+                end
+            end)
+            if chaseMode == "BYPASS" and flatDir.Magnitude>0 and _G.DuelsPathfind and _G.DuelsPathfind.avoid then
+                pcall(function()
+                    flatDir = _G.DuelsPathfind.avoid(myPos, flatDir, 14)
+                end)
+            end
             local desiredHeight=targetPos.Y + 3.7
             local yVel=(desiredHeight - myPos.Y) * 19.5 + targetVel.Y * 0.8
             if hum.FloorMaterial~=Enum.Material.Air then yVel=math.max(yVel,13) end
