@@ -3535,75 +3535,38 @@ local function Main()
 
 
             
--- ANTI TP BAT - SINGLE (BOOTSWARE) - CLEAN UI (NO VERSIONS)
-do
-    local atpRow = Instance.new("Frame")
-    atpRow.Name = "Anti TP Bat Single"
-    atpRow.Size = UDim2.new(1, 0, 0, 42)
-    atpRow.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
-    atpRow.BackgroundTransparency = 0.35
-    atpRow.BorderSizePixel = 0
-    atpRow.Parent = Content
-    Instance.new("UICorner", atpRow).CornerRadius = UDim.new(0, 12)
-    local atpStroke = Instance.new("UIStroke", atpRow)
-    atpStroke.Color = Color3.fromRGB(70, 70, 80)
-    atpStroke.Transparency = 0.55
-
-    local atpLbl = Instance.new("TextLabel")
-    atpLbl.Size = UDim2.new(0, 160, 1, 0)
-    atpLbl.Position = UDim2.new(0, 12, 0, 0)
-    atpLbl.BackgroundTransparency = 1
-    atpLbl.Text = "ANTI TP BAT [BOOTSWARE]"
-    atpLbl.TextColor3 = Color3.fromRGB(235,235,245)
-    atpLbl.Font = Enum.Font.GothamBold
-    atpLbl.TextSize = 12
-    atpLbl.TextXAlignment = Enum.TextXAlignment.Left
-    atpLbl.Parent = atpRow
-
-    local atpToggleBg = Instance.new("Frame")
-    atpToggleBg.Name = "AntiTPBatToggleBg"
-    atpToggleBg.Size = UDim2.new(0, 48, 0, 24)
-    atpToggleBg.Position = UDim2.new(1, -60, 0.5, -12)
-    atpToggleBg.BackgroundColor3 = _G.DuelsAntiTPBatEnabled and Color3.fromRGB(80,200,120) or Color3.fromRGB(55,55,65)
-    atpToggleBg.BorderSizePixel = 0
-    atpToggleBg.Parent = atpRow
-    Instance.new("UICorner", atpToggleBg).CornerRadius = UDim.new(1,0)
-
-    local atpKnob = Instance.new("Frame")
-    atpKnob.Size = UDim2.new(0,18,0,18)
-    atpKnob.Position = _G.DuelsAntiTPBatEnabled and UDim2.new(1,-21,0.5,-9) or UDim2.new(0,3,0.5,-9)
-    atpKnob.BackgroundColor3 = Color3.fromRGB(245,245,250)
-    atpKnob.BorderSizePixel = 0
-    atpKnob.Parent = atpToggleBg
-    Instance.new("UICorner", atpKnob).CornerRadius = UDim.new(1,0)
-
-    local atpBtn = Instance.new("TextButton")
-    atpBtn.Size = UDim2.new(1,0,1,0)
-    atpBtn.BackgroundTransparency = 1
-    atpBtn.Text = ""
-    atpBtn.Parent = atpRow
-
-    local function setRowVisual(on)
-        TweenService:Create(atpToggleBg, TweenInfo.new(0.15), {BackgroundColor3 = on and Color3.fromRGB(80,200,120) or Color3.fromRGB(55,55,65)}):Play()
-        TweenService:Create(atpKnob, TweenInfo.new(0.15), {Position = on and UDim2.new(1,-21,0.5,-9) or UDim2.new(0,3,0.5,-9)}):Play()
-    end
-    _G._DuelsAntiTPBatSetRowVisual = setRowVisual
-    -- dummy for old calls
-    _G._DuelsAntiTPBatSetSpamVisual = function() end
-    _G._DuelsAntiTPBatSetVersionVisual = function() end
-
-    atpBtn.MouseButton1Click:Connect(function()
-        if _G.DuelsAntiTPBat then _G.DuelsAntiTPBat.toggle() else _G.DuelsToggleAntiTPBat() end
-    end)
-
-    setRowVisual(_G.DuelsAntiTPBatEnabled==true)
-    if stackBtnRefs then
-        stackBtnRefs.antiTPBat = {
-            setOn = setRowVisual
-        }
-    end
-end
--- END ANTI TP BAT SINGLE UI
+-- ANTI TP BAT - SINGLE (BOOTSWARE) - NORMAL TOGGLE UNDER KICK WARNING
+            do
+                local function setATPBatVisual(on)
+                    -- visual handled by makeToggleRow
+                end
+                -- Use same style as all other toggles
+                local atpSetVisual = makeToggleRow("Anti TP Bat [Bootsware]", _G.DuelsAntiTPBatEnabled==true, function(on)
+                    if _G.DuelsAntiTPBat then
+                        _G.DuelsAntiTPBat.setEnabled(on)
+                    else
+                        _G.DuelsAntiTPBatEnabled = on
+                        if _G.DuelsToggleAntiTPBat then _G.DuelsToggleAntiTPBat() end
+                    end
+                    if requestSave then requestSave() end
+                end)
+                _G._DuelsAntiTPBatSetRowVisual = function(on)
+                    if atpSetVisual then atpSetVisual(on) end
+                end
+                _G._DuelsAntiTPBatSetSpamVisual = function() end
+                _G._DuelsAntiTPBatSetVersionVisual = function() end
+                toggleSetters["antiTPBat"] = function(on)
+                    if atpSetVisual then atpSetVisual(on) end
+                end
+                if stackBtnRefs then
+                    stackBtnRefs.antiTPBat = {
+                        setOn = function(on)
+                            if atpSetVisual then atpSetVisual(on) end
+                        end
+                    }
+                end
+            end
+            -- END ANTI TP BAT SINGLE UI
 
         end)
         page.LayoutOrder = 2
