@@ -136,107 +136,73 @@ localPlayer.CharacterAdded:Connect(function()
 	task.defer(_G.__VX7_APPLY_FPS_CAP)
 end)
 local isfile_, readfile_, writefile_ =
-
--- ==================== DELTA FIX: CONFIG SYSTEM ====================
--- Delta uses global isfile/readfile/writefile/makefolder/isfolder
-local CONFIG_FOLDER = "vx7"
-local CONFIG_FILE = "vx7/Vx7Config.json"
-local KEYBINDS_FILE = "vx7/Vx7Keybinds.json"
-local ANTIBAT_FILE = "vx7/Vx7AntiBat.json"
-local UIPOS_FILE = "vx7/Vx7_UIPositions.json"
-
--- Delta-compatible wrappers
-local function _isfile(p)
-    local ok, res = pcall(function() return isfile(p) end)
-    if ok then return res end
-    if syn and syn.isfile then ok, res = pcall(syn.isfile, p) if ok then return res end end
-    return false
-end
-local function _readfile(p)
-    local ok, res = pcall(function() return readfile(p) end)
-    if ok then return res end
-    if syn and syn.readfile then ok, res = pcall(syn.readfile, p) if ok then return res end end
-    return nil
-end
-local function _writefile(p, c)
-    local ok, res = pcall(function() return writefile(p, c) end)
-    if ok then return true end
-    if syn and syn.writefile then ok, res = pcall(syn.writefile, p, c) if ok then return true end end
-    return false
-end
-local function _isfolder(p)
-    local ok, res = pcall(function() return isfolder(p) end)
-    if ok then return res end
-    if syn and syn.isfolder then ok, res = pcall(syn.isfolder, p) if ok then return res end end
-    return false
-end
-local function _makefolder(p)
-    local ok = pcall(function() return makefolder(p) end)
-    if ok then return true end
-    if syn and syn.makefolder then ok = pcall(syn.makefolder, p) if ok then return true end end
-    return false
+	isfile or syn and syn.isfile or getgenv and getgenv().isfile or function()
+		return false
+	end, readfile or syn and syn.readfile or getgenv and getgenv().readfile or function()
+		return nil
+	end, writefile or syn and syn.writefile or getgenv and getgenv().writefile or function() end
+_G.__VX7_FS = {
+	isfolder = isfolder or syn and syn.isfolder or getgenv and getgenv().isfolder,
+	makefolder = makefolder or syn and syn.makefolder or getgenv and getgenv().makefolder,
+	delfile = delfile or syn and syn.delfile or getgenv and getgenv().delfile,
+}
+if _G.__VX7_FS.makefolder then
+	fn2 = { "vx7", "vx7/main", "vx7/intro", "vx7/antibat", "vx7/lagger" }
+	for i, v in ipairs(fn2) do
+		pcall(function()
+			if not _G.__VX7_FS.isfolder or not _G.__VX7_FS.isfolder(v) then
+				_G.__VX7_FS.makefolder(v)
+			end
+		end)
+	end
 end
 
--- expose as expected names for rest of script
-isfile_ = _isfile
-readfile_ = _readfile
-writefile_ = _writefile
+-- ===== ONE-TIME FIX: config save was missing, causing nil error =====
+if not isfile_ then isfile_ = isfile or function() return false end end
+if not readfile_ then readfile_ = readfile or function() return nil end end
+if not writefile_ then writefile_ = writefile or function() end end
 
--- ensure folders exist (Delta needs this before first write)
+-- Delta fix: ensure vx7 folder exists before any write
 pcall(function()
-    if not _isfolder("vx7") then _makefolder("vx7") end
-    if not _isfolder("vx7/main") then _makefolder("vx7/main") end
-    if not _isfolder("vx7/intro") then _makefolder("vx7/intro") end
-    if not _isfolder("vx7/antibat") then _makefolder("vx7/antibat") end
-    if not _isfolder("vx7/lagger") then _makefolder("vx7/lagger") end
+    if _G.__VX7_FS and _G.__VX7_FS.makefolder and _G.__VX7_FS.isfolder then
+        if not _G.__VX7_FS.isfolder("vx7") then _G.__VX7_FS.makefolder("vx7") end
+    elseif makefolder and isfolder then
+        if not isfolder("vx7") then makefolder("vx7") end
+    end
 end)
 
-_G.__VX7_FS = {
-    isfolder = _isfolder,
-    makefolder = _makefolder,
-    delfile = delfile or (syn and syn.delfile) or function() end,
-}
-
--- THE MAIN FIX: scheduleSaveConfig was nil, so nothing ever saved
-local __saveDebounce = false
-local __saveQueued = false
-function scheduleSaveConfig()
-    if __saveDebounce then
-        __saveQueued = true
-        return
-    end
-    __saveDebounce = true
-    task.spawn(function()
-        task.wait(0.6)
-        __saveDebounce = false
-        if __saveQueued then
-            __saveQueued = false
-            scheduleSaveConfig()
-            return
-        end
-        -- try to save via fn40 (the real saver defined later) or global backup
-        pcall(function()
-            if fn40 and type(fn40) == "function" then
-                fn40()
-            elseif _G.__VX7_DO_SAVE and type(_G.__VX7_DO_SAVE) == "function" then
-                _G.__VX7_DO_SAVE()
-            end
+-- define scheduleSaveConfig BEFORE it's used (was nil before)
+if not _G.__VX7_SCHEDULE_SAVE then
+    local __deb, __que = false, false
+    function scheduleSaveConfig()
+        if __deb then __que = true return end
+        __deb = true
+        task.spawn(function()
+            task.wait(0.6)
+            __deb = false
+            if __que then __que = false scheduleSaveConfig() return end
+            pcall(function()
+                if fn40 and type(fn40)=="function" then fn40() end
+            end)
         end)
-    end)
+    end
+    _G.__VX7_SCHEDULE_SAVE = scheduleSaveConfig
+else
+    scheduleSaveConfig = _G.__VX7_SCHEDULE_SAVE
 end
-_G.__VX7_SCHEDULE_SAVE = scheduleSaveConfig
 
 local tbl2 = {}
 pcall(function()
-    if _isfile(UIPOS_FILE) then
-        local d = _readfile(UIPOS_FILE)
-        if d then
-            -- just validate json, don't error
-            game:GetService("HttpService"):JSONDecode(d)
-        end
-    end
+	if isfile_("vx7/Vx7_UIPositions.json") then
+		local data = HttpService:JSONDecode(readfile_("vx7/Vx7_UIPositions.json"))
+		local kind = type(data)
+		if kind == "table" then
+			tbl2 = data
+		end
+	end
 end)
-
+local function fn3(arg, arg2, arg3, arg4)
+	if type(arg) ~= "table" then
 		return arg2
 	end
 	local num, num2, num3, num4 = tonumber(arg.sx), tonumber(arg.ox), tonumber(arg.sy), tonumber(arg.oy)
@@ -472,7 +438,7 @@ local n4, n5, flag3, n6 = math.random(n, n2), 0, false, 0
 local function fn10()
 	if writefile then
 		pcall(function()
-			writefile_(ANTIBAT_FILE, HttpService:JSONEncode({ on = Config.antiBatToggled }))
+			writefile_("vx7/Vx7AntiBat.json", HttpService:JSONEncode({ on = Config.antiBatToggled }))
 		end)
 	end
 end
@@ -481,9 +447,9 @@ pcall(function()
 		_G.__VX7AntiBatConn:Disconnect()
 	end
 	_G.__VX7AntiBatConn = nil
-	if isfile and (isfile_(ANTIBAT_FILE)) then
+	if isfile_("vx7/Vx7AntiBat.json") then
 		local ok, result = pcall(function()
-			return HttpService:JSONDecode(readfile_(ANTIBAT_FILE))
+			return HttpService:JSONDecode(readfile_("vx7/Vx7AntiBat.json"))
 		end)
 		if ok and type(result) == "table" and result.on ~= nil then
 			Config.antiBatToggled = not not result.on
@@ -4052,7 +4018,7 @@ local function fn33()
 	end)
 	if ok and result then
 		pcall(function()
-			writefile_(CONFIG_FILE, result)
+			writefile_("vx7/Vx7Config.json", result)
 		end)
 	else
 		tbl32.toggleKeybinds = nil
@@ -4061,7 +4027,7 @@ local function fn33()
 		end)
 		if ok2 and result2 then
 			pcall(function()
-				writefile_(CONFIG_FILE, result2)
+				writefile_("vx7/Vx7Config.json", result2)
 			end)
 		end
 	end
@@ -4072,7 +4038,7 @@ local function fn33()
 		end)
 		if ok2 and result2 then
 			pcall(function()
-				writefile_(KEYBINDS_FILE, result2)
+				writefile_("vx7/Vx7Keybinds.json", result2)
 			end)
 		end
 	end
@@ -4368,10 +4334,10 @@ local function fn38(arg)
 	return nil, nil
 end
 local function fn39()
-	if not isfile_(CONFIG_FILE) then
-		return true
-	end
-	local ok, result = pcall(readfile_, CONFIG_FILE)
+    if not isfile_("vx7/Vx7Config.json") then
+        return true
+    end
+    local ok, result = pcall(readfile_, "vx7/Vx7Config.json")
     if not ok or type(result) ~= "string" or result == "" then
         return false
     end
@@ -5036,8 +5002,8 @@ local function fn39()
 			end
 		end
 	end
-	if isfile_(KEYBINDS_FILE) then
-		local json = readfile_(KEYBINDS_FILE)
+	if isfile_("vx7/Vx7Keybinds.json") then
+		local json = readfile_("vx7/Vx7Keybinds.json")
 		if json then
 			fn40, tbl35 = pcall(function()
 				return HttpService:JSONDecode(json)
@@ -5764,7 +5730,7 @@ local function fn41()
 	Config._speedKeyCleared = false
 	Config._speedKeyLaggerCleared = false
 	pcall(function()
-		writefile_(KEYBINDS_FILE, HttpService:JSONEncode({ toggleKeybinds = {} }))
+		writefile_("vx7/Vx7Keybinds.json", HttpService:JSONEncode({ toggleKeybinds = {} }))
 	end)
 	fn40(fn15(v13))
 	if Config._refreshKeybindDisplays then
@@ -11028,8 +10994,8 @@ tbl31 = {
 						tbl22.musicGui =
 							UDim2.new(position3.X.Scale, position3.X.Offset, position3.Y.Scale, position3.Y.Offset)
 						local tbl49 = {}
-						if isfile_(UIPOS_FILE) then
-							local json = readfile_(UIPOS_FILE)
+						if isfile_("vx7/Vx7_UIPositions.json") then
+							local json = readfile_("vx7/Vx7_UIPositions.json")
 							if json then
 								pcall(function()
 									tbl49 = HttpService:JSONDecode(json)
@@ -11045,7 +11011,7 @@ tbl31 = {
 						end)
 						if ok then
 							pcall(function()
-								writefile_(UIPOS_FILE, result)
+								writefile_("vx7/Vx7_UIPositions.json", result)
 							end)
 						end
 					end
@@ -11126,7 +11092,7 @@ tbl31 = {
 			end)
 			if ok then
 				pcall(function()
-					writefile_(UIPOS_FILE, result)
+					writefile_("vx7/Vx7_UIPositions.json", result)
 				end)
 			end
 		end
@@ -11134,10 +11100,10 @@ tbl31 = {
 			pcall(saveUIPositions)
 		end)
 		function loadUIPositions()
-			if not isfile_(UIPOS_FILE) then
+			if not isfile_("vx7/Vx7_UIPositions.json") then
 				return
 			end
-			local json = readfile_(UIPOS_FILE)
+			local json = readfile_("vx7/Vx7_UIPositions.json")
 			if not json or json == "" then
 				return
 			end
@@ -12326,7 +12292,7 @@ tbl31 = {
 					end)
 					if ok and result then
 						pcall(function()
-							writefile_(KEYBINDS_FILE, result)
+							writefile_("vx7/Vx7Keybinds.json", result)
 						end)
 					end
 				end)
@@ -23534,7 +23500,7 @@ tbl31 = {
 				fn35()
 				local data
 				pcall(function()
-					local json = readfile_(CONFIG_FILE)
+					local json = readfile_("vx7/Vx7Config.json")
 					if json then
 						data = HttpService:JSONDecode(json)
 					end
@@ -23668,7 +23634,7 @@ tbl31 = {
 				fn35()
 				local tbl56 = {}
 				pcall(function()
-					local json = readfile_(CONFIG_FILE)
+					local json = readfile_("vx7/Vx7Config.json")
 					if json then
 						tbl56 = HttpService:JSONDecode(json)
 					end
@@ -23682,7 +23648,7 @@ tbl31 = {
 					end
 				end
 				pcall(function()
-					writefile_(CONFIG_FILE, HttpService:JSONEncode(tbl56))
+					writefile_("vx7/Vx7Config.json", HttpService:JSONEncode(tbl56))
 					writefile_(
 						"vx7/Vx7Keybinds.json",
 						HttpService:JSONEncode({
@@ -31740,4 +31706,3 @@ Config.carrySpeed = Config.carrySpeed or 16
 -- (Real core would set this after decrypting the LPH buffer.)
 --
 _G.VX7_LOADED = true
-
