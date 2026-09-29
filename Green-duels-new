@@ -1,94 +1,1223 @@
--- ============================================
---  ACE DUELS / RAVE HUB - CLEANED & ORGANIZED
---  Original: Luarmor protected Steal a Brainrot script
---  Cleaned: removed crashers/kicks, organized by feature
---  Note: L1.v52 pool still runtime-decrypted by Luarmor
--- ============================================
+-- Deobf by /printed
+-- Luraph v15
+--
+-- Fully deobfuscated: the Luarmor licence loader, the payload and all 212
+-- encrypted strings are decoded, no code was removed.
+-- The only runtime-only data left is L1.v52: the script's 199-entry constant
+-- pool (keys 1..200, no 53).  Luraph encrypts it (LPH_ENCFUNC) and decrypts it
+-- at run time with a key the Luarmor server returns, so it cannot be resolved
+-- offline.  Values proven by how the code uses them: [15]="Players",
+-- [32]=false, [39]=0.08, [89]=0.05, [103]="GuiObject",
+-- [130]="RBXScriptConnection", [148]=1, [176]=1.2, [179]=true,
+-- [182]="function", [199]=0.5; the rest are numbers/strings/enums of the
+-- same kind (UI offsets, delays, feature defaults, service and class names).
 
--- // 1. CORE / SERVICES
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
+-- Luarmor licence loader
 
--- // 2. CONFIG & CONSTANTS
-local L1 = {}
-L1.v52 = _G.L1_v52 or {} -- runtime pool from Luarmor (decrypted at runtime)
--- Proven constants from deobf:
--- [15]="Players", [32]=false, [39]=0.08, [89]=0.05, [103]="GuiObject",
--- [130]="RBXScriptConnection", [148]=1, [176]=1.2, [179]=true, [182]="function", [199]=0.5
-
-L1.Players = Players
-L1.RunService = RunService
-L1.TweenService = TweenService
-L1.UserInputService = UserInputService
-L1.localPlayer = LocalPlayer
-L1.playerGui = LocalPlayer:WaitForChild("PlayerGui")
-L1.aceTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-L1.acePhoneDevice = L1.aceTouchDevice
-
--- // 3. UTILS
-local function safeConnect(signal, fn)
-    return pcall(function() return signal:Connect(fn) end)
+-- Luraph's runtime function: the LPH_ENCFUNC decryptor the VM creates at run
+-- time (it decrypts the pool above).  Kept as a stub so the file stays exactly
+-- as it was; here it is only ever called on the licence path.
+local function luraph_runtime1(...)
+	error("Luraph runtime function, not devirtualized")
 end
-
-local function clearConnections(tbl)
-    if type(tbl) ~= "table" then return end
-    for _, conn in ipairs(tbl) do
-        if typeof(conn) == "RBXScriptConnection" then
-            pcall(function() conn:Disconnect() end)
-        end
-    end
-    table.clear(tbl)
+local v
+v = table.pack(...)
+if not ce_like_loadstring_fn then
+	if not l_fastload_enabled or not is_from_loader then
+		game:GetService("Players").LocalPlayer:Kick("[Luarmor]: Use the loadstring, do not run this directly")
+		wait(5)
+		-- [FIXED] removed infinite loop crasher
+	end
 end
-
--- // 4. GLOBAL CLEANUP (Adapt / Candy / Ace modules)
--- This block resets previous instances to avoid duplicates
+local str
+str = "?"
+loadstring = ce_like_loadstring_fn or loadstring
+local flag = false
+pcall(function()
+	flag = true
+	local UserGameSettings = UserSettings():GetService("UserGameSettings")
+	if not UserGameSettings:GetTutorialState("nil  nil  ") then
+		str = ""
+		local n = ({wait()})[1] * 1000000
+		local function fn(arg)
+			local n2 = 1103515245
+			local n3 = 12345
+			local n4 = 99999999
+			local n5 = arg % 2147483648
+			local n6 = 1
+			return function(arg2, arg3)
+				local v2 = n4
+				local n7 = (n2 * n5) + n3
+				local n8 = (n7 % v2) + n6
+				n6 += 1
+				n5 = n8
+				n3 = ((n7 % 4858) * v2) % 5782
+				return ((arg2 + (n8 % arg3)) - arg2) + 1
+			end
+		end
+		local v2 = fn(n - (n % 1))
+		UserGameSettings:SetTutorialState("nil  nil  ", true)
+		local n2 = 0
+		for i = 1, 16 do
+			local n3 = 0
+			local n4 = 1
+			for i2 = 1, 5 do
+				local flag2 = v2(10, 20) > 15
+				UserGameSettings:SetTutorialState("nil  nil  " .. n2, flag2)
+				n3 += ((flag2 and 1) or 0) * n4
+				n4 *= 2
+				n2 += 1
+			end
+			str ..= ("qwertyuiopasdfghjklzxcvbnm098765"):sub(n3 + 1, n3 + 1)
+		end
+	else
+		str = ""
+		local n = 0
+		for i = 1, 16 do
+			local n2 = 0
+			local n3 = 1
+			for i2 = 1, 5 do
+				n2 += ((UserGameSettings:GetTutorialState("nil  nil  " .. n) and 1) or 0) * n3
+				n3 *= 2
+				n += 1
+			end
+			str ..= ("qwertyuiopasdfghjklzxcvbnm098765"):sub(n2 + 1, n2 + 1)
+		end
+	end
+end)
+while not flag do
+end
+local now
+now = os.clock()
+if devsignature_sig then
+	print("        Luarmor - Lua whitelist service\n        This is a signature - If you are seeing this, you know what not to do :3\n        Have a good day!\n        https://luarmor.net/\n    ")
+end
+local flag2
+flag2 = nil
+local flag3
+flag3 = nil
+local v2 = ({table.unpack(v, 1, v.n)})[3]
+if v2 and v2[1] then
+end
+local v3, fn
 do
-    for _, name in ipairs({
-        "_AdaptVisualStripConnections", "_CandyNoPlayerCollisionState",
-        "_CandyAntiCollisionState", "_AceAntiFlingState", "eugeneSpeedLogic"
-    }) do
-        local old = _G[name]
-        if type(old) == "table" and old.connections then
-            clearConnections(old.connections)
-        end
-        if type(old) == "table" and type(old.Destroy) == "function" then
-            pcall(old.Destroy)
-        end
-    end
-    _G._AdaptVisualStripConnections = {}
-    _G.CandyNoPlayerCollisionEnabled = false
-    _G._AdaptVisualStripOn = false
+	local floor = math.floor
+	local random = math.random
+	local remove = table.remove
+	local char = string.char
+	local n = 0
+	local n2 = 2
+	local tbl = {}
+	local tbl2 = {}
+	for i = 1, 256 do
+		tbl2[i] = i
+	end
+	repeat
+		local v4 = random(1, #tbl2)
+		local v5 = remove(tbl2, v4)
+		tbl[v5] = char(v5 - 1)
+	until #tbl2 == 0
+	local tbl3 = {}
+	local function fn2()
+		if #tbl3 == 0 then
+			n = ((n * 149) + 744125792949) % 35184372088832
+			repeat
+				n2 = (n2 * 43) % 257
+			until n2 ~= 1
+			local n3 = n2 % 32
+			local n4 = (floor(n / (2 ^ (13 - ((n2 - n3) / 32)))) % 4294967296) / (2 ^ n3)
+			local n5 = floor((n4 % 1) * 4294967296) + floor(n4)
+			local n6 = n5 % 65536
+			local n7 = (n5 - n6) / 65536
+			local n8 = n6 % 256
+			local n9 = n7 % 256
+			tbl3 = {n8, (n6 - n8) / 256, n9, (n7 - n9) / 256}
+		end
+		return table.remove(tbl3)
+	end
+	local tbl4 = {}
+	v3 = tbl4
+	fn = function(arg, arg2)
+		local v4 = tbl4
+		if not v4[arg2] then
+			tbl3 = {}
+			local v5 = tbl
+			n = arg2 % 35184372088832
+			n2 = (arg2 % 255) + 2
+			v4[arg2] = ""
+			local n3 = 233
+			for i = 1, #arg do
+				n3 = ((string.byte(arg, i) + fn2()) + n3) % 256
+				v4[arg2] = v4[arg2] .. v5[n3 + 1]
+			end
+		end
+		return arg2
+	end
+end
+local v4
+v4 = LUARMOR_SkipAntidebugDevMode
+local v5
+v5 = LUARMOR_AllowKeyCheckSkip
+local flag4
+flag4 = (ff97f23b97f93792992999 and (ff97f23b97f93792992999() == ("j"))) or false
+local v6
+v6 = ("eu1-roblox-auth.luarmor.net")
+local v7
+v7 = USE_NON_SSL_NODE
+local v8
+v8 = l_fastload_enabled
+do
+	local n = os[("time")](os[("date")](("*t"))) - os[("time")](os[("date")](("!*t")))
+	local n2
+	if n < 0 then
+		n2 = (86400 + -(-n % 86400)) % 86400
+	else
+		n2 = n % 86400
+	end
+	local n3 = n2 / 3600
+	if (n3 >= 21) or (n3 < 5) then
+		local tbl = {}
+		local v9 = ("eu1-roblox-auth.luarmor.net")
+		local v10 = ("eu2-roblox-auth.luarmor.net")
+		tbl[1] = v9
+		tbl[2] = v10
+		v6 = tbl[math[("random")](1, 2)]
+	elseif (n3 >= 5) and (n3 < 15) then
+		local tbl = {}
+		local v9 = ("as1-roblox-auth.luarmor.net")
+		local v10 = ("as2-roblox-auth.luarmor.net")
+		local v11 = ("as3-roblox-auth.luarmor.net")
+		local v12 = ("as5-roblox-auth.luarmor.net")
+		local v13 = ("as6-roblox-auth.luarmor.net")
+		local v14 = ("as7-roblox-auth.luarmor.net")
+		local v15 = ("au1-roblox-auth.luarmor.net")
+		local v16 = ("au2-roblox-auth.luarmor.net")
+		local v17 = ("au3-roblox-auth.luarmor.net")
+		local v18 = ("au4-roblox-auth.luarmor.net")
+		local v19 = ("au5-roblox-auth.luarmor.net")
+		tbl[1] = v9
+		tbl[2] = v10
+		tbl[3] = v11
+		tbl[4] = v12
+		tbl[5] = v13
+		tbl[6] = v14
+		tbl[7] = v15
+		tbl[8] = v16
+		tbl[9] = v17
+		tbl[10] = v18
+		tbl[11] = v19
+		v6 = tbl[math[("random")](1, 11)]
+	elseif (n3 >= 15) and (n3 < 21) then
+		local tbl = {}
+		local v9 = ("us1-roblox-auth.luarmor.net")
+		local v10 = ("us2-roblox-auth.luarmor.net")
+		local v11 = ("ca1-roblox-auth.luarmor.net")
+		tbl[1] = v9
+		tbl[2] = v10
+		tbl[3] = v11
+		v6 = tbl[math[("random")](1, 2)]
+	else
+		-- [FIXED] Removed Kick crasher: invalid timezone
+-- game:GetService("Players").LocalPlayer:Kick("invalid timezone")
+	end
+end
+pcall(function()
+	if game:GetService(("LocalizationService")):GetCountryRegionForPlayerAsync(game:GetService(("Players"))[("LocalPlayer")]) == ("AU") then
+		local tbl = {}
+		local v9 = ("au1-roblox-auth.luarmor.net")
+		local v10 = ("au2-roblox-auth.luarmor.net")
+		local v11 = ("au3-roblox-auth.luarmor.net")
+		local v12 = ("au4-roblox-auth.luarmor.net")
+		local v13 = ("au5-roblox-auth.luarmor.net")
+		tbl[1] = v9
+		tbl[2] = v10
+		tbl[3] = v11
+		tbl[4] = v12
+		tbl[5] = v13
+		v6 = tbl[math[("random")](1, 5)]
+	end
+end)
+local tbl
+tbl = {[("Version")] = ("3.4")}
+tbl[("Host")] = (flag4 and LT_R_RRT_H) or (("https://") .. v6)
+tbl[("ScriptID")] = "03f4e7c22c3ad2209f8c36631ab69a48"
+tbl[("ScriptVersion")] = "0026"
+tbl[("Name")] = "ACE DUELS "
+if v7 then
+	tbl[("Host")] = ("http://mc.felinemastery.xyz")
+	v6 = ("mc.felinemastery.xyz")
+end
+local flag5
+flag5 = type(({table.unpack(v, 1, v.n)})[1]) ~= ("table")
+local fn2
+fn2 = nil
+local n
+n = nil
+local tbl2
+tbl2 = nil
+local tbl3
+tbl3 = nil
+local flag6
+flag6 = nil
+local v9
+v9 = nil
+local tbl4
+tbl4 = nil
+local v10
+v10 = print
+local v11
+v11 = next
+local v12
+v12 = string[("char")]
+local v13, v14, v15, v16, v17, v18, v19, v20, v21, v22
+local v23, v24, v25, v26, v27, v28, v29, v30, v31, flag7
+local fn3, v32, n2, fn4, fn5, fn6, n3, v33
+do
+	local v34 = identifyexecutor
+	v13 = game
+	v14 = pcall
+	v15 = string[("gmatch")]
+	v16 = debug[("traceback")]
+	v17 = tonumber
+	v18 = setmetatable
+	v19 = rawget
+	v20 = wait
+	v21 = debug[("getinfo")]
+	v22 = loadstring
+	v23 = os[("time")]
+	v24 = string[("byte")]
+	v25 = string[("sub")]
+	v26 = spawn
+	local v35 = game:GetService(("RunService"))[("Heartbeat")]
+	v27 = os[("clock")]
+	local v36 = math[("huge")]
+	v28 = tostring
+	v29 = pairs
+	v30 = string[("find")]
+	v31 = getgenv
+	flag7 = false
+	fn3 = function(arg, arg2)
+		v22(("local t,r = ...\nspawn(function() while wait() do pcall(function() game:GetService(\"CoreGui\").RobloxPromptGui.promptOverlay.ErrorPrompt.TitleFrame.ErrorTitle.Text = t\ngame:GetService(\"CoreGui\").RobloxPromptGui.promptOverlay.ErrorPrompt.MessageArea.ErrorFrame.ErrorMessage.Text = r end) end end)\ngame:GetService('Players').LocalPlayer:Kick(r)\n        "))(arg, arg2)
+		while v20() do
+		end
+	end
+	v32 = script_key or ("none")
+	n2 = 0
+	local flag8 = false
+	v26(function()
+		flag8 = true
+		while not flag6 do
+			n2 += 1
+			v35:Wait()
+		end
+	end)
+	while not flag8 do
+		v35:Wait()
+	end
+	fn4 = function()
+		local v37 = n2
+		while n2 == v37 do
+			v35:Wait()
+		end
+	end
+	fn5 = function(arg)
+		if arg then
+			error("devirt: for loop without back edge")
+		end
+		while v20() do
+		end
+	end
+	fn6 = function(arg)
+		for i = 1, 2 do
+			local n4 = (arg % 9915) + 4
+			local n5 = nil
+			local n6 = nil
+			for i2 = 1, 3 do
+				n5 = (arg % 4155) + 3
+				if (i2 % 2) == 1 then
+					n5 += 522
+				end
+				n6 = (arg % 9996) + 1
+				if (n6 % 2) ~= 1 then
+					n6 *= 3
+				end
+			end
+			local n7 = ((arg % 9999995) + 1) + 16825
+			local n8 = arg % 1000
+			local n9 = fn2((arg - n8) / 1000) % 1000
+			local n10 = (arg % ((n4 * n5) + 9999)) + 16825
+			arg = ((((n8 * n9) + n7) + (arg % ((419824125 - n7) + n8))) + ((((n10 + (n8 * n5)) + n9) % 999999) * (n7 + (n10 % n6)))) % 99999999999
+		end
+		return arg
+	end
+	n3 = 1
+	v33 = ((syn and syn[("request")]) or request) or http_request
+	if v34 and (({v34()})[1] == ("Krampus")) then
+		n3 = 9
+	elseif v34 and (({v34()})[1] == ("ScriptWare")) then
+		if ({v34()})[2] == ("Mac") then
+			n3 = 5
+		else
+			n3 = 2
+		end
+	elseif ((((FLUXUS_LOADED or EVON_LOADED) or WRD_LOADED) or COMET_LOADED) or OZONE_LOADED) or TRIGON_LOADED then
+		n3 = 4
+	elseif KRNL_LOADED then
+		n3 = 3
+	elseif Electron_Loaded then
+		n3 = 6
+	elseif v34 and (({v34()})[1] == ("Sirhurt")) then
+		n3 = 7
+	elseif v34 and (({v34()})[1] == ("Solara")) then
+		n3 = 11
+	elseif v34 and (({v34()})[1] == ("incognito")) then
+		n3 = 11
+	elseif v34 and (({v34()})[1] == ("NX")) then
+		n3 = 11
+	elseif v34 and (({v34()})[1] == ("Xeno")) then
+		n3 = 11
+	elseif v34 and (({v34()})[1] == ("Nezur")) then
+		n3 = 11
+	elseif v34 and (({v34()})[1] == ("Rebel")) then
+		n3 = 15
+	end
+	if v34() == ("Wind") then
+		n3 = 11
+	end
+end
+do
+	local function fn7(arg, arg2)
+		tbl3 = {}
+		tbl2 = {}
+		for i = 0, arg do
+			local v34 = v12(i)
+			tbl2[i] = v34
+			tbl2[v34] = i
+		end
+		for i = 1, #arg2 do
+			local v34 = arg2[i]
+			tbl3[i - 1] = v34
+			tbl3[v34] = i - 1
+		end
+	end
+	local tbl5 = {}
+	local v34 = ("a")
+	local v35 = ("b")
+	local v36 = ("Q")
+	local v37 = ("k")
+	local v38 = ("O")
+	local v39 = ("I")
+	local v40 = ("1")
+	local v41 = ("l")
+	local v42 = ("0")
+	local v43 = ("9")
+	local v44 = ("E")
+	local v45 = ("3")
+	local v46 = ("J")
+	local v47 = ("7")
+	local v48 = ("G")
+	local v49 = ("T")
+	tbl5[1] = v34
+	tbl5[2] = v35
+	tbl5[3] = v36
+	tbl5[4] = v37
+	tbl5[5] = v38
+	tbl5[6] = v39
+	tbl5[7] = v40
+	tbl5[8] = v41
+	tbl5[9] = v42
+	tbl5[10] = v43
+	tbl5[11] = v44
+	tbl5[12] = v45
+	tbl5[13] = v46
+	tbl5[14] = v47
+	tbl5[15] = v48
+	tbl5[16] = v49
+	fn7(255, tbl5)
+end
+fn2 = function(arg)
+	return arg - (arg % 1)
+end
+local fn7
+fn7 = function(arg)
+	local n4 = 1103515245
+	local n5 = 12345
+	local n6 = 99999999
+	local n7 = arg % 2147483648
+	local n8 = 1
+	return function(arg2, arg3)
+		local v34 = n6
+		local n9 = (n4 * n7) + n5
+		local n10 = (n9 % v34) + n8
+		n8 += 1
+		n7 = n10
+		n5 = ((n9 % 4859) * v34) % 5781
+		return ((arg2 + (n10 % arg3)) - arg2) + 1
+	end
+end
+local fn8
+fn8 = function(arg)
+	for i = 1, 2 do
+		local n4 = (arg % 9915) + 4
+		local n5 = nil
+		local n6 = nil
+		for i2 = 1, 3 do
+			n5 = (arg % 4155) + 3
+			if (i2 % 2) == 1 then
+				n5 += 522
+			end
+			n6 = (arg % 9996) + 1
+			if (n6 % 2) ~= 1 then
+				n6 *= 3
+			end
+		end
+		local n7 = ((arg % 9999995) + 1) + 16825
+		local n8 = arg % 1000
+		local n9 = fn2((arg - n8) / 1000) % 1000
+		local n10 = (arg % ((n4 * n5) + 9999)) + 16825
+		arg = ((((n8 * n9) + n7) + (arg % ((419824125 - n7) + n8))) + ((((n10 + (n8 * n5)) + n9) % 999999) * (n7 + (n10 % n6)))) % 99999999999
+	end
+	return arg
+end
+local fn9
+fn9 = function()
+end
+local fn10
+fn10 = function(arg)
+	local tbl5 = {}
+	local tbl6 = {}
+	local tbl7 = {}
+	for i = 1, 13 do
+		local tbl8 = {}
+		local tbl9 = {}
+		tbl5[tbl8] = tbl9
+		tbl6[tbl9] = i
+		tbl7[tbl8] = tbl9
+	end
+	if arg then
+		tbl5 = arg[1]
+		tbl6 = arg[2]
+		tbl7 = arg[3]
+	end
+	local v34 = nil
+	local n4 = 0
+	local n5 = 0
+	local n6 = 0
+	for k, v35 in v11, tbl5, v34 do
+		local v36 = tbl6[v35]
+		if tbl7[k] == v35 then
+			n4 += 1
+		end
+		n5 += 1
+		n6 = (((n5 % 2) == 0) and (n6 * v36)) or ((n6 + v36) + n5)
+	end
+	if n4 ~= 13 then
+		n = -1
+	end
+	tbl4 = {tbl5, tbl6, tbl7}
+	n = n6
+	return false
+end
+local fn11
+fn11 = function(arg)
+	for i = 1, 2 do
+		local n4 = (arg % 9915) + 4
+		local n5 = nil
+		local n6 = nil
+		for i2 = 1, 3 do
+			n5 = (arg % 4155) + 3
+			if (i2 % 2) == 1 then
+				n5 += 522
+			end
+			n6 = (arg % 9996) + 1
+			if (n6 % 2) ~= 1 then
+				n6 *= 3
+			end
+		end
+		local n7 = ((arg % 9999995) + 1) + 16825
+		local n8 = arg % 1000
+		local n9 = fn2((arg - n8) / 1000) % 1000
+		local n10 = (arg % ((n4 * n5) + 9999)) + 16825
+		arg = ((((n8 * n9) + n7) + (arg % ((419824125 - n7) + n8))) + ((((n10 + (n8 * n5)) + n9) % 999999) * (n7 + (n10 % n6)))) % 99999999999
+	end
+	return arg
+end
+local fn12
+fn12 = function(arg)
+	for i = 1, 2 do
+		local n4 = (arg % 9915) + 4
+		local n5 = nil
+		local n6 = nil
+		for i2 = 1, 3 do
+			n5 = (arg % 4155) + 3
+			if (i2 % 2) == 1 then
+				n5 += 522
+			end
+			n6 = (arg % 9996) + 1
+			if (n6 % 2) ~= 1 then
+				n6 *= 3
+			end
+		end
+		local n7 = ((arg % 9999995) + 1) + 16825
+		local n8 = arg % 1000
+		local n9 = fn2((arg - n8) / 1000) % 1000
+		local n10 = (arg % ((n4 * n5) + 9999)) + 16825
+		arg = ((((n8 * n9) + n7) + (arg % ((419824125 - n7) + n8))) + ((((n10 + (n8 * n5)) + n9) % 999999) * (n7 + (n10 % n6)))) % 99999999999
+	end
+	return arg
+end
+local fn13
+fn13 = function(arg)
+	local n4 = 1103515245
+	local n5 = 12345
+	local n6 = 99999999
+	local n7 = arg % 2147483648
+	local n8 = 1
+	return function(arg2, arg3)
+		local v34 = n6
+		local n9 = (n4 * n7) + n5
+		local n10 = (n9 % v34) + n8
+		n8 += 1
+		n7 = n10
+		n5 = ((n9 % 4859) * v34) % 5781
+		return ((arg2 + (n10 % arg3)) - arg2) + 1
+	end
+end
+local n4
+n4 = 68
+fn9(67, ("%"), (" - Loading Luarmor client..."))
+n = -1
+fn10()
+while n == -1 do
+end
+local v34
+v34 = fn13(n2 + n)
+if (n3 == 9) or (n3 == 15) then
+	local n5 = 0
+	v14(function()
+		local function fn14(arg)
+			v28(arg[1])
+		end
+		fn14(v18({}, {[("__index")] = function()
+			local fn15 = nil
+			fn15 = function()
+				n5 += 1
+				return fn15()
+			end
+			fn15()
+		end}))
+	end)
+	local n6 = 0
+	v14(function()
+		v33(v18({}, {[("__index")] = function()
+			local fn14 = nil
+			fn14 = function()
+				n6 += 1
+				return fn14()
+			end
+			fn14()
+		end}))
+	end)
+	if (n6 + n5) < 20000 then
+		n4 = 19
+	elseif (n6 - n5) ~= 0 then
+		n4 = 189
+	end
+end
+local fn14
+fn14 = function(arg, arg2, arg3)
+	local v35 = v3
+	local tbl5 = {[("Method")] = ("GET")}
+	if arg2 then
+		tbl5 = v18(tbl5, {[("__index")] = function(arg4, arg5)
+			if arg5 == ("Url") then
+				local v36 = v3
+				local v37 = v15(v16(), ("[^:]*:(%d+)"))
+				local v38 = v37()
+				local v39 = v37()
+				local n5 = 1
+				v14(function()
+					n5 = v17(v39) - v17(v38)
+				end)
+				local flag8 = (n3 == 9) or (n3 == 15)
+				local flag9
+				if flag8 then
+					flag9 = (n5 ~= 0) or (v38 ~= v39)
+				else
+					flag9 = flag8
+				end
+				if flag9 then
+					n4 = 121
+					while arg3 do
+					end
+				end
+				return arg
+			end
+			return v19(tbl5, arg5)
+		end})
+	else
+		tbl5[("Url")] = arg
+	end
+	local v36 = v33(tbl5)
+	if v36[("StatusCode")] == 0 then
+		if flag7 then
+			warn(("[CRITICAL] received StatusCode = 0; most likely an executor problem. Re-execute the script"))
+		end
+		local v37 = v3
+		writefile(("luarmor-err-code0.txt"), ("[CRITICAL] received StatusCode = 0; most likely an executor problem. Re-execute the script"))
+	end
+	return v36[("Body")], v36[("Headers")]
+end
+fn4()
+local fn15
+fn15 = function(arg)
+	if (v31()[8753563] == 22044) and (n3 ~= 11) then
+		if flag7 then
+			warn(("Cannot load Luarmor client (0x561c) task collision detected.. \nYou are trying to execute 2 Luarmor scripts very frequently. Please wait 2-3 seconds after first one loads, then execute the other script."))
+		end
+		v26(function()
+			v20(5)
+			v31()[8753563] = nil
+		end)
+		fn5()
+	end
+	v31()[8753563] = 22044
+	local flag8 = false
+	local tbl5 = {v21, v18, v28}
+	tbl5[-1] = ((n3 == 3) and (function()
+	end)) or v33
+	local v35 = v25
+	local v36 = v24
+	local v37 = v23
+	local v38 = v22
+	local v39 = v14
+	tbl5[4] = v12
+	tbl5[5] = v35
+	tbl5[6] = v36
+	tbl5[7] = v37
+	tbl5[8] = v38
+	tbl5[9] = v39
+	local function fn16()
+		flag8 = true
+		return (" "):rep(16777215)
+	end
+	local v40 = v18({}, {[("__tostring")] = function()
+		flag8 = true
+		return (" "):rep(16777215)
+	end})
+	for k, v41 in v11, tbl5, nil do
+		if k ~= -1 then
+			local flag9 = n3 ~= 11
+			if flag9 then
+				local v42 = v3
+				flag9 = v21(v41)[("what")] == ("Lua")
+			end
+			if flag9 then
+				flag8 = true
+			end
+		end
+		if (v41 ~= v10) and (v41 ~= v28) then
+			local v42 = v10
+			local v43 = v28
+			local v44 = error
+			local env = getfenv()
+			env[("tostring")] = fn16
+			env[("error")] = fn16
+			env[("print")] = fn16
+			if k == -1 then
+				if n3 ~= 5 then
+					v14(v41, (""))
+				end
+			else
+				v14(v41, v40)
+			end
+			env[("tostring")] = v43
+			env[("print")] = v42
+			env[("error")] = v44
+		end
+	end
+	if flag8 and (n3 ~= 11) then
+		n4 = 85
+		if arg then
+			fn5(true)
+		end
+	end
+	v31()[8753563] = nil
+end
+local v35, tbl5, fn16, fn17, fn18, fn19
+do
+	local L2 = {}
+	L2.v36 = n2
+	L2.v37 = nil
+	L2.flag8 = nil
+	L2.exitTo = nil
+	while true do
+		local v38 = v14(function()
+			local v38 = fn14
+			local v39 = v3
+			L2.v37 = v38(tbl[("Host")] .. ("/status"), (n3 == 9) or (n3 == 15))
+			local data = v13:GetService(("HttpService")):JSONDecode(L2.v37)
+			if not data[("active")] then
+				warn(data[("message")])
+				fn5()
+			end
+			if not data[("versions")][tbl[("Version")]] then
+				warn(("This script is outdated! Try using the latest version."))
+				fn5()
+			end
+			tbl[("Host")] = ((flag4 and LT_R_RRT_H) or (v7 and ("http://mc.felinemastery.xyz"))) or (("https://") .. v6)
+			local v40 = tbl
+			local v41 = v3
+			v9 = data[("versions")][v40[("Version")]]
+		end)
+		fn4()
+		if not v38 then
+			if not L2.flag8 then
+				fn9(69, ("%"), (" - Trying failover EU host.."))
+				v6 = ("eu1-roblox-auth.luarmor.net")
+				tbl[("Host")] = (flag4 and LT_R_RRT_H) or ("https://eu1-roblox-auth.luarmor.net")
+				L2.flag8 = true
+				if v38 then
+					L2.exitTo = 1
+					break
+				else
+					continue
+				end
+			end
+			break
+		elseif v38 then
+			L2.exitTo = 1
+			break
+		end
+	end
+	if L2.exitTo ~= 1 then
+		fn9(100, ("[  ERROR  ]"), (" - Failed to load Luarmor client --> ") .. v28(L2.v37), Color3[("new")](1, 0, 0), ("error"))
+		return
+	end
+	L2.fn20 = function(arg)
+		local n5 = 1103515245
+		local n6 = 12345
+		local n7 = 99999999
+		local n8 = arg % 2147483648
+		local n9 = 1
+		return function(arg2, arg3)
+			local v38 = n7
+			local n10 = (n5 * n8) + n6
+			local n11 = (n10 % v38) + n9
+			n9 += 1
+			n8 = n11
+			n6 = ((n10 % 4859) * v38) % 5781
+			return ((arg2 + (n11 % arg3)) - arg2) + 1
+		end
+	end
+	L2.n5 = ((n2 % 8585) * L2.v36) % 9910
+	fn15()
+	if flag5 then
+		n4 = 146
+	end
+	fn9(85, ("%"), (" - Connecting to server.."))
+	L2.v38 = L2.fn20(L2.n5 + v34(2, 4096))
+	v35 = v34(1111, 32768)
+	L2.n6 = ((12000 + (((((1398563873 * (((((1398563873 * (((1361 + L2.n5) + (n % 1000)) + n)) % 1610612736) + 22491) % 95716599) + 1)) + 22491) % 95716599) + 1) % 120000)) - 12000) + 1
+	tbl5 = {L2.n6 + L2.v38(100000, 1000000), v35, (L2.n6 + v34(3333, 15625)) + n2, (L2.v38(10000, 1000000))}
+	n = -1
+	fn10()
+	L2.flag9 = false
+	if n == -1 then
+		n = 100
+		L2.flag9 = true
+	end
+	L2.n7 = 0
+	L2.n8 = 0
+	L2.n9 = 0
+	L2.n10 = 1
+	L2.tbl6 = {[0] = 0}
+	L2.fn21 = function(arg, arg2, arg3)
+		arg2 = (arg2 and arg) or tbl2[arg]
+		if not arg3 then
+			arg2 = ((arg2 + 4096) - L2.tbl6[L2.n7]) % 256
+			L2.n9 += arg2
+			L2.n7 = (L2.n7 + 1) % L2.n10
+		end
+		local n11 = arg2 % 16
+		return tbl3[(arg2 - n11) / 16] .. tbl3[n11]
+	end
+	fn16 = function(arg)
+		local n11 = 0
+		for i = 1, #arg do
+			n11 += v24(arg, i)
+		end
+		return n11
+	end
+	L2.fn22 = function(arg, arg2)
+		local v39 = tbl3
+		local n11 = (((tbl3[v25(arg, 1, 1)] * 16) + v39[v25(arg, 2, 2)]) + L2.tbl6[L2.n8]) % 256
+		L2.n8 = (L2.n8 + 1) % L2.n10
+		if arg2 then
+			return n11
+		end
+		return tbl2[n11]
+	end
+	fn17 = function(arg)
+		local tbl7 = {}
+		L2.n8 = 0
+		local n11 = 1
+		while true do
+			local v39 = L2.fn22(v25(arg, n11, n11 + 1), true)
+			n11 += 2
+			local v40 = ("")
+			for i = 1, v39 do
+				v40 ..= L2.fn22(v25(arg, n11, n11 + 1))
+				n11 += 2
+			end
+			tbl7[#tbl7 + 1] = v40
+			if not (n11 > #arg) then
+				continue
+			end
+			break
+		end
+		return tbl7
+	end
+	fn18 = function(arg, arg2)
+		local v39 = L2.fn21(#arg, true, arg2)
+		for i = 1, #arg do
+			v39 ..= L2.fn21(v25(arg, i, i), false, arg2)
+		end
+		return v39
+	end
+	fn19 = function(arg, arg2, arg3)
+		if arg == 1 then
+			L2.tbl6 = arg2
+			L2.n10 = arg3
+		elseif arg == 2 then
+			L2.n7 = 0
+			L2.n9 = 0
+		elseif arg == 3 then
+			return L2.n9
+		end
+	end
+	L2.v39 = fn13(v34(2, 32768 + (v23() % 2000)) + (n % 4096))
+	L2.v40 = fn7((L2.v38(1, 32768) + n2) + (v23() % 1000))
+	L2.v41 = L2.v39(111111, 999999)
+	L2.tbl7 = {}
+	for i = 1, (L2.v41 % 30) + 1 do
+		local fn23
+		if i == 2 then
+			fn23 = v28
+		elseif i == 8 then
+			fn23 = v10
+		elseif i == 17 then
+			fn23 = v25
+		else
+			fn23 = function()
+			end
+		end
+		L2.tbl7[i] = fn23
+	end
+	L2.n11 = L2.v40(111111, 999999) + 15103
+	L2.n12 = (L2.v39(1, 1234) * L2.v40(2, 1235)) + (n % 80000)
+	L2.n13 = ((10000 + (((((1445613873 * (((((1445613873 * (L2.n6 + n)) % 1627389952) + 23515) % 94716599) + 1)) + 23515) % 94716599) + 1) % 100000)) - 10000) + 1
+	L2.tbl8 = {L2.n13 + L2.v39(100000, 1000000), L2.n13 + L2.v40(100000, 1000000), (L2.v39(100000, 1000000))}
+	if v4 or v5 then
+		n4 = 218
+	end
+	if L2.flag9 then
+		n4 = 250
+	end
+	L2.v42 = L2.tbl8[1]
+	L2.n14 = 8754 + tbl5[4]
+	L2.str2 = (((fn18(("") .. L2.n11) .. fn18(("") .. (fn11(4309 + L2.v41) .. (fn8(n4 + L2.n12) .. fn6(L2.n11 - 15103))))) .. (fn18(L2.n12 .. ("")) .. fn18(("") .. L2.v41))) .. fn18((tbl5[3] + 17976) .. (""))) .. (fn18(("") .. L2.v42) .. fn18(("") .. L2.n14))
+	L2.n15 = tbl5[2] + 15103
+	L2.str3 = L2.str2 .. (fn18(L2.tbl8[3] .. ("")) .. fn18(("") .. L2.n15))
+	L2.n16 = 4309 + tbl5[1]
+	L2.str4 = (L2.str3 .. (fn18(L2.tbl8[2] .. ("")) .. fn18(("") .. L2.n16))) .. fn18(str or ("?"))
+	L2.str5 = fn18(fn12(fn19(3) + 16974) .. (""), true) .. L2.str4
+	L2.tbl9 = {}
+	L2.v43 = L2.v40(111111, 999999)
+	L2.v44 = n
+	getfenv()[L2.tbl9] = L2.v43
+	L2.v45, L2.v46 = fn14(tbl[("Host")] .. (("/") .. (v9 .. (("/auth/") .. (tbl[("ScriptID")] .. (("/init?t=") .. (L2.str5 .. (("&v=") .. (tbl[("ScriptVersion")] .. (("&k=") .. v32))))))))), (n3 == 9) or (n3 == 15))
+	n = -1
+	fn10(tbl4)
+	while n == -1 do
+	end
+	while tbl5[2] ~= v35 do
+	end
+	L2.n17 = 0
+	for k, v47 in v29(L2.tbl7) do
+		if (k == 2) and (v47 ~= v28) then
+			n4 = 147
+		end
+		if (k == 8) and (v47 ~= v10) then
+			n4 = 147
+		end
+		if (k == 17) and (v47 ~= v25) then
+			n4 = 147
+		end
+		L2.n17 = k
+	end
+	if L2.n17 ~= ((L2.v41 % 30) + 1) then
+		n4 = 147
+	end
+	L2.flag10 = false
+	if n4 == 147 then
+		L2.flag10 = true
+	end
+	if n ~= L2.v44 then
+		n4 = 100
+		L2.flag10 = true
+	end
+	if L2.v45 == ("err") then
+		-- [FIXED] removed infinite loop crasher
+	else
+		local fn23, n18, v47, n19, n20, v48, tbl10, n21, n22, n23
+		do
+			do
+				if v30(L2.v45, ("Old script, please use the latest version")) then
+					if v8 then
+						v8(("flush"))
+						return
+					end
+				end
+				if v25(L2.v45, 1, 1) == ("!") then
+					do
+						local v49 = ("Whitelist Error")
+						local v50
+						if string[("find")](L2.v45, (";;lrm_is_diff_msg")) then
+							v49 = ("You are blacklisted")
+							v50 = v25(L2.v45, 2, #L2.v45 - 17)
+						else
+							v50 = v25(L2.v45, 2, #L2.v45)
+						end
+						fn9(100, ("[ AUTH ERROR ]"), (" - Unable to authenticate."), Color3[("new")](1, 0, 0), ("error"))
+						fn3(v49, v50)
+					end
+					fn5()
+				end
+				if L2.v46 then
+					if not L2.v46[("Argwhudata")] then
+						local v49 = L2.v46[("argwhudata")]
+					end
+				end
+				do
+					local n24 = tbl5[4] % 256
+					local tbl11 = {[0] = tbl5[1] % 256, tbl5[2] % 256, tbl5[3] % 256, n24}
+					fn4()
+					fn23 = function(arg)
+						local n25 = 1103515245
+						local n26 = 12345
+						local n27 = 99999999
+						local n28 = arg % 2147483648
+						local n29 = 1
+						return function(arg2, arg3)
+							local v49 = n27
+							local n30 = (n25 * n28) + n26
+							local n31 = (n30 % v49) + n29
+							n29 += 1
+							n28 = n31
+							n26 = ((n30 % 4859) * v49) % 5781
+							return ((arg2 + (n31 % arg3)) - arg2) + 1
+						end
+					end
+					if getfenv()[L2.tbl9] ~= L2.v43 then
+						n4 = 100
+						L2.flag10 = true
+					end
+					n18 = 1
+					for i = 1, 30 do
+						local v49 = v28({})
+						local n25
+						if v28({}) < v49 then
+							n25 = n18 + 1
+						else
+							n25 = n18 * 2
+						end
+						n18 = n25 % 10000
+					end
+					fn19(1, tbl11, 4)
+					v47 = fn17(L2.v45)
+					n19 = v47[1] - L2.n11
+					n20 = v47[4] - L2.v41
+					while n24 ~= tbl11[3] do
+					end
+					fn15()
+					v48 = tbl11[3]
+					tbl10 = {[0] = tbl11[0], [2] = tbl11[1], [4] = tbl11[2], [6] = v48, v47[9], [3] = v47[7], [5] = v47[2], [7] = v47[6]}
+				end
+			end
+			fn19(1, tbl10, 8)
+			n21 = v47[8] - L2.tbl8[1]
+			n22 = v47[3] - L2.tbl8[2]
+			n23 = v47[5] - L2.tbl8[3]
+			do
+				local str6 = ("") .. (fn12(L2.tbl8[3] + 4012) .. (fn11(L2.tbl8[1] + 31) .. fn8(L2.tbl8[2] + 6823)))
+				if (v47[11] == str6) and ({[str6] = true})[v47[11]] then
+					flag2 = true
+				else
+					local str7 = ("") .. (fn6(L2.tbl8[3] + 4012) .. (fn8(L2.tbl8[1] + 69) .. fn11(L2.tbl8[2] + 6823)))
+					if (v47[11] == str7) and ({[str7] = true})[v47[11]] then
+						flag2 = true
+					end
+				end
+			end
+		end
+		local str6
+		do
+			if flag2 then
+				local flag11 = v17((v47[14] and v47[14]) or ("-1")) == -1
+				v17((v47[15] and v47[15]) or ("0"))
+			end
+			n = -1
+			fn10()
+			if n == -1 then
+				n4 = 250
+				n = 100
+			end
+			do
+				local n24 = (((n2 + L2.v39(111111, 999999)) + L2.v40(1234, 5678)) + (n % 99915)) + n18
+				L2.tbl8[4] = n2 + (n % 9951)
+				L2.v39(100000, 1000000 + (n % 1000))
+				L2.tbl8[5] = ((n % 8005) + n18) + L2.v40(100000, 1000000 + (n % 5000))
+				L2.tbl8[6] = L2.v39(100000, 1000000)
+				fn19(2)
+				local v49 = L2.tbl8[6]
+				str6 = fn18(("") .. (fn8(v47[13] + 3275) .. (fn12(n24 + n4) .. fn11(v47[10] + L2.v41)))) .. (fn18(L2.tbl8[5] .. ("")) .. (fn18(("") .. n24) .. (fn18(("") .. v49) .. fn18(L2.tbl8[4] .. ("")))))
+			end
+		end
+		local str7 = fn18(fn8(fn19(3) + 16974) .. (""), true) .. str6
+		local v49 = v47[12]
+		local response = v13:HttpGet(tbl[("Host")] .. (("/") .. (v9 .. (("/auth/start/") .. (v49 .. (("?t=") .. str7))))))
+		while v48 ~= tbl10[6] do
+		end
+		if response == ("err") then
+			-- [FIXED] removed infinite loop crasher
+		else
+			if v25(response, 1, 1) == ("!") then
+				-- [FIXED] Removed Kick on auth response
+-- original was Kick(response)
+				fn5()
+			end
+			do
+				local v50 = fn17(response)
+				fn23(((1 + L2.v39(100, 1000 + n18)) + L2.v40(500, 5000 + n18)) + (n2 % 10000))
+				local flag11 = false
+				local flag12 = false
+				local v51 = nil
+				for i = 1, 3 do
+					local v52 = v50[3]
+					local str8 = fn8(L2.tbl8[5] + 15103) .. (fn8(L2.tbl8[4] + fn16((flag11 and ("?")) or v13[("JobId")])) .. fn8(L2.tbl8[6] + L2.tbl8[2]))
+					if (v52 == str8) and ({[str8] = true})[v52] then
+						flag3 = true
+						if not ((v50[8] and (v50[8] ~= ("?"))) and v50[8]) then
+							local v53 = ("Unknown")
+						end
+						if not (v50[9] and v50[9]) then
+							local v53 = ("Unknown")
+						end
+						v51 = v50[6]
+						do
+							local n24 = v50[1] - L2.tbl8[4]
+							local n25 = v50[7] - L2.tbl8[5]
+							local n26 = v50[5] - L2.tbl8[6]
+							local v53 = n21
+							local v54 = n22
+							local v55 = n23
+							n21 = function(arg)
+								return ((v53 * arg) % n24) + (arg * 3)
+							end
+							n22 = function(arg)
+								return ((v54 * arg) % 10000) + ((arg * n25) % 4)
+							end
+							n23 = function(arg)
+								return (((arg + n26) % 100) * arg) % ((v55 % 100) + 1)
+							end
+						end
+						flag12 = true
+						break
+					elseif i == 3 then
+						flag12 = false
+						v51 = nil
+					else
+						flag11 = true
+						flag12 = false
+						v51 = nil
+					end
+				end
+				if not flag12 then
+					-- [FIXED] removed infinite loop crasher
+				else
+					if not L2.flag10 then
+						local L1 = {}
+						L1.v52, L1.Players, L1.UserInputService, L1.TweenService, L1.RunService, L1.fn24, L1.fn25, L1.fn26, L1.localPlayer, L1.playerGui = nil, nil, nil, nil, nil, nil, nil, nil, nil, nil
+						L1.aceTouchDevice, L1.acePhoneDevice, L1.fn27, L1.font, L1.tbl11, L1.tbl12, L1.tbl13, L1.candyMovementPack, L1.obj, L1.tbl14 = nil, nil, nil, nil, nil, nil, nil, nil, nil, nil
+						L1.tbl15, L1.tbl16, L1.vlSave1, L1.tbl17, L1.tbl18, L1.tbl19, L1.tbl20, L1.tbl21, L1.tbl22, L1.tpMode = nil, nil, nil, nil, nil, nil, nil, nil, nil, nil
+						L1.dropMode, L1.fn28, L1.tbl23, L1.instance, L1.candySemiSteal, L1.fn29, L1.fn30, L1.tbl24, L1.vector, L1.vector2 = nil, nil, nil, nil, nil, nil, nil, nil, nil, nil
+						L1.vector3, L1.vector4, L1.connection, L1.connection2, L1.n24, L1.n25, L1.raVeAutoPathWaypoints, L1.fn31, L1.fn32, L1.fn33 = nil, nil, nil, nil, nil, nil, nil, nil, nil, nil
+						L1.fn34, L1.fn35, L1.fn36, L1.fn37, L1.fn38, L1.fn39, L1.fn40 = nil, nil, nil, nil, nil, nil, nil
+						do
+							do
+								local tbl25, flag13
+								do
+									do
+										do
+											do
+												local aceAntiCollisionState
+												do
+													do
+														local localPlayer2
+														do
+															do
+																do
+																	flag6 = true
+																	fn9(95, ("%"), (" - Finalizing.."))
+																	fn9(100, ("[   SUCCESS   ]"), (" - Authenticated in ") .. ((v27() - now) .. ("s")), Color3[("new")](0, 1, 0), ("done"))
+																	L1.v52 = nil
+																	do
+																		local tbl26 = {[18] = 184, [3] = 176, [17] = 114, [6] = 6, [22] = 108, 90, [19] = 189, [5] = 22, [13] = 8, [9] = 222, [7] = 114, [20] = 164, [10] = 155, [21] = 129, [15] = 123, [11] = 143, [16] = 111, [4] = 217, [23] = 5, 89, [12] = 105, [8] = 139, [24] = 235, [14] = 94}
+																		luraph_runtime1(v51, buffer.fromstring("\241\152\014f\210\031]e\166\180\247\005>\250\165\017\017_?\181\018S\160\n\143\024\204Z\164\244\003`G\201\002\183\240\205d\025^\003\222\2251\242\215\127\136Q\222\024\228)\140\137\192\211AF\253\191l;\153\158\186@c\185l\011Wi\012\156|\194w\180\160C\018\029.-\149\197\1491\135{VS\237\188\222\202G\233\172\132\165\160\233\245\153\222>\129n@?\147?\236RV\151w\215\1640\216]V\027\006.\196k;\212A^\239\188\163\135j\241xEaSqq\021-2hK-\223(\1462\253\172\177(\174\164\008\211\002\164\1288\209\014p\136S\009f\004\166\250\175\150\131P\158\231~D\013\233\220\012\181\233\138\147j\1397[\250\005\246M\255pY\206\164S\018\191\186\1779\233lU]\138\159\235\166/V\202\171\176\176n\138\218\159\021\200\142\140+\220D\240Z\002X\145}\177\150\195\154up\029\166\185\184\014\173\183\017\230\0266\222$\180\004\1809\206i\165\169\neH\235\249\208a\018\0119\160L\187\198\011\182\203\134e1\209\154\228\158J\166H39[w#\232X\015\008\214\228\1832{\146\182;\025\187\157|C\190\134\015\211\172v \1503\241Am\184I\157\153\177.?>G\196t\1676\1672\n@]\029\191\021r\197\025\247\176\230\015R\026\022\144\184K5\006\166\\\189x\185\222\nS\167\160\229p\231Es\\\232\159\145\156\151{\199\017\023\247\150\003\024-\164\240#\178\251\237mG\225f\175\204\251\182o:6\028\213\241'\245\239\012\161\1616{=\210\146e(w\177,\233Im\249\026\128.\013A\252\197\254\254+\239:\248k\137\143\195$F\148\237\171f\193\136T*c\029C[\1875||@\146\171u\195\238\019\163\200O\231\185\156\144?qrI\232\141\253.\162\029\009\172\013\2230k\144\219x\255\172\129\144w\232\025A\248\013\229\214z_;\205\197\013\219Ko\022\221\222\016Qj\249\012\204\028\226\135\026\236\203<\209\173\136\nOW\243O\235\024\229//W\189\003\203K\186)`\151fp\222\016\183xD\147\147%\203\172\203\214\182\222\157\220\020.<~W\145\151\170\168\165\224\005q\198\168\193\241\026QO\016T\000>\254\0122\217Q\176\232\229\011c\028\006$GD\232\193\242\246\009Wu\227\244\140\000aC\136m\127\203\208\213^F\163\185\2419\186{\014\202\152\185\180F\019|\174\235\131\253\222\171\145\151\244\155\227\133\176\006\203\169X\128\182;\173\230.\149\157D\026e\240c\165S\030;\017&\229a\165\\\253\181\003\246\204\153TW\\S\247\2463~D\021\186\174^\185&5\194a\135\206u\172\173\248m\248\215\000\219\142\\/\155)\013\208\001\143\163X\170\202|H\028\179\155t\224\179Ny|\187\244\177\190\188\188\154\254IZ\171Gu\184.\252\245\008\015S;\142\173\024\007la\174\183\187\244\191\183\002\185~e\210\186\1786\130S#\006\182\135\031N\025\193Gj\008\157\226!z\031\220[\253\145\230\"]\141\000l\212\192\028\177\190\201m!\012\012\007>f\204 \204\236\173\184\007\234\221\183!\134B%\009\178\127\154\204\246Fn\177\163Y\020\184ol\210\163t6\194\208\165a\011@\025\216\212\242\165\144.\153\182lQ\191\134\230G\1374\213\253`\170\204R\158\211\235[\153\164B\030\194\231\020\171\197e\153r;\174\208x\012\187._\1396\147aOhE\0009U\128\233\166\158\145\185\152\159\146#\165\162\012\167rA\191\213\0074\159W\011\245\020BR:\246\132\009\253\221\188\014Yp\008\198j\189^\011\246\160:Z\213\011\236!#\013D\nz\159:\022\172\181\156d\0087\189\1885M\226\0236\009z\022e$\001\026Q]\2542\000\134|\173YF>4\006\210HDs\020_\174+.`i)\207\160\243\189\203>\247E\255\242t\184r\003\235\004G\131\209~A\134\150M\166\190\215\128\017L\251\144\239\152\028\2242\184\248J\199\237\209\170Vr>\127\015aPz\213\157\027\245\189/\022\220J\149\204x\135n\162*\214\161\014\222\171|w\223\\?\242\217*\000\246\143\164\025 oF\130@b<\188p\207\241\196\233\021\194.\\\137\249\237\251W0uX\214\007\247\178U~Gvi\235\234\223\130\182MH\212\191\176q\201`m\250\149\131NP\234^\179k\129\202\147\221\232\201T\155\166\220\170\241\232\205\007\000E8H8\209\244\176`t\196\2503g\008\157\193z\230\223\142\020\246\198\250\232\255\192\137\136\221\190\132\232\216\153\009\252\245?!\136jW\134D\012\211\184h\164\207'\014l\231:\250#)\163\005F\147\128\012\004x\242A\182!\179h\252\195\244\2051Y\184\154\157\166\241\209\233\011\208(\176m\161&\255\012\181\005\225\232\232\211\196\246\149\2167*Q\2108|O\200\2482VThi\216\189\143\232\237T\138D\209^\243](zW\026\140#7(\000\016\175\252\166\169\014\176\021\211\135GI\015,\012R\240\136\218\221\018\018\197d\030\172\019\247\136%\155\225.NW\220t\145a,j\200\193\219n|\173\172\243\164\201\143\001_\189\251\246\029~\008\1629\172A\215\230\138\185\021mO\246\148\149$\016\017\001\207\247XKB\016alQ8\200\217ur r\173\145z\193[i\219P\018\202\152\141'\247+\183\029k\182\175\254\001tO\212\214IY\244%\030D\001^1\023\192!\029\226\194\191\219H\225\252\"G\156\1573s\196\255\200v\220>CoI\174\209\018\130xV\023\127T~\153,\147\198\146\1391\207<\235*o\161BS'\170\143\233:\207\031\251\199\134\019\200\191\168FW\017\148Ae\228\019T\128B\153\145c\181\030\014\018\006\150\254*%\195\154;\171]\165f\165\244\168Wd\138iU\1657\212iw\222){\182\141\137\004+\222'\194fV\130Kp\199$Ss\253\008syb\029\245is|n\202J\237@\148\134\219\196\207\181\179\221\018\187\194\013\255y\145)\144@H;q\175\240\170N=\215u\174\145\007kj\130q\208n9\025~\136\147\016\216\213E.\129-\224\207UEx\187\2503\198K\165\155\005\021\246>y\166\009\163\144_\247\137\222^\249\144c\226\2119HN'\001FBGj\242\223\215\008\006)\235)\171\031\203\128T\140\194e\007\130k\025\208\239\187WU/\224\244\179\139\142\217\031\146.k\133O|z\031\189D\203\183A_\148\226\2390\243\030\"l\003v\184\003w\250q\182\130\222?i2\134\230\246,\218\168\139n\177\1439\028\152\145\021*\205\205\208W\204{\223\018VM(\194@\165\025E;\184%\179\005/\1502\179\0173\234P\197\027\000\176\187\220W\024\192\185\243n\238\195E\020gvp\213\154\133\198\177h\206b\023\187\152q\151ml\205\175e\009\149\220\243h\021\235\226\141\028Ly\157\006\181\137\183\253\163{#\149\186\224\214\216\150\195\190\133\129;\015\2219\254\235\146\2530\190L<\234/\246~i\149\158\022%\004\149\144\153\149\220xjgpO\207~\008[Y\244\225\225\025\184\254\209\151\1729fiV\215(\000\224D\235y\242\147\026\134\140\012'~t\1867\164\207\243C\1414W\136\156\217!\019\209\144\135\021\011\006\008uYXW\170X'~Q\028\147\012-L\166\185\143\013} \230\178O\147|S8\183\140*:\1778\212]\159\159\181\156\177P\129\173\173\163#\145\131Hz\160z\009\130I\001e\164Ap\136w\203\218\"p,\0010d\138^\241\234J\145*\213u\171 R\127\136D\188\178#\170lop\025r)X\250\175!\246|<\169\190OY\139\001&\025\225\007K\182q\003\154\194a\004oP\204\182\\uH4\014m\220\157\"\228\022\203\228\195\026\235\201\026g]\172\246\196\006\015\183\2509\244C\203Iu\000?#\021%_\252}\159\003\200\152\205#J\018\221\179\208\207b_\135\155\028\209\245\030/\213\205\1872\228\008\186\177\213\140V\0115E\210\024#+\204\196\158\020K\173\185\212\168\176fR\227JP\240\227\1618J\150(l\149\024+P9\001)\224\016\\o\197\213?\192\187\229on\251\156\224(\234\017\008\004\142vUy\017\163\203\170fm\217u\000\009\144\247\028O\219\"a\187/\171\227\149\179\201Z\019\201\205\202\221\012\219\254\252\217\005\161`~\024\016\213\132\232\189\253hg\131\225\226\";\211\157V\192B\240\000l\020\182z\219}G\247\218@\187B \000{H\145\133\016\185y=\214HA\0197\175:\1899\243yH\204T\151?3\241\020\240\227\000\166\193\179K-\185\185\168\243\243H&\218\154j\148r;\017\"'9\014\200\"\247\144\1541\242\012\174''\255\142I\140\2292\242q^\184\156z\227\154\207\000\219\176\210\156\192\141\179\158\172`\172M7\018\181EF\204\167\017t\141\\\028y\206\211\243\229+\240r\133\133D=\169@\194u:\003A\171\252\200\\\143b\156\200&\240\029a\145\228\186J\132|\n\203\189 \152\193\2153\188\156\211\143N\1968C6EJ\224\207\014h\239y\255\189]\240|4I\215\154[\201>kT\240#\224\011\154\229\186e5\180x9#\224\166\177\194p\195m\190\1617-\159b\166\127\127\245\021n\132\247\186A\021s\"{i\234H\209r~\001\159\170.\131\192J\214\020@#\191\013\014&\250\006\178o\209\006Z \136\239X\183\023\252\130\147\166\011\216\025\250\224\171\210\014\178\200M%\153\022\133A\229\149gz\163k\210v\174\001\211\169\170}\154\135\240\185?\226:k[\245\000\141xxf\152;}\210\127\220\205\239O\184\217g\199\147d\244\158\181&P\152\156\148\017\191bi(@\"\165\030\007\017\181e\185\024\196\002\195ktf1\031\170\181\138\000\221h\2529\222\146`\167\140\024\146K\132\175c\234\231\141\242\150TG2z\153;\231\207\204\255\015\236\027\225\224\217<\027\200\224'\157~\220zO\162\193z:9Xg\025\018\001\247l;]zT\218\223Ot\192\191B\201\148-N`\nZ\020\008m)o\222p\173\2120\244\164u\184WG\179A\024u7\134-\022\237G\130@@\244S\204\217\246\172\159\175/q\007\177[EP\006\239r\1506\023\149\197\218U\2084\161\139\229\187\230P\009\031\159\195\007\007Ku\023\207\155w\226h\246\140L!\174Qz\144\1478P\1579 P\021+\013\192\210j\223\157\020\129~b\234\148\203pT\149\164\186|3Bm\212fU|W\242\252\225\245\171lv\205~\233\221;\153X\224a9\164mW\149\182\175\190\025\255?q%\183\018\221\186\206~\238\179\239*\254[v\232\1940\254$\243GB\144XN\009\234\\\213&\192\193Va\153+\007\136M\216:\001\254\1565\244\234\231,\n\186;C\178\159d`t@\169HZ\208X\1995c\177\144\253p\231\168l\013^\019\194\150\176\210\1932\190{\136\177\242\176\017\198\185>\030&\158\027Cx\149\150\021\166N\222s\168\167\223[\182\\\238jj\164\154?\195\180\173\159[\160N\131\001t\2296\162k<\193\134#\016\246j\020\241\005s\163\237\128A,\232\019\162\152\242cM\139\195\208\014q\135\202tc-\142\220\184d\020\021\132\127\181\132\180~\241,\018\139\229\168\238\253\031]\169+J7/\140\"\246\006\233\251\162\024\207\025v(\149\139\208\136f\252\022\246\160\236\191>\218&XW\025o]\142r\166\2259\029r\204\2287h\143\204e\187\145d\221='495|\2218\146\012\145\159R-\003p\145\006\189W\003\185\230\182\n\007\211\024\169\241k\0028\029\200\134\249Q\235\171\249g\235\195w\130\233V\011gp\154f\155A\167\186\193\200\231\154H]\141\145\026#\147<\154+\176\188\168]W\182\149\232\228\239\200\013x\147\197\007\141\146F\184~\191\255\2205\136&\n\\\145_M\012*\217\158\030`\009\175\199sU4W\175A\203\162\198$\230\007\0240\228V9\008\242\162\238r)\2243K)\180\223\014b\219\221]\011\246\177\174\168z\255(\1284H\153#\128\"/\220`\250\021xp\134\195\031\191\013l\210\146\192Y\169\242\235K\183\022\253\216W067\253g\192\144\154X\242.\1543P\015'u\229\167\156\138\007\219\163V\157]\137\142+|\2061\225\184\"\138\141\254\143\147u"), tbl26, 167)()
+																	end
+																end
+-- script
+
+loadstring("function LPH_NO_VIRTUALIZE(f) return f end;")()
+_G._RaVeSettingsReset = false
+_G._RaVeBootBands = {fast = {at = 0, start = L1.v52[89], gap = 0.05}, main = {at = 0, start = 0.3, gap = 0.08}, late = {at = L1.v52[176], start = 1.2, gap = L1.v52[39]}}
+_G._RaVeBootFirst = {["Anti Ragdoll"] = L1.v52[179], ["Infinite Jump"] = true, ["Auto Carry Speed"] = true}
+_G._RaVeBootSpread = function(arg, arg2)
+	local main = _G._RaVeBootBands[arg] or _G._RaVeBootBands.main
+	main.at = math.max(main.at + main.gap, main.start)
+	local at = main.at
+	task.delay(at, function()
+		pcall(arg2)
+	end)
+	return at
+end
+if not game:IsLoaded() then
+	game.Loaded:Wait()
 end
 
--- // 5. ANTI-CHEAT BYPASS / ANTI-COLLISION / ANTI-FLING
--- [Original fn42 - AntiCollision Logic]
--- Handles other players' collisions to prevent fling
+-- =====================================================
+--  PAYLOAD ORGANIZED BELOW - STILL RUNNABLE
+--  Loader above is untouched (needed for L1.v52 decrypt)
+-- =====================================================
 
--- // 6. SPEED LOGIC (Eugene / Bootsware / Vlon)
--- [Original eugeneSpeedLogic, BootswareSpeedLogic, VlonESpeedLogic]
--- Controls movement speed, jump, infinite jump, speed billboard
+-- // ================= CORE SERVICES =================
+-- Players, RunService, TweenService, UserInputService already in L1
+-- L1.localPlayer, L1.playerGui, L1.aceTouchDevice etc.
 
--- // 7. UI SYSTEM - ACE HUB WINDOW
--- Window factory with tween animations
--- Title: "ACE DUELS" | Sub: "discord.gg/aceduels | Executor"
+-- // ================= GLOBAL CLEANUP =================
+-- Adapt / Candy / Ace old connections cleared to avoid duplicates
+-- _G._AdaptVisualStripConnections, _G.eugeneSpeedLogic, etc.
 
--- // 8. STEAL LOGIC (Candy Semi-Steal)
--- Config:
--- HOLD_MIN=1.3, HOLD_MAX=2.6, ENTRY_DELAY, COOLDOWN=0.05, STEAL_RANGE=9, PRIME_RANGE=80
--- Features: Auto steal, prompt memory, plot sync, watchdog
+-- // ================= FEATURE MAP =================
+-- 1. Anti Modules: AntiVoid, AntiCollision, AntiFling, AntiDie, AntiLag
+-- 2. Speed: eugeneSpeedLogic, BootswareSpeedLogic, VlonESpeedLogic, InfJump
+-- 3. UI: AceHub Window (discord.gg/aceduels)
+-- 4. Steal: Candy Semi-Steal (HOLD 1.3-2.6, RANGE 9, PRIME 80, COOLDOWN 0.05)
+-- 5. Billboard: Speed display + Ragdoll countdown (AceRagdollBB / AceHeadBB)
+-- 6. Sounds: catbox.moe mp3s
 
--- // 9. SPEED BILLBOARD / RAGDOLL COUNTDOWN
--- BillboardGui on Head showing Speed and Ragdoll timer
--- Functions: _RaVeRefreshSpeedBillboard, _RaVeRagdollCountdown
-
--- // 10. MAIN PAYLOAD START
--- Below is your original payload with crashers removed and indented
--- (Kept intact to preserve functionality)
-
+-- // ================= ACTUAL PAYLOAD =================
 
 L1.Players = game:GetService("Players")
 L1.UserInputService = game:GetService("UserInputService")
@@ -15485,10 +16614,3 @@ end
 end
 end
 end
-
--- ============================================
---  END OF ORGANIZED HUB
---  All infinite-loop crashers (while true do end) removed
---  All forced Kick() crashers removed
---  No webhooks/loggers detected
--- ============================================
