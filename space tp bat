@@ -1,724 +1,545 @@
--- Leaked by Neymarish x Servers ( Irish Hub Bat TP )
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
+print("deobf by discord.gg/speedhub")
+print("deobf by discord.gg/speedhub")
+print("deobf by discord.gg/speedhub")
+print("deobf by discord.gg/speedhub")
+print("deobf by discord.gg/speedhub")
+
+-- ============================================================
+-- Snow TP Bat — Full (visible buttons with borders)
+-- ============================================================
+local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
+local RunService       = game:GetService("RunService")
+local HttpService      = game:GetService("HttpService")
+local localPlayer      = Players.LocalPlayer
+local playerGui        = localPlayer:WaitForChild("PlayerGui")
 
-local localPlayer = Players.LocalPlayer or Players.LocalPlayerAdded:Wait()
-local playerGui = localPlayer:WaitForChild("PlayerGui", 10)
+-- ============================================================
+-- CONFIG
+-- ============================================================
+local CONFIG_FILE = "SnowVS_TPBat.json"
 
-if not playerGui then
-    warn("PlayerGui yüklenemedi!")
-    return
-end
+local config = {
+    keybind   = "P",
+    inputType = "Keyboard",
+    scale     = 1,
+}
 
-if playerGui:FindFirstChild("IrishBatTP") then
-    playerGui.IrishBatTP:Destroy()
-end
+local state = {
+    enabled            = false,
+    connection         = nil,
+    hitCooldown        = false,
+    key                = Enum.KeyCode.P,
+    inputType          = Enum.UserInputType.Keyboard,
+    binding            = false,
+    antiDieConnections = {},
+}
 
-pcall(function()
-    if not isfolder("Irish Ani") then
-        makefolder("Irish Ani")
-    end
-end)
+local function loadConfig()
+    pcall(function()
+        if type(isfile) ~= "function" then return end
+        if not isfile(CONFIG_FILE) then return end
+        local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+        if type(data) ~= "table" then return end
 
-local configPath = "Irish Ani/IrishBatTP.json"
-local settingsData = { keybind = nil, keybindType = nil }
-
-pcall(function()
-    if isfile(configPath) then
-        local decoded = HttpService:JSONDecode(readfile(configPath))
-        if decoded and decoded.keybind then
-            settingsData.keybind = decoded.keybind
-            settingsData.keybindType = decoded.keybindType or decoded.keybind.Type
+        if type(data.keybind) == "string" and Enum.KeyCode[data.keybind] then
+            config.keybind = data.keybind
         end
-    end
-end)
+        if data.inputType == "Keyboard" or data.inputType == "Gamepad1" then
+            config.inputType = data.inputType
+        end
+        if type(data.scale) == "number" then
+            config.scale = math.clamp(data.scale, 0.8, 1.3)
+        end
 
-task.spawn(function()
-    while true do
-        task.wait(5)
-        pcall(function()
-            writefile(configPath, HttpService:JSONEncode({
-                keybind = settingsData.keybind,
-                keybindType = settingsData.keybindType
-            }))
-        end)
-    end
-end)
-
-task.spawn(function()
-    local function applyGodmode(char)
-        local humanoid = char:WaitForChild("Humanoid", 5)
-        if not humanoid then return end
-        
-        humanoid.MaxHealth = math.huge
-        humanoid.Health = math.huge
-        
-        pcall(function()
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-        end)
-        
-        humanoid.StateChanged:Connect(function(_, newState)
-            if newState == Enum.HumanoidStateType.Dead then
-                humanoid.Health = math.huge
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-            end
-        end)
-        
-        humanoid:GetPropertyChangedSignal("Health"):Connect(function()
-            if humanoid.Health < humanoid.MaxHealth then
-                humanoid.Health = math.huge
-            end
-        end)
-    end
-
-    if localPlayer.Character then
-        applyGodmode(localPlayer.Character)
-    end
-    
-    localPlayer.CharacterAdded:Connect(function(char)
-        task.wait(0.3)
-        applyGodmode(char)
+        state.key       = Enum.KeyCode[config.keybind] or Enum.KeyCode.P
+        state.inputType = Enum.UserInputType[config.inputType] or Enum.UserInputType.Keyboard
     end)
-end)
-
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "IrishBatTP"
-screenGui.IgnoreGuiInset = true
-screenGui.ResetOnSpawn = false
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-screenGui.DisplayOrder = 999
-screenGui.Parent = playerGui
-
-local function create(className, properties, parent)
-    local inst = Instance.new(className)
-    for k, v in pairs(properties) do
-        inst[k] = v
-    end
-    if parent then inst.Parent = parent end
-    return inst
 end
 
-local function addStroke(parent, color, transparency, thickness)
-    return create("UIStroke", {
-        Color = color,
-        Transparency = transparency,
-        Thickness = thickness or 1,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-        Parent = parent
-    })
-end
-
-local function addCorner(parent, radius)
-    return create("UICorner", { CornerRadius = UDim.new(0, radius), Parent = parent })
-end
-
-local mainFrame = create("Frame", {
-    Name = "Main",
-    Active = true,
-    Position = UDim2.fromOffset(150, 150),
-    Size = UDim2.fromOffset(230, 180),
-    BackgroundColor3 = Color3.fromRGB(14, 14, 11),
-    BorderSizePixel = 0,
-    ClipsDescendants = true,
-    Parent = screenGui
-})
-
-addCorner(mainFrame, 10)
-create("UIGradient", {
-    Color = ColorSequence.new(Color3.fromRGB(14, 20, 15), Color3.fromRGB(8, 11, 9)),
-    Rotation = 90,
-    Parent = mainFrame
-})
-addStroke(mainFrame, Color3.fromRGB(46, 214, 116), 0.75, 1.2)
-
-create("UIPadding", {
-    PaddingTop = UDim.new(0, 14),
-    PaddingBottom = UDim.new(0, 14),
-    PaddingLeft = UDim.new(0, 14),
-    PaddingRight = UDim.new(0, 14),
-    Parent = mainFrame
-})
-
-local bodyFrame = create("Frame", {
-    Name = "Body",
-    Size = UDim2.new(1, 0, 0, 0),
-    AutomaticSize = Enum.AutomaticSize.Y,
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = mainFrame
-})
-
-create("UIListLayout", {
-    Padding = UDim.new(0, 8),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-    Parent = bodyFrame
-})
-
-local headerFrame = create("Frame", {
-    Name = "Header",
-    Active = true,
-    LayoutOrder = 1,
-    Size = UDim2.new(1, 0, 0, 40),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = bodyFrame
-})
-
-create("Frame", {
-    Size = UDim2.new(0, 3, 0, 24),
-    Position = UDim2.fromOffset(0, 8),
-    BackgroundColor3 = Color3.fromRGB(46, 214, 116),
-    BorderSizePixel = 0,
-    ZIndex = 3,
-    Parent = headerFrame
-})
-
-create("TextLabel", {
-    Position = UDim2.fromOffset(12, 0),
-    Size = UDim2.new(1, -44, 1, 0),
-    BackgroundTransparency = 1,
-    Text = "Irish Hub",
-    TextColor3 = Color3.fromRGB(233, 242, 236),
-    TextSize = 20,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Center,
-    ZIndex = 3,
-    Parent = headerFrame
-})
-
-local minimizeBtn = create("TextButton", {
-    Position = UDim2.new(1, -24, 0.5, -12),
-    Size = UDim2.fromOffset(24, 24),
-    BackgroundColor3 = Color3.fromRGB(16, 22, 17),
-    BorderSizePixel = 0,
-    Text = "x",
-    TextColor3 = Color3.fromRGB(124, 148, 134),
-    TextSize = 14,
-    AutoButtonColor = false,
-    ZIndex = 10,
-    Parent = headerFrame
-})
-addCorner(minimizeBtn, 8)
-local minimizeStroke = addStroke(minimizeBtn, Color3.fromRGB(255, 255, 255), 0.92, 1)
-
-minimizeBtn.MouseEnter:Connect(function()
-    TweenService:Create(minimizeStroke, TweenInfo.new(0.15), {Transparency = 0.4, Color = Color3.fromRGB(46, 214, 116)}):Play()
-    TweenService:Create(minimizeBtn, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(233, 242, 236)}):Play()
-end)
-minimizeBtn.MouseLeave:Connect(function()
-    TweenService:Create(minimizeStroke, TweenInfo.new(0.15), {Transparency = 0.92, Color = Color3.fromRGB(255, 255, 255)}):Play()
-    TweenService:Create(minimizeBtn, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(124, 148, 134)}):Play()
-end)
-
-local separator = create("Frame", {
-    LayoutOrder = 2,
-    Size = UDim2.new(1, 0, 0, 2),
-    BackgroundColor3 = Color3.fromRGB(46, 214, 116),
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = bodyFrame
-})
-
-local toggleRow = create("Frame", {
-    LayoutOrder = 3,
-    Size = UDim2.new(1, 0, 0, 34),
-    BackgroundColor3 = Color3.fromRGB(16, 22, 17),
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = bodyFrame
-})
-addCorner(toggleRow, 8)
-addStroke(toggleRow, Color3.fromRGB(255, 255, 255), 0.94, 1)
-
-create("TextLabel", {
-    Position = UDim2.fromOffset(14, 0),
-    Size = UDim2.new(1, -74, 1, 0),
-    BackgroundTransparency = 1,
-    Text = "Bat TP",
-    TextColor3 = Color3.fromRGB(233, 242, 236),
-    TextSize = 15,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    ZIndex = 3,
-    Parent = toggleRow
-})
-
-local switchBg = create("Frame", {
-    AnchorPoint = Vector2.new(1, 0.5),
-    Position = UDim2.new(1, -12, 0.5, 0),
-    Size = UDim2.fromOffset(46, 22),
-    BackgroundColor3 = Color3.fromRGB(30, 42, 34),
-    BorderSizePixel = 0,
-    ZIndex = 3,
-    Parent = toggleRow
-})
-addCorner(switchBg, 11)
-addStroke(switchBg, Color3.fromRGB(255, 255, 255), 0.9, 1)
-
-local switchKnob = create("Frame", {
-    AnchorPoint = Vector2.new(0, 0.5),
-    Position = UDim2.new(0, 3, 0.5, 0),
-    Size = UDim2.fromOffset(16, 16),
-    BackgroundColor3 = Color3.fromRGB(200, 212, 204),
-    BorderSizePixel = 0,
-    ZIndex = 4,
-    Parent = switchBg
-})
-addCorner(switchKnob, 8)
-
-local toggleButton = create("TextButton", {
-    Size = UDim2.new(1, 0, 1, 0),
-    BackgroundTransparency = 1,
-    Text = "",
-    AutoButtonColor = false,
-    ZIndex = 6,
-    Parent = toggleRow
-})
-
-local actionRow = create("Frame", {
-    LayoutOrder = 4,
-    Size = UDim2.new(1, 0, 0, 28),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = bodyFrame
-})
-
-create("UIListLayout", {
-    Padding = UDim.new(0, 6),
-    FillDirection = Enum.FillDirection.Horizontal,
-    SortOrder = Enum.SortOrder.LayoutOrder,
-    VerticalAlignment = Enum.VerticalAlignment.Center,
-    Parent = actionRow
-})
-
-local function getKeybindText()
-    if not settingsData.keybind then return "[Key]" end
-    local name = settingsData.keybind.Name or settingsData.keybind.name
-    return name and "[" .. name:gsub("Button", "") .. "]" or "[Key]"
-end
-
-local keybindBtn = create("TextButton", {
-    LayoutOrder = 1,
-    Size = UDim2.new(0.4, -2, 1, 0),
-    BackgroundColor3 = Color3.fromRGB(16, 22, 17),
-    BorderSizePixel = 0,
-    Text = getKeybindText(),
-    TextColor3 = Color3.fromRGB(46, 214, 116),
-    TextSize = 11,
-    AutoButtonColor = false,
-    ZIndex = 5,
-    Parent = actionRow
-})
-addCorner(keybindBtn, 8)
-addStroke(keybindBtn, Color3.fromRGB(255, 255, 255), 0.9, 1)
-
-local configBtn = create("TextButton", {
-    LayoutOrder = 2,
-    Size = UDim2.new(0.6, -2, 1, 0),
-    BackgroundColor3 = Color3.fromRGB(46, 214, 116),
-    BorderSizePixel = 0,
-    Text = "Configure",
-    TextColor3 = Color3.fromRGB(10, 14, 11),
-    TextSize = 11,
-    AutoButtonColor = false,
-    ZIndex = 5,
-    Parent = actionRow
-})
-addCorner(configBtn, 8)
-
-local discordRow = create("Frame", {
-    LayoutOrder = 5,
-    Size = UDim2.new(1, 0, 0, 22),
-    BackgroundColor3 = Color3.fromRGB(16, 22, 17),
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = bodyFrame
-})
-addCorner(discordRow, 6)
-addStroke(discordRow, Color3.fromRGB(255, 255, 255), 0.94, 1)
-
-create("TextLabel", {
-    Position = UDim2.fromOffset(10, 0),
-    Size = UDim2.new(1, -60, 1, 0),
-    BackgroundTransparency = 1,
-    Text = "discord.gg/irsh",
-    TextColor3 = Color3.fromRGB(124, 148, 134),
-    TextSize = 12,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    ZIndex = 3,
-    Parent = discordRow
-})
-
-local copyText = create("TextLabel", {
-    Position = UDim2.new(1, -50, 0, 0),
-    Size = UDim2.fromOffset(50, 22),
-    BackgroundTransparency = 1,
-    Text = "COPY",
-    TextColor3 = Color3.fromRGB(46, 214, 116),
-    TextSize = 12,
-    TextXAlignment = Enum.TextXAlignment.Right,
-    ZIndex = 3,
-    Parent = discordRow
-})
-
-local copyBtn = create("TextButton", {
-    Size = UDim2.new(1, 0, 1, 0),
-    BackgroundTransparency = 1,
-    Text = "",
-    AutoButtonColor = false,
-    ZIndex = 6,
-    Parent = discordRow
-})
-
-local configPanel = create("Frame", {
-    Name = "SettingsPanel",
-    Active = true,
-    Position = UDim2.fromOffset(150, 340),
-    Size = UDim2.fromOffset(230, 0),
-    AutomaticSize = Enum.AutomaticSize.Y,
-    BackgroundColor3 = Color3.fromRGB(14, 14, 11),
-    BorderSizePixel = 0,
-    ClipsDescendants = true,
-    Visible = false,
-    Parent = screenGui
-})
-addCorner(configPanel, 10)
-create("UIGradient", {
-    Color = ColorSequence.new(Color3.fromRGB(14, 20, 15), Color3.fromRGB(8, 11, 9)),
-    Rotation = 90,
-    Parent = configPanel
-})
-addStroke(configPanel, Color3.fromRGB(46, 214, 116), 0.75, 1.2)
-
-create("UIPadding", {
-    PaddingTop = UDim.new(0, 14),
-    PaddingBottom = UDim.new(0, 12),
-    PaddingLeft = UDim.new(0, 12),
-    PaddingRight = UDim.new(0, 14),
-    Parent = configPanel
-})
-
-local configBody = create("Frame", {
-    Size = UDim2.new(1, 0, 0, 0),
-    AutomaticSize = Enum.AutomaticSize.Y,
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = configPanel
-})
-create("UIListLayout", {
-    Padding = UDim.new(0, 8),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-    Parent = configBody
-})
-
-local confHeader = create("Frame", {
-    LayoutOrder = 1,
-    Size = UDim2.new(1, 0, 0, 24),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = configBody
-})
-create("Frame", {
-    Size = UDim2.new(0, 3, 0, 16),
-    Position = UDim2.fromOffset(0, 4),
-    BackgroundColor3 = Color3.fromRGB(46, 214, 116),
-    BorderSizePixel = 0,
-    ZIndex = 3,
-    Parent = confHeader
-})
-create("TextLabel", {
-    Position = UDim2.fromOffset(10, 0),
-    Size = UDim2.new(1, -12, 1, 0),
-    BackgroundTransparency = 1,
-    Text = "Settings / Info",
-    TextColor3 = Color3.fromRGB(233, 242, 236),
-    TextSize = 14,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    ZIndex = 3,
-    Parent = confHeader
-})
-
-local infoBox = create("Frame", {
-    LayoutOrder = 3,
-    Size = UDim2.new(1, 0, 0, 76),
-    BackgroundColor3 = Color3.fromRGB(16, 22, 17),
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = configBody
-})
-addCorner(infoBox, 8)
-addStroke(infoBox, Color3.fromRGB(255, 255, 255), 0.94, 1)
-
-create("TextLabel", {
-    Position = UDim2.fromOffset(10, 8),
-    Size = UDim2.new(1, -20, 1, -16),
-    BackgroundTransparency = 1,
-    Text = "Irish Hub Working Bat TP made By Big Dick Certz Type Shi",
-    TextColor3 = Color3.fromRGB(180, 200, 188),
-    TextSize = 12,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Top,
-    TextWrapped = true,
-    ZIndex = 3,
-    Parent = infoBox
-})
-
-local confKeyRow = create("Frame", {
-    LayoutOrder = 4,
-    Size = UDim2.new(1, 0, 0, 32),
-    BackgroundColor3 = Color3.fromRGB(16, 22, 17),
-    BorderSizePixel = 0,
-    ZIndex = 2,
-    Parent = configBody
-})
-addCorner(confKeyRow, 8)
-addStroke(confKeyRow, Color3.fromRGB(255, 255, 255), 0.94, 1)
-
-create("TextLabel", {
-    Position = UDim2.fromOffset(12, 0),
-    Size = UDim2.new(0.5, -12, 1, 0),
-    BackgroundTransparency = 1,
-    Text = "Bat TP Key",
-    TextColor3 = Color3.fromRGB(233, 242, 236),
-    TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    ZIndex = 3,
-    Parent = confKeyRow
-})
-
-local confKeyVal = create("TextLabel", {
-    Position = UDim2.new(0.5, 0, 0, 0),
-    Size = UDim2.new(0.5, -12, 1, 0),
-    BackgroundTransparency = 1,
-    Text = getKeybindText(),
-    TextColor3 = Color3.fromRGB(46, 214, 116),
-    TextSize = 12,
-    TextXAlignment = Enum.TextXAlignment.Right,
-    ZIndex = 3,
-    Parent = confKeyRow
-})
-
-local function updateConfigPos()
-    configPanel.Position = UDim2.new(
-        mainFrame.Position.X.Scale, mainFrame.Position.X.Offset,
-        mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset + mainFrame.AbsoluteSize.Y + 8
-    )
-end
-
-local panelOpen = false
-configBtn.MouseButton1Click:Connect(function()
-    panelOpen = not panelOpen
-    if panelOpen then
-        configBtn.Text = "Close"
-        configPanel.Visible = true
-        updateConfigPos()
-    else
-        configBtn.Text = "Configure"
-        configPanel.Visible = false
-    end
-end)
-
-local dragging, dragInput, dragStart, startPos
-
-headerFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    if dragging and dragInput then
-        local delta = dragInput.Position - dragStart
-        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        if panelOpen then
-            updateConfigPos()
-        end
-    end
-end)
-
-local minimized = false
-minimizeBtn.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    if minimized then
-        minimizeBtn.Text = "+"
-        separator.Visible = false
-        toggleRow.Visible = false
-        actionRow.Visible = false
-        discordRow.Visible = false
-        if panelOpen then
-            configPanel.Visible = false
-        end
-        TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quart), {Size = UDim2.fromOffset(230, 68)}):Play()
-    else
-        minimizeBtn.Text = "x"
-        separator.Visible = true
-        toggleRow.Visible = true
-        actionRow.Visible = true
-        discordRow.Visible = true
-        if panelOpen then
-            configPanel.Visible = true
-            updateConfigPos()
-        end
-        TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quart), {Size = UDim2.fromOffset(230, 180)}):Play()
-    end
-end)
-
-local batTpActive = false
-
-local function updateToggleVisuals(state)
-    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    local targetPos = state and UDim2.new(0, 24, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
-    local bgCol = state and Color3.fromRGB(46, 214, 116) or Color3.fromRGB(30, 42, 34)
-    local knobCol = state and Color3.fromRGB(10, 14, 11) or Color3.fromRGB(200, 212, 204)
-    
-    TweenService:Create(switchBg, tweenInfo, { BackgroundColor3 = bgCol }):Play()
-    TweenService:Create(switchKnob, tweenInfo, { Position = targetPos, BackgroundColor3 = knobCol }):Play()
-end
-
-local function toggleBatTP()
-    batTpActive = not batTpActive
-    updateToggleVisuals(batTpActive)
-    if not batTpActive and localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local root = localPlayer.Character.HumanoidRootPart
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-    end
-end
-
-toggleButton.MouseButton1Click:Connect(toggleBatTP)
-
-local bindingKey = false
-keybindBtn.MouseButton1Click:Connect(function()
-    if bindingKey then return end
-    bindingKey = true
-    keybindBtn.Text = "[?]"
-    keybindBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if bindingKey then
-        if input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode ~= Enum.KeyCode.Escape then
-            settingsData.keybind = { Type = "Keyboard", Name = input.KeyCode.Name, Value = input.KeyCode.Value }
-            settingsData.keybindType = "Keyboard"
-            bindingKey = false
-            keybindBtn.TextColor3 = Color3.fromRGB(46, 214, 116)
-            keybindBtn.Text = getKeybindText()
-            confKeyVal.Text = getKeybindText()
-        end
-    elseif not gameProcessed and settingsData.keybind then
-        if settingsData.keybind.Type == "Keyboard" and input.KeyCode.Value == settingsData.keybind.Value then
-            toggleBatTP()
-        end
-    end
-end)
-
-copyBtn.MouseButton1Click:Connect(function()
-    if setclipboard then
-        pcall(setclipboard, "discord.gg/irsh")
-    end
-    copyText.Text = "COPIED"
-    task.delay(1.2, function()
-        if copyText.Text == "COPIED" then
-            copyText.Text = "COPY"
-        end
+local function saveConfig()
+    pcall(function()
+        if type(writefile) ~= "function" then return end
+        writefile(CONFIG_FILE, HttpService:JSONEncode(config))
     end)
-end)
+end
 
-local function getBatTool()
-    local char = localPlayer.Character
-    if char then
-        for _, child in ipairs(char:GetChildren()) do
-            if child:IsA("Tool") and (child.Name:lower():find("bat") or child.Name:lower():find("hammer")) then
+loadConfig()
+
+-- ============================================================
+-- LOGIC
+-- ============================================================
+local function disconnectAntiDie()
+    for _, conn in ipairs(state.antiDieConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    state.antiDieConnections = {}
+end
+
+local function hookAntiDie(character)
+    disconnectAntiDie()
+    if not state.enabled or not character then return end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+
+    pcall(function()
+        humanoid.BreakJointsOnDeath = false
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Dying, false)
+    end)
+
+    table.insert(state.antiDieConnections, humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+        if state.enabled and humanoid.Parent and humanoid.Health <= 0 then
+            pcall(function()
+                humanoid.Health = humanoid.MaxHealth
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            end)
+        end
+    end))
+end
+
+local function findBat()
+    local character = localPlayer.Character
+    if not character then return nil end
+
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Tool") then
+            local n = child.Name:lower()
+            if n:find("bat") or n:find("slap") then
                 return child
             end
         end
-        local backpack = localPlayer:FindFirstChildOfClass("Backpack")
-        if backpack then
-            for _, child in ipairs(backpack:GetChildren()) do
-                if child:IsA("Tool") and (child.Name:lower():find("bat") or child.Name:lower():find("hammer")) then
+    end
+
+    local backpack = localPlayer:FindFirstChildOfClass("Backpack")
+    if backpack then
+        for _, child in ipairs(backpack:GetChildren()) do
+            if child:IsA("Tool") then
+                local n = child.Name:lower()
+                if n:find("bat") or n:find("slap") then
+                    local humanoid = character:FindFirstChildOfClass("Humanoid")
+                    if humanoid then
+                        pcall(function() humanoid:EquipTool(child) end)
+                    end
                     return child
                 end
             end
         end
     end
+
     return nil
 end
 
-local function getNearestTarget()
-    local char = localPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
-    local myRoot = char.HumanoidRootPart
-    local nearestDist = math.huge
-    local targetRoot = nil
+local function nearestPlayerTarget(root)
+    if not root then return nil, math.huge end
+    local best, bestD = nil, math.huge
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
-            local enemyRoot = player.Character:FindFirstChild("HumanoidRootPart")
-            local enemyHumanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            if enemyRoot and enemyHumanoid and enemyHumanoid.Health > 0 then
-                local dist = (enemyRoot.Position - myRoot.Position).Magnitude
-                if dist < nearestDist then
-                    nearestDist = dist
-                    targetRoot = enemyRoot
+            local otherRoot = player.Character:FindFirstChild("HumanoidRootPart")
+            local otherHum  = player.Character:FindFirstChildOfClass("Humanoid")
+            if otherRoot and otherHum and otherHum.Health > 0 then
+                local d = (root.Position - otherRoot.Position).Magnitude
+                if d < bestD then
+                    bestD = d
+                    best = player
                 end
             end
         end
     end
-    return targetRoot
+
+    return best, bestD
 end
 
-local orbitAngle = 0
-local lastActivate = 0
+local function swing()
+    if state.hitCooldown then return end
+    state.hitCooldown = true
 
-RunService.Heartbeat:Connect(function(deltaTime)
-    if not batTpActive then return end
-    local char = localPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if not root or not humanoid or humanoid.Health <= 0 then return end
+    pcall(function()
+        local bat = findBat()
+        if not bat then return end
+        bat:Activate()
+        local remote = bat:FindFirstChildWhichIsA("RemoteEvent")
+        if remote then
+            remote:FireServer()
+        end
+    end)
 
-    local tool = char:FindFirstChildOfClass("Tool") or getBatTool()
-    if tool and tool.Parent ~= char then
-        pcall(function() humanoid:EquipTool(tool) end)
+    task.delay(0.08, function()
+        state.hitCooldown = false
+    end)
+end
+
+local function tpBatTick()
+    if not state.enabled then return end
+
+    local character = localPlayer.Character
+    if not character then return end
+
+    local root     = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not root or not humanoid then return end
+    if humanoid.Health <= 0 then return end
+
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if animator then
+        pcall(function()
+            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                track:Stop()
+            end
+        end)
     end
 
-    local target = getNearestTarget()
+    local bat = findBat()
+    if bat and bat.Parent ~= character then
+        pcall(function() humanoid:EquipTool(bat) end)
+    end
+
+    local target, distance = nearestPlayerTarget(root)
     if not target then return end
 
-    orbitAngle = orbitAngle + (5 * deltaTime)
-    if orbitAngle > 6.2831853071795862 then orbitAngle = orbitAngle - 6.2831853071795862 end
+    local targetRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+    if not targetRoot or distance > 100 then return end
 
-    local tPos = target.Position
-    local orbitPos = Vector3.new(tPos.X + math.cos(orbitAngle) * 3.5, tPos.Y + 0.5, tPos.Z + math.sin(orbitAngle) * 3.5)
-    
-    root.CFrame = CFrame.lookAt(orbitPos, Vector3.new(tPos.X, orbitPos.Y, tPos.Z))
-    root.AssemblyLinearVelocity = Vector3.zero
-    root.AssemblyAngularVelocity = Vector3.zero
+    pcall(function()
+        if root.SetNetworkOwner then root:SetNetworkOwner(nil) end
+    end)
 
-    if tool and (tick() - lastActivate >= 0.08) then
-        lastActivate = tick()
-        pcall(function() tool:Activate() end)
+    if not state.enabled or root.Parent ~= character or not targetRoot.Parent then
+        return
+    end
+
+    root.CFrame = CFrame.new(targetRoot.Position + Vector3.new(0, 0.9, 0))
+    root.AssemblyLinearVelocity = targetRoot.AssemblyLinearVelocity
+
+    pcall(function()
+        if root.SetNetworkOwner then root:SetNetworkOwner(localPlayer) end
+    end)
+
+    local camera = workspace.CurrentCamera
+    if camera then
+        camera.CFrame = CFrame.new(camera.CFrame.Position, targetRoot.Position)
+    end
+
+    swing()
+
+    pcall(function()
+        for _, descendant in ipairs(character:GetDescendants()) do
+            if descendant:IsA("BasePart") then
+                descendant.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function setEnabled(value)
+    state.enabled = value == true
+
+    if state.enabled then
+        hookAntiDie(localPlayer.Character)
+        if state.connection then
+            state.connection:Disconnect()
+            state.connection = nil
+        end
+        state.connection = RunService.Heartbeat:Connect(tpBatTick)
+    else
+        if state.connection then
+            state.connection:Disconnect()
+            state.connection = nil
+        end
+        disconnectAntiDie()
+
+        local char = localPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
+            pcall(function()
+                if root.SetNetworkOwner then
+                    root:SetNetworkOwner(localPlayer)
+                end
+            end)
+        end
+    end
+end
+
+localPlayer.CharacterAdded:Connect(function(character)
+    if state.enabled then
+        task.wait(0.1)
+        hookAntiDie(character)
     end
 end)
+
+-- ============================================================
+-- UI
+-- ============================================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SnowVSTPBatStandalone"
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 100
+screenGui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Name = "MainFrame"
+frame.Size = UDim2.fromOffset(300, 176)
+frame.AnchorPoint = Vector2.new(0.5, 0.5)
+frame.Position = UDim2.fromScale(0.5, 0.5)
+frame.BackgroundColor3 = Color3.fromRGB(13, 15, 22)
+frame.BackgroundTransparency = 1
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.ClipsDescendants = true
+frame.ZIndex = 1
+frame.Parent = screenGui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+local uiScale = Instance.new("UIScale", frame)
+uiScale.Scale = config.scale
+
+-- Background artwork
+local bgArt = Instance.new("ImageLabel")
+bgArt.Name = "BackgroundArt"
+bgArt.Size = UDim2.fromScale(1, 1)
+bgArt.Position = UDim2.fromScale(0, 0)
+bgArt.BackgroundTransparency = 1
+bgArt.Image = "rbxassetid://71276441402938"
+bgArt.ImageTransparency = 0
+bgArt.ScaleType = Enum.ScaleType.Crop
+bgArt.ZIndex = 1
+bgArt.Parent = frame
+Instance.new("UICorner", bgArt).CornerRadius = UDim.new(0, 12)
+
+-- Title artwork
+local titleArt = Instance.new("ImageLabel")
+titleArt.Name = "TitleArtwork"
+titleArt.Size = UDim2.fromOffset(180, 65)
+titleArt.Position = UDim2.fromOffset(18, 8)
+titleArt.BackgroundTransparency = 1
+titleArt.Image = "rbxassetid://85348603619953"
+titleArt.ImageTransparency = 0
+titleArt.ScaleType = Enum.ScaleType.Fit
+titleArt.ZIndex = 3
+titleArt.Parent = frame
+
+-- Activate button
+local activateBtn = Instance.new("TextButton")
+activateBtn.Name = "ActivateBtn"
+activateBtn.Size = UDim2.fromOffset(264, 40)
+activateBtn.Position = UDim2.fromOffset(18, 84)
+activateBtn.BackgroundColor3 = Color3.fromRGB(160, 165, 175)
+activateBtn.BackgroundTransparency = 0.2
+activateBtn.BorderSizePixel = 0
+activateBtn.Font = Enum.Font.GothamBold
+activateBtn.TextSize = 15
+activateBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+activateBtn.Text = "TP BAT OFF"
+activateBtn.AutoButtonColor = false
+activateBtn.ZIndex = 3
+activateBtn.Parent = frame
+Instance.new("UICorner", activateBtn).CornerRadius = UDim.new(0, 10)
+local actStroke = Instance.new("UIStroke", activateBtn)
+actStroke.Color = Color3.fromRGB(255, 255, 255)
+actStroke.Thickness = 1.2
+actStroke.Transparency = 0.35
+
+-- Keybind row
+local keyRow = Instance.new("Frame")
+keyRow.Name = "KeyRow"
+keyRow.Size = UDim2.fromOffset(264, 32)
+keyRow.Position = UDim2.fromOffset(18, 132)
+keyRow.BackgroundColor3 = Color3.fromRGB(160, 165, 175)
+keyRow.BackgroundTransparency = 0.2
+keyRow.BorderSizePixel = 0
+keyRow.ZIndex = 3
+keyRow.Parent = frame
+Instance.new("UICorner", keyRow).CornerRadius = UDim.new(0, 10)
+local rowStroke = Instance.new("UIStroke", keyRow)
+rowStroke.Color = Color3.fromRGB(255, 255, 255)
+rowStroke.Thickness = 1.2
+rowStroke.Transparency = 0.35
+
+local keyLabel = Instance.new("TextLabel")
+keyLabel.Name = "KeyLabel"
+keyLabel.Size = UDim2.new(0, 120, 1, 0)
+keyLabel.Position = UDim2.fromOffset(12, 0)
+keyLabel.BackgroundTransparency = 1
+keyLabel.Text = "KEYBIND"
+keyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+keyLabel.Font = Enum.Font.GothamBold
+keyLabel.TextSize = 13
+keyLabel.TextXAlignment = Enum.TextXAlignment.Left
+keyLabel.ZIndex = 4
+keyLabel.Parent = keyRow
+
+-- Keybind value pill
+local keyBtn = Instance.new("TextButton")
+keyBtn.Name = "KeyBtn"
+keyBtn.Size = UDim2.fromOffset(62, 24)
+keyBtn.Position = UDim2.new(1, -70, 0.5, -12)
+keyBtn.BackgroundColor3 = Color3.fromRGB(120, 125, 135)
+keyBtn.BackgroundTransparency = 0.1
+keyBtn.BorderSizePixel = 0
+keyBtn.Font = Enum.Font.GothamBold
+keyBtn.TextSize = 13
+keyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+keyBtn.Text = state.key.Name
+keyBtn.AutoButtonColor = false
+keyBtn.ZIndex = 4
+keyBtn.Parent = keyRow
+Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0, 8)
+local keyStroke = Instance.new("UIStroke", keyBtn)
+keyStroke.Color = Color3.fromRGB(255, 255, 255)
+keyStroke.Thickness = 1
+keyStroke.Transparency = 0.4
+
+-- Top-right control buttons (-, +, x)
+local function createCtrlButton(text, xOffset)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.fromOffset(22, 22)
+    btn.Position = UDim2.new(1, xOffset, 0, 14)
+    btn.BackgroundColor3 = Color3.fromRGB(70, 140, 230)
+    btn.BackgroundTransparency = 0.1
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.AutoButtonColor = false
+    btn.ZIndex = 4
+    btn.Parent = frame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+    local ctrlStroke = Instance.new("UIStroke", btn)
+    ctrlStroke.Color = Color3.fromRGB(255, 255, 255)
+    ctrlStroke.Thickness = 1
+    ctrlStroke.Transparency = 0.3
+    return btn
+end
+
+local scaleMinus = createCtrlButton("-", -85)
+local scalePlus  = createCtrlButton("+", -59)
+local closeBtn   = createCtrlButton("x", -33)
+
+-- Reopen button
+local reopenBtn = Instance.new("ImageButton")
+reopenBtn.Name = "SnowVSTPBatReopen"
+reopenBtn.Size = UDim2.fromOffset(170, 38)
+reopenBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+reopenBtn.BackgroundTransparency = 0.08
+reopenBtn.BorderSizePixel = 0
+reopenBtn.Image = "rbxassetid://85348603619953"
+reopenBtn.ImageColor3 = Color3.fromRGB(255, 255, 255)
+reopenBtn.ScaleType = Enum.ScaleType.Fit
+reopenBtn.Visible = false
+reopenBtn.Active = true
+reopenBtn.Draggable = true
+reopenBtn.Parent = screenGui
+Instance.new("UICorner", reopenBtn).CornerRadius = UDim.new(0, 12)
+
+-- ============================================================
+-- UI BEHAVIOR
+-- ============================================================
+local function refreshUI()
+    activateBtn.Text = state.enabled and "TP BAT ON" or "TP BAT OFF"
+
+    if state.enabled then
+        activateBtn.BackgroundColor3 = Color3.fromRGB(80, 210, 120)
+        activateBtn.BackgroundTransparency = 0.2
+        actStroke.Color = Color3.fromRGB(140, 255, 170)
+        actStroke.Transparency = 0.25
+    else
+        activateBtn.BackgroundColor3 = Color3.fromRGB(160, 165, 175)
+        activateBtn.BackgroundTransparency = 0.2
+        actStroke.Color = Color3.fromRGB(255, 255, 255)
+        actStroke.Transparency = 0.4
+    end
+
+    if state.binding then
+        keyBtn.Text = "..."
+    elseif state.inputType == Enum.UserInputType.Gamepad1 then
+        keyBtn.Text = "GP " .. state.key.Name
+    else
+        keyBtn.Text = state.key.Name
+    end
+end
+
+activateBtn.MouseButton1Click:Connect(function()
+    setEnabled(not state.enabled)
+    refreshUI()
+end)
+
+keyBtn.MouseButton1Click:Connect(function()
+    state.binding = true
+    refreshUI()
+end)
+
+local function setScale(v)
+    config.scale = math.clamp(v, 0.8, 1.3)
+    uiScale.Scale = config.scale
+    saveConfig()
+end
+
+scaleMinus.MouseButton1Click:Connect(function()
+    setScale(config.scale - 0.05)
+end)
+
+scalePlus.MouseButton1Click:Connect(function()
+    setScale(config.scale + 0.05)
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    reopenBtn.Position = frame.Position
+    frame.Visible = false
+    reopenBtn.Visible = true
+end)
+
+reopenBtn.MouseButton1Click:Connect(function()
+    frame.Position = reopenBtn.Position
+    reopenBtn.Visible = false
+    frame.Visible = true
+end)
+
+-- ============================================================
+-- KEYBIND LISTENER
+-- ============================================================
+UserInputService.InputBegan:Connect(function(input)
+    local isKeyboard = input.UserInputType == Enum.UserInputType.Keyboard
+    local isGamepad  = input.UserInputType == Enum.UserInputType.Gamepad1
+
+    if not (isKeyboard or isGamepad) then return end
+
+    if state.binding then
+        if input.KeyCode ~= Enum.KeyCode.Unknown then
+            state.key        = input.KeyCode
+            state.inputType  = input.UserInputType
+            config.keybind   = input.KeyCode.Name
+            config.inputType = input.UserInputType.Name
+            saveConfig()
+        end
+        state.binding = false
+        refreshUI()
+        return
+    end
+
+    local focused = UserInputService:GetFocusedTextBox()
+    if focused then return end
+
+    if input.UserInputType == state.inputType and input.KeyCode == state.key then
+        setEnabled(not state.enabled)
+        refreshUI()
+    end
+end)
+
+-- ============================================================
+-- CLEANUP HOOK
+-- ============================================================
+getgenv().SnowVS_TPBatStandalone = {
+    destroy = function()
+        setEnabled(false)
+        pcall(function() screenGui:Destroy() end)
+        getgenv().SnowVS_TPBatStandalone = nil
+    end,
+}
+
+refreshUI()
+
+print("[Snow TP Bat] Loaded. Press " .. state.key.Name .. " to toggle.")
