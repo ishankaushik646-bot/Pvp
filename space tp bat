@@ -1,545 +1,962 @@
-print("deobf by discord.gg/speedhub")
-print("deobf by discord.gg/speedhub")
-print("deobf by discord.gg/speedhub")
-print("deobf by discord.gg/speedhub")
-print("deobf by discord.gg/speedhub")
+--[[
+	R4ull TP Bat
+	leaked by r4ull
+]]
 
--- ============================================================
--- Snow TP Bat — Full (visible buttons with borders)
--- ============================================================
-local Players          = game:GetService("Players")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local RunService       = game:GetService("RunService")
-local HttpService      = game:GetService("HttpService")
-local localPlayer      = Players.LocalPlayer
-local playerGui        = localPlayer:WaitForChild("PlayerGui")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local localPlayer = Players.LocalPlayer
 
--- ============================================================
--- CONFIG
--- ============================================================
-local CONFIG_FILE = "SnowVS_TPBat.json"
+local function getGuiParent()
+	local ok, pg = pcall(function()
+		return localPlayer:FindFirstChild("PlayerGui") or localPlayer:WaitForChild("PlayerGui", 3)
+	end)
+	if ok and pg then return pg end
+	return CoreGui
+end
+local guiParent = getGuiParent()
 
-local config = {
-    keybind   = "P",
-    inputType = "Keyboard",
-    scale     = 1,
+pcall(function()
+	for _, n in ipairs({"RoseyTpBatUI", "SpaceTpBatUI", "R4ullTpBatUI", "R4ullTpBatGui"}) do
+		local o = guiParent:FindFirstChild(n)
+		if o then o:Destroy() end
+	end
+end)
+
+local BG_IDS = {
+	"rbxassetid://102775518748491",
+	"rbxassetid://121536133702042",
+	"rbxassetid://82864322166492",
+	"rbxassetid://131084212676285",
+}
+local bgIndex = 1
+
+local ACCENT = Color3.fromRGB(255, 70, 110)
+local ACCENT_DIM = Color3.fromRGB(160, 30, 55)
+local BG_DARK = Color3.fromRGB(12, 8, 12)
+local ROW = Color3.fromRGB(28, 12, 18)
+local TEXT = Color3.fromRGB(255, 220, 228)
+local TEXT_DIM = Color3.fromRGB(200, 140, 155)
+local GREEN = Color3.fromRGB(100, 255, 120)
+local RED = Color3.fromRGB(255, 80, 100)
+
+-- V1 = side of target (best hits) | V2 = slightly above (safe, no void)
+local versionConfigs = {
+	V1 = {
+		range = 350,
+		tpOffset = Vector3.new(0, 0, 0),
+		loopDelay = 0.05,
+		smartRotation = true,
+		resetVelocity = true,
+		predictMovement = true,
+		predictionFactor = 0.12,
+		healthCheck = true,
+		teamCheck = false,
+		behindTarget = false,
+		behindDistance = 4,
+		antiFling = true,
+		sideOffset = 2.2,
+	},
+	V2 = {
+		range = 350,
+		tpOffset = Vector3.new(0, 1.5, 0), -- low Y — no void
+		loopDelay = 0.06,
+		smartRotation = true,
+		resetVelocity = true,
+		predictMovement = false,
+		predictionFactor = 0,
+		healthCheck = true,
+		teamCheck = false,
+		behindTarget = false,
+		behindDistance = 0,
+		antiFling = true,
+		sideOffset = 0,
+	},
 }
 
-local state = {
-    enabled            = false,
-    connection         = nil,
-    hitCooldown        = false,
-    key                = Enum.KeyCode.P,
-    inputType          = Enum.UserInputType.Keyboard,
-    binding            = false,
-    antiDieConnections = {},
+local settings = {
+	toggleKey = Enum.KeyCode.Y,
+	antiDieKey = Enum.KeyCode.G,
+	autoBatEnabled = true,
+	autoBatDelay = 0.06,
+	currentVersion = "V1",
 }
 
-local function loadConfig()
-    pcall(function()
-        if type(isfile) ~= "function" then return end
-        if not isfile(CONFIG_FILE) then return end
-        local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
-        if type(data) ~= "table" then return end
-
-        if type(data.keybind) == "string" and Enum.KeyCode[data.keybind] then
-            config.keybind = data.keybind
-        end
-        if data.inputType == "Keyboard" or data.inputType == "Gamepad1" then
-            config.inputType = data.inputType
-        end
-        if type(data.scale) == "number" then
-            config.scale = math.clamp(data.scale, 0.8, 1.3)
-        end
-
-        state.key       = Enum.KeyCode[config.keybind] or Enum.KeyCode.P
-        state.inputType = Enum.UserInputType[config.inputType] or Enum.UserInputType.Keyboard
-    end)
-end
-
-local function saveConfig()
-    pcall(function()
-        if type(writefile) ~= "function" then return end
-        writefile(CONFIG_FILE, HttpService:JSONEncode(config))
-    end)
-end
-
-loadConfig()
-
--- ============================================================
--- LOGIC
--- ============================================================
-local function disconnectAntiDie()
-    for _, conn in ipairs(state.antiDieConnections) do
-        pcall(function() conn:Disconnect() end)
-    end
-    state.antiDieConnections = {}
-end
-
-local function hookAntiDie(character)
-    disconnectAntiDie()
-    if not state.enabled or not character then return end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-
-    pcall(function()
-        humanoid.BreakJointsOnDeath = false
-        humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-        humanoid:SetStateEnabled(Enum.HumanoidStateType.Dying, false)
-    end)
-
-    table.insert(state.antiDieConnections, humanoid:GetPropertyChangedSignal("Health"):Connect(function()
-        if state.enabled and humanoid.Parent and humanoid.Health <= 0 then
-            pcall(function()
-                humanoid.Health = humanoid.MaxHealth
-                humanoid:ChangeState(Enum.HumanoidStateType.Running)
-            end)
-        end
-    end))
-end
-
-local function findBat()
-    local character = localPlayer.Character
-    if not character then return nil end
-
-    for _, child in ipairs(character:GetChildren()) do
-        if child:IsA("Tool") then
-            local n = child.Name:lower()
-            if n:find("bat") or n:find("slap") then
-                return child
-            end
-        end
-    end
-
-    local backpack = localPlayer:FindFirstChildOfClass("Backpack")
-    if backpack then
-        for _, child in ipairs(backpack:GetChildren()) do
-            if child:IsA("Tool") then
-                local n = child.Name:lower()
-                if n:find("bat") or n:find("slap") then
-                    local humanoid = character:FindFirstChildOfClass("Humanoid")
-                    if humanoid then
-                        pcall(function() humanoid:EquipTool(child) end)
-                    end
-                    return child
-                end
-            end
-        end
-    end
-
-    return nil
-end
-
-local function nearestPlayerTarget(root)
-    if not root then return nil, math.huge end
-    local best, bestD = nil, math.huge
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character then
-            local otherRoot = player.Character:FindFirstChild("HumanoidRootPart")
-            local otherHum  = player.Character:FindFirstChildOfClass("Humanoid")
-            if otherRoot and otherHum and otherHum.Health > 0 then
-                local d = (root.Position - otherRoot.Position).Magnitude
-                if d < bestD then
-                    bestD = d
-                    best = player
-                end
-            end
-        end
-    end
-
-    return best, bestD
-end
-
-local function swing()
-    if state.hitCooldown then return end
-    state.hitCooldown = true
-
-    pcall(function()
-        local bat = findBat()
-        if not bat then return end
-        bat:Activate()
-        local remote = bat:FindFirstChildWhichIsA("RemoteEvent")
-        if remote then
-            remote:FireServer()
-        end
-    end)
-
-    task.delay(0.08, function()
-        state.hitCooldown = false
-    end)
-end
-
-local function tpBatTick()
-    if not state.enabled then return end
-
-    local character = localPlayer.Character
-    if not character then return end
-
-    local root     = character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not root or not humanoid then return end
-    if humanoid.Health <= 0 then return end
-
-    local animator = humanoid:FindFirstChildOfClass("Animator")
-    if animator then
-        pcall(function()
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                track:Stop()
-            end
-        end)
-    end
-
-    local bat = findBat()
-    if bat and bat.Parent ~= character then
-        pcall(function() humanoid:EquipTool(bat) end)
-    end
-
-    local target, distance = nearestPlayerTarget(root)
-    if not target then return end
-
-    local targetRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-    if not targetRoot or distance > 100 then return end
-
-    pcall(function()
-        if root.SetNetworkOwner then root:SetNetworkOwner(nil) end
-    end)
-
-    if not state.enabled or root.Parent ~= character or not targetRoot.Parent then
-        return
-    end
-
-    root.CFrame = CFrame.new(targetRoot.Position + Vector3.new(0, 0.9, 0))
-    root.AssemblyLinearVelocity = targetRoot.AssemblyLinearVelocity
-
-    pcall(function()
-        if root.SetNetworkOwner then root:SetNetworkOwner(localPlayer) end
-    end)
-
-    local camera = workspace.CurrentCamera
-    if camera then
-        camera.CFrame = CFrame.new(camera.CFrame.Position, targetRoot.Position)
-    end
-
-    swing()
-
-    pcall(function()
-        for _, descendant in ipairs(character:GetDescendants()) do
-            if descendant:IsA("BasePart") then
-                descendant.CanCollide = false
-            end
-        end
-    end)
-end
-
-local function setEnabled(value)
-    state.enabled = value == true
-
-    if state.enabled then
-        hookAntiDie(localPlayer.Character)
-        if state.connection then
-            state.connection:Disconnect()
-            state.connection = nil
-        end
-        state.connection = RunService.Heartbeat:Connect(tpBatTick)
-    else
-        if state.connection then
-            state.connection:Disconnect()
-            state.connection = nil
-        end
-        disconnectAntiDie()
-
-        local char = localPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            pcall(function()
-                if root.SetNetworkOwner then
-                    root:SetNetworkOwner(localPlayer)
-                end
-            end)
-        end
-    end
-end
-
-localPlayer.CharacterAdded:Connect(function(character)
-    if state.enabled then
-        task.wait(0.1)
-        hookAntiDie(character)
-    end
-end)
-
--- ============================================================
--- UI
--- ============================================================
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "SnowVSTPBatStandalone"
-screenGui.ResetOnSpawn = false
-screenGui.DisplayOrder = 100
-screenGui.Parent = playerGui
-
-local frame = Instance.new("Frame")
-frame.Name = "MainFrame"
-frame.Size = UDim2.fromOffset(300, 176)
-frame.AnchorPoint = Vector2.new(0.5, 0.5)
-frame.Position = UDim2.fromScale(0.5, 0.5)
-frame.BackgroundColor3 = Color3.fromRGB(13, 15, 22)
-frame.BackgroundTransparency = 1
-frame.BorderSizePixel = 0
-frame.Active = true
-frame.Draggable = true
-frame.ClipsDescendants = true
-frame.ZIndex = 1
-frame.Parent = screenGui
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
-
-local uiScale = Instance.new("UIScale", frame)
-uiScale.Scale = config.scale
-
--- Background artwork
-local bgArt = Instance.new("ImageLabel")
-bgArt.Name = "BackgroundArt"
-bgArt.Size = UDim2.fromScale(1, 1)
-bgArt.Position = UDim2.fromScale(0, 0)
-bgArt.BackgroundTransparency = 1
-bgArt.Image = "rbxassetid://71276441402938"
-bgArt.ImageTransparency = 0
-bgArt.ScaleType = Enum.ScaleType.Crop
-bgArt.ZIndex = 1
-bgArt.Parent = frame
-Instance.new("UICorner", bgArt).CornerRadius = UDim.new(0, 12)
-
--- Title artwork
-local titleArt = Instance.new("ImageLabel")
-titleArt.Name = "TitleArtwork"
-titleArt.Size = UDim2.fromOffset(180, 65)
-titleArt.Position = UDim2.fromOffset(18, 8)
-titleArt.BackgroundTransparency = 1
-titleArt.Image = "rbxassetid://85348603619953"
-titleArt.ImageTransparency = 0
-titleArt.ScaleType = Enum.ScaleType.Fit
-titleArt.ZIndex = 3
-titleArt.Parent = frame
-
--- Activate button
-local activateBtn = Instance.new("TextButton")
-activateBtn.Name = "ActivateBtn"
-activateBtn.Size = UDim2.fromOffset(264, 40)
-activateBtn.Position = UDim2.fromOffset(18, 84)
-activateBtn.BackgroundColor3 = Color3.fromRGB(160, 165, 175)
-activateBtn.BackgroundTransparency = 0.2
-activateBtn.BorderSizePixel = 0
-activateBtn.Font = Enum.Font.GothamBold
-activateBtn.TextSize = 15
-activateBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-activateBtn.Text = "TP BAT OFF"
-activateBtn.AutoButtonColor = false
-activateBtn.ZIndex = 3
-activateBtn.Parent = frame
-Instance.new("UICorner", activateBtn).CornerRadius = UDim.new(0, 10)
-local actStroke = Instance.new("UIStroke", activateBtn)
-actStroke.Color = Color3.fromRGB(255, 255, 255)
-actStroke.Thickness = 1.2
-actStroke.Transparency = 0.35
-
--- Keybind row
-local keyRow = Instance.new("Frame")
-keyRow.Name = "KeyRow"
-keyRow.Size = UDim2.fromOffset(264, 32)
-keyRow.Position = UDim2.fromOffset(18, 132)
-keyRow.BackgroundColor3 = Color3.fromRGB(160, 165, 175)
-keyRow.BackgroundTransparency = 0.2
-keyRow.BorderSizePixel = 0
-keyRow.ZIndex = 3
-keyRow.Parent = frame
-Instance.new("UICorner", keyRow).CornerRadius = UDim.new(0, 10)
-local rowStroke = Instance.new("UIStroke", keyRow)
-rowStroke.Color = Color3.fromRGB(255, 255, 255)
-rowStroke.Thickness = 1.2
-rowStroke.Transparency = 0.35
-
-local keyLabel = Instance.new("TextLabel")
-keyLabel.Name = "KeyLabel"
-keyLabel.Size = UDim2.new(0, 120, 1, 0)
-keyLabel.Position = UDim2.fromOffset(12, 0)
-keyLabel.BackgroundTransparency = 1
-keyLabel.Text = "KEYBIND"
-keyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-keyLabel.Font = Enum.Font.GothamBold
-keyLabel.TextSize = 13
-keyLabel.TextXAlignment = Enum.TextXAlignment.Left
-keyLabel.ZIndex = 4
-keyLabel.Parent = keyRow
-
--- Keybind value pill
-local keyBtn = Instance.new("TextButton")
-keyBtn.Name = "KeyBtn"
-keyBtn.Size = UDim2.fromOffset(62, 24)
-keyBtn.Position = UDim2.new(1, -70, 0.5, -12)
-keyBtn.BackgroundColor3 = Color3.fromRGB(120, 125, 135)
-keyBtn.BackgroundTransparency = 0.1
-keyBtn.BorderSizePixel = 0
-keyBtn.Font = Enum.Font.GothamBold
-keyBtn.TextSize = 13
-keyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-keyBtn.Text = state.key.Name
-keyBtn.AutoButtonColor = false
-keyBtn.ZIndex = 4
-keyBtn.Parent = keyRow
-Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0, 8)
-local keyStroke = Instance.new("UIStroke", keyBtn)
-keyStroke.Color = Color3.fromRGB(255, 255, 255)
-keyStroke.Thickness = 1
-keyStroke.Transparency = 0.4
-
--- Top-right control buttons (-, +, x)
-local function createCtrlButton(text, xOffset)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.fromOffset(22, 22)
-    btn.Position = UDim2.new(1, xOffset, 0, 14)
-    btn.BackgroundColor3 = Color3.fromRGB(70, 140, 230)
-    btn.BackgroundTransparency = 0.1
-    btn.BorderSizePixel = 0
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
-    btn.AutoButtonColor = false
-    btn.ZIndex = 4
-    btn.Parent = frame
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
-    local ctrlStroke = Instance.new("UIStroke", btn)
-    ctrlStroke.Color = Color3.fromRGB(255, 255, 255)
-    ctrlStroke.Thickness = 1
-    ctrlStroke.Transparency = 0.3
-    return btn
-end
-
-local scaleMinus = createCtrlButton("-", -85)
-local scalePlus  = createCtrlButton("+", -59)
-local closeBtn   = createCtrlButton("x", -33)
-
--- Reopen button
-local reopenBtn = Instance.new("ImageButton")
-reopenBtn.Name = "SnowVSTPBatReopen"
-reopenBtn.Size = UDim2.fromOffset(170, 38)
-reopenBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-reopenBtn.BackgroundTransparency = 0.08
-reopenBtn.BorderSizePixel = 0
-reopenBtn.Image = "rbxassetid://85348603619953"
-reopenBtn.ImageColor3 = Color3.fromRGB(255, 255, 255)
-reopenBtn.ScaleType = Enum.ScaleType.Fit
-reopenBtn.Visible = false
-reopenBtn.Active = true
-reopenBtn.Draggable = true
-reopenBtn.Parent = screenGui
-Instance.new("UICorner", reopenBtn).CornerRadius = UDim.new(0, 12)
-
--- ============================================================
--- UI BEHAVIOR
--- ============================================================
-local function refreshUI()
-    activateBtn.Text = state.enabled and "TP BAT ON" or "TP BAT OFF"
-
-    if state.enabled then
-        activateBtn.BackgroundColor3 = Color3.fromRGB(80, 210, 120)
-        activateBtn.BackgroundTransparency = 0.2
-        actStroke.Color = Color3.fromRGB(140, 255, 170)
-        actStroke.Transparency = 0.25
-    else
-        activateBtn.BackgroundColor3 = Color3.fromRGB(160, 165, 175)
-        activateBtn.BackgroundTransparency = 0.2
-        actStroke.Color = Color3.fromRGB(255, 255, 255)
-        actStroke.Transparency = 0.4
-    end
-
-    if state.binding then
-        keyBtn.Text = "..."
-    elseif state.inputType == Enum.UserInputType.Gamepad1 then
-        keyBtn.Text = "GP " .. state.key.Name
-    else
-        keyBtn.Text = state.key.Name
-    end
-end
-
-activateBtn.MouseButton1Click:Connect(function()
-    setEnabled(not state.enabled)
-    refreshUI()
-end)
-
-keyBtn.MouseButton1Click:Connect(function()
-    state.binding = true
-    refreshUI()
-end)
-
-local function setScale(v)
-    config.scale = math.clamp(v, 0.8, 1.3)
-    uiScale.Scale = config.scale
-    saveConfig()
-end
-
-scaleMinus.MouseButton1Click:Connect(function()
-    setScale(config.scale - 0.05)
-end)
-
-scalePlus.MouseButton1Click:Connect(function()
-    setScale(config.scale + 0.05)
-end)
-
-closeBtn.MouseButton1Click:Connect(function()
-    reopenBtn.Position = frame.Position
-    frame.Visible = false
-    reopenBtn.Visible = true
-end)
-
-reopenBtn.MouseButton1Click:Connect(function()
-    frame.Position = reopenBtn.Position
-    reopenBtn.Visible = false
-    frame.Visible = true
-end)
-
--- ============================================================
--- KEYBIND LISTENER
--- ============================================================
-UserInputService.InputBegan:Connect(function(input)
-    local isKeyboard = input.UserInputType == Enum.UserInputType.Keyboard
-    local isGamepad  = input.UserInputType == Enum.UserInputType.Gamepad1
-
-    if not (isKeyboard or isGamepad) then return end
-
-    if state.binding then
-        if input.KeyCode ~= Enum.KeyCode.Unknown then
-            state.key        = input.KeyCode
-            state.inputType  = input.UserInputType
-            config.keybind   = input.KeyCode.Name
-            config.inputType = input.UserInputType.Name
-            saveConfig()
-        end
-        state.binding = false
-        refreshUI()
-        return
-    end
-
-    local focused = UserInputService:GetFocusedTextBox()
-    if focused then return end
-
-    if input.UserInputType == state.inputType and input.KeyCode == state.key then
-        setEnabled(not state.enabled)
-        refreshUI()
-    end
-end)
-
--- ============================================================
--- CLEANUP HOOK
--- ============================================================
-getgenv().SnowVS_TPBatStandalone = {
-    destroy = function()
-        setEnabled(false)
-        pcall(function() screenGui:Destroy() end)
-        getgenv().SnowVS_TPBatStandalone = nil
-    end,
+local programState = {
+	isTpBatActive = false,
+	isAntiDieActive = false,
+	isRunning = false,
+	tpLoopThread = nil,
+	isWaitingForKey = false,
+	hittingCooldown = false,
+	uiReferences = {},
 }
 
-refreshUI()
+local function getActiveConfig()
+	return versionConfigs[settings.currentVersion] or versionConfigs.V1
+end
 
-print("[Snow TP Bat] Loaded. Press " .. state.key.Name .. " to toggle.")
+local function getMyRootPart()
+	local character = localPlayer.Character
+	if not character then return nil end
+	return character:FindFirstChild("HumanoidRootPart")
+end
+
+local function getMyHumanoid()
+	local character = localPlayer.Character
+	if not character then return nil end
+	return character:FindFirstChildOfClass("Humanoid")
+end
+
+local function isBatTool(tool)
+	if not tool or not tool:IsA("Tool") then return false end
+	local n = string.lower(tool.Name)
+	return n == "bat" or string.find(n, "bat", 1, true) ~= nil
+end
+
+local function getBat()
+	local character = localPlayer.Character
+	if not character then return nil end
+	for _, child in ipairs(character:GetChildren()) do
+		if isBatTool(child) then return child end
+	end
+	local backpack = localPlayer:FindFirstChild("Backpack")
+	if backpack then
+		for _, child in ipairs(backpack:GetChildren()) do
+			if isBatTool(child) then
+				pcall(function() child.Parent = character end)
+				return child
+			end
+		end
+	end
+	return nil
+end
+
+local function tryHitBat()
+	if programState.hittingCooldown then return end
+	programState.hittingCooldown = true
+	task.spawn(function()
+		local bat = getBat()
+		if bat then
+			for _ = 1, 3 do
+				pcall(function() bat:Activate() end)
+				for _, d in ipairs(bat:GetDescendants()) do
+					if d:IsA("RemoteEvent") then
+						pcall(function() d:FireServer() end)
+					end
+				end
+				local re = bat:FindFirstChildWhichIsA("RemoteEvent")
+				if re then pcall(function() re:FireServer() end) end
+				task.wait(0.025)
+			end
+		end
+		task.wait(settings.autoBatDelay)
+		programState.hittingCooldown = false
+	end)
+end
+
+local function isValidEnemy(player)
+	local config = getActiveConfig()
+	if player == localPlayer then return false end
+	if not player.Character then return false end
+	local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return false end
+	if config.healthCheck and humanoid.Health <= 0 then return false end
+	if config.teamCheck then
+		if player.Team == localPlayer.Team and player.Team ~= nil then
+			return false
+		end
+	end
+	local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return false end
+	return true, rootPart, humanoid
+end
+
+local function predictPosition(rootPart)
+	local config = getActiveConfig()
+	if not config.predictMovement then return rootPart.Position end
+	local v = rootPart.AssemblyLinearVelocity
+	-- only horizontal prediction — vertical velocity caused void issues
+	return rootPart.Position + Vector3.new(v.X, 0, v.Z) * config.predictionFactor
+end
+
+local function findNearestEnemy()
+	local config = getActiveConfig()
+	local myRootPart = getMyRootPart()
+	if not myRootPart then return nil end
+	local nearestRootPart = nil
+	local shortestDist = config.range
+	for _, player in ipairs(Players:GetPlayers()) do
+		local valid, rootPart = isValidEnemy(player)
+		if valid then
+			local dist = (rootPart.Position - myRootPart.Position).Magnitude
+			if dist < shortestDist and dist > 0.5 then
+				shortestDist = dist
+				nearestRootPart = rootPart
+			end
+		end
+	end
+	return nearestRootPart
+end
+
+local function teleportTo(targetRootPart)
+	local config = getActiveConfig()
+	local myRootPart = getMyRootPart()
+	local myHumanoid = getMyHumanoid()
+	if not myRootPart or not targetRootPart or not targetRootPart.Parent then return end
+
+	local targetPos = predictPosition(targetRootPart)
+	if typeof(targetPos) ~= "Vector3" then return end
+	if targetPos.X ~= targetPos.X then return end -- NaN check
+
+	local finalPos
+	if config.behindTarget then
+		local flat = Vector3.new(targetPos.X - myRootPart.Position.X, 0, targetPos.Z - myRootPart.Position.Z)
+		if flat.Magnitude < 0.1 then flat = Vector3.new(0, 0, -1) else flat = flat.Unit end
+		finalPos = targetPos - flat * config.behindDistance + Vector3.new(0, 1.5, 0)
+	elseif config.sideOffset and config.sideOffset > 0 then
+		-- V1: stand beside target, face them — bat reach
+		local dir = Vector3.new(myRootPart.Position.X - targetPos.X, 0, myRootPart.Position.Z - targetPos.Z)
+		if dir.Magnitude < 0.1 then
+			dir = Vector3.new(1, 0, 0)
+		else
+			dir = dir.Unit
+		end
+		finalPos = targetPos + dir * config.sideOffset
+		finalPos = Vector3.new(finalPos.X, targetPos.Y, finalPos.Z) -- lock Y to target (no void)
+	else
+		-- V2: same XZ-ish, slight above target root
+		local yOff = config.tpOffset and config.tpOffset.Y or 1.5
+		yOff = math.clamp(yOff, 0.5, 2.5)
+		finalPos = Vector3.new(targetPos.X, targetPos.Y + yOff, targetPos.Z)
+	end
+
+	-- hard anti-void
+	if finalPos.Y < targetPos.Y - 2 then
+		finalPos = Vector3.new(finalPos.X, targetPos.Y + 1, finalPos.Z)
+	end
+	if finalPos.Y > targetPos.Y + 6 then
+		finalPos = Vector3.new(finalPos.X, targetPos.Y + 2, finalPos.Z)
+	end
+
+	local newCFrame
+	if config.smartRotation then
+		local lookAt = Vector3.new(targetPos.X, finalPos.Y, targetPos.Z)
+		newCFrame = CFrame.new(finalPos, lookAt)
+	else
+		newCFrame = CFrame.new(finalPos)
+	end
+
+	pcall(function()
+		myRootPart.AssemblyLinearVelocity = Vector3.zero
+		myRootPart.AssemblyAngularVelocity = Vector3.zero
+		myRootPart.CFrame = newCFrame
+		myRootPart.AssemblyLinearVelocity = Vector3.zero
+		myRootPart.AssemblyAngularVelocity = Vector3.zero
+	end)
+
+	if config.resetVelocity then
+		pcall(function()
+			myRootPart.Velocity = Vector3.zero
+			myRootPart.AssemblyLinearVelocity = Vector3.zero
+			myRootPart.RotVelocity = Vector3.zero
+			myRootPart.AssemblyAngularVelocity = Vector3.zero
+		end)
+	end
+	if config.antiFling and myHumanoid then
+		pcall(function()
+			myHumanoid.PlatformStand = false
+			myHumanoid.Sit = false
+		end)
+	end
+end
+
+local function updateStatusUI(isActive)
+	if programState.uiReferences.StatusLabel then
+		if isActive then
+			programState.uiReferences.StatusLabel.Text = "ACTIVE"
+			programState.uiReferences.StatusLabel.TextColor3 = GREEN
+			if programState.uiReferences.StatusDot then
+				programState.uiReferences.StatusDot.BackgroundColor3 = GREEN
+			end
+		else
+			programState.uiReferences.StatusLabel.Text = "INACTIVE"
+			programState.uiReferences.StatusLabel.TextColor3 = RED
+			if programState.uiReferences.StatusDot then
+				programState.uiReferences.StatusDot.BackgroundColor3 = RED
+			end
+		end
+	end
+end
+
+local function startTpBat()
+	if programState.isRunning then return end
+	programState.isRunning = true
+	programState.isTpBatActive = true
+	programState.tpLoopThread = task.spawn(function()
+		while programState.isTpBatActive do
+			local target = findNearestEnemy()
+			if target then
+				teleportTo(target)
+				if settings.autoBatEnabled then
+					tryHitBat()
+				end
+			else
+				getBat()
+			end
+			task.wait(getActiveConfig().loopDelay)
+		end
+	end)
+	updateStatusUI(true)
+end
+
+local function stopTpBat()
+	if not programState.isRunning then return end
+	programState.isRunning = false
+	programState.isTpBatActive = false
+	if programState.tpLoopThread then
+		pcall(function() task.cancel(programState.tpLoopThread) end)
+		programState.tpLoopThread = nil
+	end
+	updateStatusUI(false)
+end
+
+local function toggleTpBat()
+	if programState.isTpBatActive then stopTpBat() else startTpBat() end
+end
+
+-- Anti Die
+local antiDieEnabled = false
+local antiDieBillboard = nil
+local heartBeatConnection = nil
+local deathConnections = {}
+local characterAddedConnection = nil
+
+local function createAntiDieBillboard(character)
+	if not character then return end
+	local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
+	if not head then return end
+	if antiDieBillboard then antiDieBillboard:Destroy() antiDieBillboard = nil end
+	local oldTag = head:FindFirstChild("AntiDieTag")
+	if oldTag then oldTag:Destroy() end
+	antiDieBillboard = Instance.new("BillboardGui")
+	antiDieBillboard.Name = "AntiDieTag"
+	antiDieBillboard.Size = UDim2.new(0, 200, 0, 60)
+	antiDieBillboard.StudsOffsetWorldSpace = Vector3.new(0, 3, 0)
+	antiDieBillboard.AlwaysOnTop = true
+	antiDieBillboard.LightInfluence = 0
+	antiDieBillboard.MaxDistance = math.huge
+	antiDieBillboard.ResetOnSpawn = false
+	antiDieBillboard.Parent = head
+	local frame = Instance.new("Frame", antiDieBillboard)
+	frame.Size = UDim2.new(1, 0, 1, 0)
+	frame.BackgroundColor3 = Color3.fromRGB(20, 8, 12)
+	frame.BackgroundTransparency = 0.25
+	frame.BorderSizePixel = 0
+	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+	local stroke = Instance.new("UIStroke", frame)
+	stroke.Color = ACCENT
+	stroke.Thickness = 1.2
+	stroke.Transparency = 0.3
+	local txt1 = Instance.new("TextLabel", frame)
+	txt1.Size = UDim2.new(1, 0, 0.5, 0)
+	txt1.BackgroundTransparency = 1
+	txt1.Text = "ANTI DIE"
+	txt1.TextColor3 = ACCENT
+	txt1.Font = Enum.Font.GothamBlack
+	txt1.TextSize = 18
+	txt1.TextXAlignment = Enum.TextXAlignment.Center
+	txt1.TextYAlignment = Enum.TextYAlignment.Bottom
+	local txt2 = Instance.new("TextLabel", frame)
+	txt2.Size = UDim2.new(1, 0, 0.5, 0)
+	txt2.Position = UDim2.new(0, 0, 0.5, 0)
+	txt2.BackgroundTransparency = 1
+	txt2.Text = "leaked by r4ull"
+	txt2.TextColor3 = TEXT
+	txt2.Font = Enum.Font.GothamBold
+	txt2.TextSize = 13
+	txt2.TextXAlignment = Enum.TextXAlignment.Center
+	txt2.TextYAlignment = Enum.TextYAlignment.Top
+end
+
+local function destroyAntiDieBillboard()
+	if antiDieBillboard then
+		antiDieBillboard:Destroy()
+		antiDieBillboard = nil
+	end
+	local character = localPlayer.Character
+	if character then
+		local head = character:FindFirstChild("Head")
+		if head then
+			local oldTag = head:FindFirstChild("AntiDieTag")
+			if oldTag then oldTag:Destroy() end
+		end
+	end
+end
+
+local function protectCharacter(character)
+	if not character then return end
+	local humanoid = character:WaitForChild("Humanoid", 5)
+	if not humanoid then return end
+	humanoid.MaxHealth = math.huge
+	humanoid.Health = math.huge
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+	local stateChanged = humanoid.StateChanged:Connect(function(_, newState)
+		if not antiDieEnabled then return end
+		if newState == Enum.HumanoidStateType.Dead then
+			humanoid.Health = math.huge
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+		end
+	end)
+	table.insert(deathConnections, stateChanged)
+	local healthChanged = humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+		if not antiDieEnabled then return end
+		if humanoid.Health < humanoid.MaxHealth then
+			humanoid.Health = math.huge
+		end
+	end)
+	table.insert(deathConnections, healthChanged)
+	if heartBeatConnection then heartBeatConnection:Disconnect() end
+	heartBeatConnection = RunService.Heartbeat:Connect(function()
+		if not antiDieEnabled then return end
+		if humanoid and humanoid.Parent and humanoid.Health < humanoid.MaxHealth then
+			humanoid.Health = math.huge
+		end
+	end)
+	createAntiDieBillboard(character)
+end
+
+local function startAntiDie()
+	antiDieEnabled = true
+	programState.isAntiDieActive = true
+	for _, conn in ipairs(deathConnections) do pcall(function() conn:Disconnect() end) end
+	deathConnections = {}
+	if heartBeatConnection then heartBeatConnection:Disconnect(); heartBeatConnection = nil end
+	if characterAddedConnection then characterAddedConnection:Disconnect(); characterAddedConnection = nil end
+	local character = localPlayer.Character
+	if character then protectCharacter(character) end
+	characterAddedConnection = localPlayer.CharacterAdded:Connect(function(newChar)
+		if not antiDieEnabled then return end
+		task.wait(0.2)
+		for _, conn in ipairs(deathConnections) do pcall(function() conn:Disconnect() end) end
+		deathConnections = {}
+		protectCharacter(newChar)
+	end)
+end
+
+local function stopAntiDie()
+	antiDieEnabled = false
+	programState.isAntiDieActive = false
+	for _, conn in ipairs(deathConnections) do pcall(function() conn:Disconnect() end) end
+	deathConnections = {}
+	if heartBeatConnection then heartBeatConnection:Disconnect(); heartBeatConnection = nil end
+	if characterAddedConnection then characterAddedConnection:Disconnect(); characterAddedConnection = nil end
+	destroyAntiDieBillboard()
+	local character = localPlayer.Character
+	if character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
+			humanoid.MaxHealth = 100
+			humanoid.Health = 100
+		end
+	end
+end
+
+local function toggleAntiDie()
+	if antiDieEnabled then stopAntiDie() else startAntiDie() end
+end
+
+local function tween(obj, props, t)
+	local anim = TweenService:Create(obj, TweenInfo.new(t or 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
+	anim:Play()
+	return anim
+end
+
+local function startKeybindListener()
+	if programState.isWaitingForKey then return end
+	programState.isWaitingForKey = true
+	if programState.uiReferences.KeyLabel then
+		programState.uiReferences.KeyLabel.Text = "..."
+		programState.uiReferences.KeyLabel.TextColor3 = Color3.fromRGB(255, 200, 80)
+	end
+	local connection
+	connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed then return end
+		if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+		if input.KeyCode == Enum.KeyCode.Escape then
+			programState.isWaitingForKey = false
+			if programState.uiReferences.KeyLabel then
+				programState.uiReferences.KeyLabel.Text = settings.toggleKey.Name
+				programState.uiReferences.KeyLabel.TextColor3 = TEXT_DIM
+			end
+			connection:Disconnect()
+			return
+		end
+		settings.toggleKey = input.KeyCode
+		programState.isWaitingForKey = false
+		if programState.uiReferences.KeyLabel then
+			programState.uiReferences.KeyLabel.Text = input.KeyCode.Name
+			programState.uiReferences.KeyLabel.TextColor3 = ACCENT
+			task.delay(0.35, function()
+				if programState.uiReferences.KeyLabel then
+					programState.uiReferences.KeyLabel.TextColor3 = TEXT_DIM
+				end
+			end)
+		end
+		connection:Disconnect()
+	end)
+end
+
+local function buildUI()
+	local oldUI = guiParent:FindFirstChild("R4ullTpBatUI")
+	if oldUI then oldUI:Destroy() end
+	local oldRosey = guiParent:FindFirstChild("RoseyTpBatUI")
+	if oldRosey then oldRosey:Destroy() end
+
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "R4ullTpBatUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.DisplayOrder = 12
+	screenGui.IgnoreGuiInset = true
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = guiParent
+
+	local mainFrame = Instance.new("Frame")
+	mainFrame.Name = "Main"
+	mainFrame.Size = UDim2.new(0, 280, 0, 360)
+	mainFrame.Position = UDim2.new(0.5, -140, 0.5, -180)
+	mainFrame.BackgroundColor3 = BG_DARK
+	mainFrame.BackgroundTransparency = 0.08
+	mainFrame.BorderSizePixel = 0
+	mainFrame.Active = true
+	mainFrame.ClipsDescendants = true
+	mainFrame.ZIndex = 1
+	mainFrame.Parent = screenGui
+	Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 14)
+	local mainStroke = Instance.new("UIStroke", mainFrame)
+	mainStroke.Color = ACCENT_DIM
+	mainStroke.Thickness = 1.4
+	mainStroke.Transparency = 0.25
+
+	local bgImage = Instance.new("ImageLabel")
+	bgImage.Name = "BgImage"
+	bgImage.Size = UDim2.fromScale(1, 1)
+	bgImage.BackgroundTransparency = 1
+	bgImage.Image = BG_IDS[bgIndex]
+	bgImage.ScaleType = Enum.ScaleType.Crop
+	bgImage.ImageTransparency = 0.42
+	bgImage.ZIndex = 0
+	bgImage.Parent = mainFrame
+	Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0, 14)
+
+	local overlay = Instance.new("Frame")
+	overlay.Size = UDim2.fromScale(1, 1)
+	overlay.BackgroundColor3 = Color3.fromRGB(10, 4, 8)
+	overlay.BackgroundTransparency = 0.35
+	overlay.BorderSizePixel = 0
+	overlay.ZIndex = 1
+	overlay.Parent = mainFrame
+	Instance.new("UICorner", overlay).CornerRadius = UDim.new(0, 14)
+
+	local topBar = Instance.new("Frame")
+	topBar.Size = UDim2.new(1, 0, 0, 52)
+	topBar.BackgroundColor3 = Color3.fromRGB(18, 8, 12)
+	topBar.BackgroundTransparency = 0.25
+	topBar.BorderSizePixel = 0
+	topBar.ZIndex = 5
+	topBar.Parent = mainFrame
+	Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 14)
+
+	local accentDot = Instance.new("Frame")
+	accentDot.Size = UDim2.fromOffset(8, 8)
+	accentDot.Position = UDim2.new(0, 16, 0, 12)
+	accentDot.BackgroundColor3 = ACCENT
+	accentDot.BorderSizePixel = 0
+	accentDot.ZIndex = 6
+	accentDot.Parent = topBar
+	Instance.new("UICorner", accentDot).CornerRadius = UDim.new(1, 0)
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(0, 200, 0, 20)
+	title.Position = UDim2.new(0, 32, 0, 6)
+	title.BackgroundTransparency = 1
+	title.Text = "R4ULL TP BAT"
+	title.TextColor3 = TEXT
+	title.Font = Enum.Font.GothamBlack
+	title.TextSize = 14
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.ZIndex = 6
+	title.Parent = topBar
+
+	local leak = Instance.new("TextLabel")
+	leak.Size = UDim2.new(0, 200, 0, 14)
+	leak.Position = UDim2.new(0, 32, 0, 26)
+	leak.BackgroundTransparency = 1
+	leak.Text = "leaked by r4ull"
+	leak.TextColor3 = ACCENT
+	leak.Font = Enum.Font.GothamBold
+	leak.TextSize = 11
+	leak.TextXAlignment = Enum.TextXAlignment.Left
+	leak.ZIndex = 6
+	leak.Parent = topBar
+
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Size = UDim2.fromOffset(28, 28)
+	closeBtn.Position = UDim2.new(1, -38, 0.5, -14)
+	closeBtn.BackgroundColor3 = ROW
+	closeBtn.BackgroundTransparency = 0.2
+	closeBtn.Text = "−"
+	closeBtn.TextColor3 = TEXT
+	closeBtn.Font = Enum.Font.GothamBlack
+	closeBtn.TextSize = 18
+	closeBtn.BorderSizePixel = 0
+	closeBtn.ZIndex = 6
+	closeBtn.Parent = topBar
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
+
+	local function makeRow(y, height)
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, -24, 0, height or 48)
+		row.Position = UDim2.new(0, 12, 0, y)
+		row.BackgroundColor3 = ROW
+		row.BackgroundTransparency = 0.25
+		row.BorderSizePixel = 0
+		row.ZIndex = 4
+		row.Parent = mainFrame
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 12)
+		local st = Instance.new("UIStroke", row)
+		st.Color = ACCENT_DIM
+		st.Thickness = 1
+		st.Transparency = 0.55
+		return row
+	end
+
+	local statusBox = makeRow(62, 36)
+	local statusDot = Instance.new("Frame")
+	statusDot.Size = UDim2.fromOffset(8, 8)
+	statusDot.Position = UDim2.new(0, 14, 0.5, -4)
+	statusDot.BackgroundColor3 = RED
+	statusDot.BorderSizePixel = 0
+	statusDot.ZIndex = 6
+	statusDot.Parent = statusBox
+	Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
+
+	local statusLabel = Instance.new("TextLabel")
+	statusLabel.Size = UDim2.new(1, -40, 1, 0)
+	statusLabel.Position = UDim2.new(0, 30, 0, 0)
+	statusLabel.BackgroundTransparency = 1
+	statusLabel.Text = "INACTIVE"
+	statusLabel.TextColor3 = RED
+	statusLabel.Font = Enum.Font.GothamBold
+	statusLabel.TextSize = 13
+	statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+	statusLabel.ZIndex = 6
+	statusLabel.Parent = statusBox
+
+	local tpBox = makeRow(106, 50)
+	local tpText = Instance.new("TextLabel")
+	tpText.Size = UDim2.new(0, 90, 1, 0)
+	tpText.Position = UDim2.new(0, 14, 0, 0)
+	tpText.BackgroundTransparency = 1
+	tpText.Text = "TP Bat"
+	tpText.TextColor3 = TEXT
+	tpText.Font = Enum.Font.GothamBold
+	tpText.TextSize = 14
+	tpText.TextXAlignment = Enum.TextXAlignment.Left
+	tpText.ZIndex = 6
+	tpText.Parent = tpBox
+
+	local keyLabel = Instance.new("TextButton")
+	keyLabel.Size = UDim2.fromOffset(40, 24)
+	keyLabel.Position = UDim2.new(1, -110, 0.5, -12)
+	keyLabel.BackgroundColor3 = Color3.fromRGB(40, 16, 24)
+	keyLabel.BackgroundTransparency = 0.15
+	keyLabel.Text = settings.toggleKey.Name
+	keyLabel.TextColor3 = TEXT_DIM
+	keyLabel.Font = Enum.Font.GothamBold
+	keyLabel.TextSize = 12
+	keyLabel.AutoButtonColor = false
+	keyLabel.BorderSizePixel = 0
+	keyLabel.ZIndex = 6
+	keyLabel.Parent = tpBox
+	Instance.new("UICorner", keyLabel).CornerRadius = UDim.new(0, 8)
+
+	local tpSwitch = Instance.new("TextButton")
+	tpSwitch.Size = UDim2.fromOffset(48, 24)
+	tpSwitch.Position = UDim2.new(1, -58, 0.5, -12)
+	tpSwitch.BackgroundColor3 = Color3.fromRGB(40, 16, 24)
+	tpSwitch.Text = ""
+	tpSwitch.BorderSizePixel = 0
+	tpSwitch.ZIndex = 6
+	tpSwitch.Parent = tpBox
+	Instance.new("UICorner", tpSwitch).CornerRadius = UDim.new(1, 0)
+
+	local tpKnob = Instance.new("Frame")
+	tpKnob.Size = UDim2.fromOffset(18, 18)
+	tpKnob.Position = UDim2.new(0, 3, 0.5, -9)
+	tpKnob.BackgroundColor3 = TEXT_DIM
+	tpKnob.BorderSizePixel = 0
+	tpKnob.ZIndex = 7
+	tpKnob.Parent = tpSwitch
+	Instance.new("UICorner", tpKnob).CornerRadius = UDim.new(1, 0)
+
+	local antiBox = makeRow(164, 50)
+	local antiText = Instance.new("TextLabel")
+	antiText.Size = UDim2.new(0, 150, 1, 0)
+	antiText.Position = UDim2.new(0, 14, 0, 0)
+	antiText.BackgroundTransparency = 1
+	antiText.Text = "Anti Die"
+	antiText.TextColor3 = TEXT
+	antiText.Font = Enum.Font.GothamBold
+	antiText.TextSize = 14
+	antiText.TextXAlignment = Enum.TextXAlignment.Left
+	antiText.ZIndex = 6
+	antiText.Parent = antiBox
+
+	local antiSwitch = Instance.new("TextButton")
+	antiSwitch.Size = UDim2.fromOffset(48, 24)
+	antiSwitch.Position = UDim2.new(1, -58, 0.5, -12)
+	antiSwitch.BackgroundColor3 = Color3.fromRGB(40, 16, 24)
+	antiSwitch.Text = ""
+	antiSwitch.BorderSizePixel = 0
+	antiSwitch.ZIndex = 6
+	antiSwitch.Parent = antiBox
+	Instance.new("UICorner", antiSwitch).CornerRadius = UDim.new(1, 0)
+
+	local antiKnob = Instance.new("Frame")
+	antiKnob.Size = UDim2.fromOffset(18, 18)
+	antiKnob.Position = UDim2.new(0, 3, 0.5, -9)
+	antiKnob.BackgroundColor3 = TEXT_DIM
+	antiKnob.BorderSizePixel = 0
+	antiKnob.ZIndex = 7
+	antiKnob.Parent = antiSwitch
+	Instance.new("UICorner", antiKnob).CornerRadius = UDim.new(1, 0)
+
+	local versionBox = makeRow(222, 50)
+	local versionText = Instance.new("TextLabel")
+	versionText.Size = UDim2.new(0, 90, 1, 0)
+	versionText.Position = UDim2.new(0, 14, 0, 0)
+	versionText.BackgroundTransparency = 1
+	versionText.Text = "Version"
+	versionText.TextColor3 = TEXT
+	versionText.Font = Enum.Font.GothamBold
+	versionText.TextSize = 14
+	versionText.TextXAlignment = Enum.TextXAlignment.Left
+	versionText.ZIndex = 6
+	versionText.Parent = versionBox
+
+	local v1Btn = Instance.new("TextButton")
+	v1Btn.Size = UDim2.fromOffset(48, 26)
+	v1Btn.Position = UDim2.new(1, -112, 0.5, -13)
+	v1Btn.BackgroundColor3 = ACCENT
+	v1Btn.Text = "V1"
+	v1Btn.TextColor3 = Color3.fromRGB(20, 8, 12)
+	v1Btn.TextSize = 12
+	v1Btn.Font = Enum.Font.GothamBlack
+	v1Btn.AutoButtonColor = false
+	v1Btn.BorderSizePixel = 0
+	v1Btn.ZIndex = 6
+	v1Btn.Parent = versionBox
+	Instance.new("UICorner", v1Btn).CornerRadius = UDim.new(0, 8)
+
+	local v2Btn = Instance.new("TextButton")
+	v2Btn.Size = UDim2.fromOffset(48, 26)
+	v2Btn.Position = UDim2.new(1, -58, 0.5, -13)
+	v2Btn.BackgroundColor3 = Color3.fromRGB(40, 16, 24)
+	v2Btn.Text = "V2"
+	v2Btn.TextColor3 = TEXT_DIM
+	v2Btn.TextSize = 12
+	v2Btn.Font = Enum.Font.GothamBold
+	v2Btn.AutoButtonColor = false
+	v2Btn.BorderSizePixel = 0
+	v2Btn.ZIndex = 6
+	v2Btn.Parent = versionBox
+	Instance.new("UICorner", v2Btn).CornerRadius = UDim.new(0, 8)
+
+	local bgBox = makeRow(280, 44)
+	local bgText = Instance.new("TextLabel")
+	bgText.Size = UDim2.new(0, 110, 1, 0)
+	bgText.Position = UDim2.new(0, 14, 0, 0)
+	bgText.BackgroundTransparency = 1
+	bgText.Text = "Background"
+	bgText.TextColor3 = TEXT
+	bgText.Font = Enum.Font.GothamBold
+	bgText.TextSize = 13
+	bgText.TextXAlignment = Enum.TextXAlignment.Left
+	bgText.ZIndex = 6
+	bgText.Parent = bgBox
+
+	local bgBtn = Instance.new("TextButton")
+	bgBtn.Size = UDim2.fromOffset(90, 26)
+	bgBtn.Position = UDim2.new(1, -104, 0.5, -13)
+	bgBtn.BackgroundColor3 = Color3.fromRGB(40, 16, 24)
+	bgBtn.Text = bgIndex .. " / " .. #BG_IDS
+	bgBtn.TextColor3 = ACCENT
+	bgBtn.TextSize = 12
+	bgBtn.Font = Enum.Font.GothamBold
+	bgBtn.AutoButtonColor = false
+	bgBtn.BorderSizePixel = 0
+	bgBtn.ZIndex = 6
+	bgBtn.Parent = bgBox
+	Instance.new("UICorner", bgBtn).CornerRadius = UDim.new(0, 8)
+
+	bgBtn.MouseButton1Click:Connect(function()
+		bgIndex = bgIndex + 1
+		if bgIndex > #BG_IDS then bgIndex = 1 end
+		bgImage.Image = BG_IDS[bgIndex]
+		bgBtn.Text = bgIndex .. " / " .. #BG_IDS
+	end)
+
+	programState.uiReferences.Main = mainFrame
+	programState.uiReferences.StatusLabel = statusLabel
+	programState.uiReferences.StatusDot = statusDot
+	programState.uiReferences.TpSwitch = tpSwitch
+	programState.uiReferences.TpKnob = tpKnob
+	programState.uiReferences.AntiSwitch = antiSwitch
+	programState.uiReferences.AntiKnob = antiKnob
+	programState.uiReferences.KeyLabel = keyLabel
+
+	local isMinimized = false
+	local originalSize = UDim2.new(0, 280, 0, 360)
+	local miniSize = UDim2.new(0, 280, 0, 52)
+
+	closeBtn.MouseButton1Click:Connect(function()
+		isMinimized = not isMinimized
+		if isMinimized then
+			tween(mainFrame, {Size = miniSize}, 0.25)
+			closeBtn.Text = "+"
+			statusBox.Visible = false
+			tpBox.Visible = false
+			antiBox.Visible = false
+			versionBox.Visible = false
+			bgBox.Visible = false
+		else
+			tween(mainFrame, {Size = originalSize}, 0.25)
+			closeBtn.Text = "−"
+			statusBox.Visible = true
+			tpBox.Visible = true
+			antiBox.Visible = true
+			versionBox.Visible = true
+			bgBox.Visible = true
+		end
+	end)
+
+	keyLabel.MouseButton1Click:Connect(startKeybindListener)
+
+	local function setSwitchVisual(knob, switch, on)
+		if on then
+			tween(knob, {Position = UDim2.new(1, -21, 0.5, -9), BackgroundColor3 = ACCENT}, 0.18)
+			tween(switch, {BackgroundColor3 = ACCENT_DIM}, 0.18)
+		else
+			tween(knob, {Position = UDim2.new(0, 3, 0.5, -9), BackgroundColor3 = TEXT_DIM}, 0.18)
+			tween(switch, {BackgroundColor3 = Color3.fromRGB(40, 16, 24)}, 0.18)
+		end
+	end
+
+	tpSwitch.MouseButton1Click:Connect(function()
+		toggleTpBat()
+		setSwitchVisual(tpKnob, tpSwitch, programState.isTpBatActive)
+	end)
+
+	antiSwitch.MouseButton1Click:Connect(function()
+		toggleAntiDie()
+		setSwitchVisual(antiKnob, antiSwitch, antiDieEnabled)
+	end)
+
+	v1Btn.MouseButton1Click:Connect(function()
+		v1Btn.BackgroundColor3 = ACCENT
+		v1Btn.TextColor3 = Color3.fromRGB(20, 8, 12)
+		v1Btn.Font = Enum.Font.GothamBlack
+		v2Btn.BackgroundColor3 = Color3.fromRGB(40, 16, 24)
+		v2Btn.TextColor3 = TEXT_DIM
+		v2Btn.Font = Enum.Font.GothamBold
+		settings.currentVersion = "V1"
+	end)
+
+	v2Btn.MouseButton1Click:Connect(function()
+		v2Btn.BackgroundColor3 = ACCENT
+		v2Btn.TextColor3 = Color3.fromRGB(20, 8, 12)
+		v2Btn.Font = Enum.Font.GothamBlack
+		v1Btn.BackgroundColor3 = Color3.fromRGB(40, 16, 24)
+		v1Btn.TextColor3 = TEXT_DIM
+		v1Btn.Font = Enum.Font.GothamBold
+		settings.currentVersion = "V2"
+	end)
+
+	local dragging = false
+	local dragStart, startPos
+	mainFrame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = mainFrame.Position
+		end
+	end)
+	mainFrame.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	return screenGui
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if programState.isWaitingForKey then return end
+	if input.KeyCode == settings.toggleKey then
+		toggleTpBat()
+		if programState.uiReferences.TpSwitch and programState.uiReferences.TpKnob then
+			local on = programState.isTpBatActive
+			if on then
+				tween(programState.uiReferences.TpKnob, {Position = UDim2.new(1, -21, 0.5, -9), BackgroundColor3 = ACCENT}, 0.18)
+				tween(programState.uiReferences.TpSwitch, {BackgroundColor3 = ACCENT_DIM}, 0.18)
+			else
+				tween(programState.uiReferences.TpKnob, {Position = UDim2.new(0, 3, 0.5, -9), BackgroundColor3 = TEXT_DIM}, 0.18)
+				tween(programState.uiReferences.TpSwitch, {BackgroundColor3 = Color3.fromRGB(40, 16, 24)}, 0.18)
+			end
+		end
+	end
+	if input.KeyCode == settings.antiDieKey then
+		toggleAntiDie()
+		if programState.uiReferences.AntiSwitch and programState.uiReferences.AntiKnob then
+			local on = antiDieEnabled
+			if on then
+				tween(programState.uiReferences.AntiKnob, {Position = UDim2.new(1, -21, 0.5, -9), BackgroundColor3 = ACCENT}, 0.18)
+				tween(programState.uiReferences.AntiSwitch, {BackgroundColor3 = ACCENT_DIM}, 0.18)
+			else
+				tween(programState.uiReferences.AntiKnob, {Position = UDim2.new(0, 3, 0.5, -9), BackgroundColor3 = TEXT_DIM}, 0.18)
+				tween(programState.uiReferences.AntiSwitch, {BackgroundColor3 = Color3.fromRGB(40, 16, 24)}, 0.18)
+			end
+		end
+	end
+end)
+
+localPlayer.CharacterAdded:Connect(function()
+	if programState.isTpBatActive then
+		stopTpBat()
+		task.wait(0.5)
+		if programState.isAntiDieActive then
+			startAntiDie()
+		end
+		startTpBat()
+	end
+end)
+
+localPlayer.CharacterRemoving:Connect(function()
+	stopTpBat()
+	stopAntiDie()
+end)
+
+pcall(buildUI)
+print("[R4ull TP Bat] loaded — leaked by r4ull")
